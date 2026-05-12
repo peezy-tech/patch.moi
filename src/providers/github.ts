@@ -15,6 +15,7 @@ type GitHubPayload = {
     default_branch?: string;
     owner?: {
       login?: string;
+      username?: string;
       name?: string;
     };
   };
@@ -40,7 +41,7 @@ export function normalizeGithubEvent(input: {
   payload: GitHubPayload;
 }): GitWebhookEvent {
   const { payload } = input;
-  const repoOwner = payload.repository?.owner?.login ?? payload.repository?.owner?.name;
+  const repoOwner = payload.repository?.owner?.login ?? payload.repository?.owner?.username ?? payload.repository?.owner?.name;
   const repoName = payload.repository?.name;
   const fullName = payload.repository?.full_name ?? (repoOwner && repoName ? `${repoOwner}/${repoName}` : undefined);
 
