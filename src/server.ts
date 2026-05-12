@@ -101,10 +101,10 @@ export function createHandler(config: ServerConfig): (request: Request) => Promi
     if (url.pathname === "/healthz") {
       return textResponse("ok\n");
     }
-    if (url.pathname === "/git-webhooks/github") {
+    if (url.pathname === "/patchbay/github" || url.pathname === "/git-webhooks/github") {
       return handleGithub(request, config, store);
     }
-    if (url.pathname === "/git-webhooks/jojo") {
+    if (url.pathname === "/patchbay/jojo" || url.pathname === "/git-webhooks/jojo") {
       return handleJojo(request, config, store);
     }
     return jsonResponse({ error: "not_found" }, { status: 404 });

@@ -91,7 +91,7 @@ describe("feed watcher", () => {
   });
 
   test("first poll primes state without emitting old entries", async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), "git-webhooks-feed-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "patchbay-feed-"));
     const sourcesPath = join(dataDir, "sources.json");
     await writeFile(sourcesPath, JSON.stringify({ sources: [source] }), "utf8");
 
@@ -105,7 +105,7 @@ describe("feed watcher", () => {
   });
 
   test("later polls emit new entries and release fork sync jobs", async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), "git-webhooks-feed-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "patchbay-feed-"));
     const sourcesPath = join(dataDir, "sources.json");
     const releaseSource: FeedSourceConfig = {
       ...source,

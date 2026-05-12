@@ -3,10 +3,10 @@ import { normalizeGithubEvent } from "../src/providers/github";
 import { normalizeJojoEvent } from "../src/providers/jojo";
 
 const repository = {
-  name: "git-webhooks",
-  full_name: "peezy-tech/git-webhooks",
-  clone_url: "https://example.test/peezy-tech/git-webhooks.git",
-  ssh_url: "git@example.test:peezy-tech/git-webhooks.git",
+  name: "patchbay",
+  full_name: "peezy-tech/patchbay",
+  clone_url: "https://example.test/peezy-tech/patchbay.git",
+  ssh_url: "git@example.test:peezy-tech/patchbay.git",
   default_branch: "main",
   owner: { login: "peezy-tech" },
 };
@@ -28,7 +28,7 @@ describe("provider normalization", () => {
 
     expect(event.provider).toBe("github");
     expect(event.event).toBe("push");
-    expect(event.repo?.fullName).toBe("peezy-tech/git-webhooks");
+    expect(event.repo?.fullName).toBe("peezy-tech/patchbay");
     expect(event.sender?.username).toBe("peezy");
   });
 

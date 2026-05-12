@@ -132,7 +132,7 @@ export function buildDiscordPayload(input: DiscordNotification): DiscordPayload 
     ].filter((item): item is DiscordEmbedField => item !== null);
 
     return {
-      username: "git-webhooks",
+      username: "patchbay",
       embeds: [
         {
           title: feedTitle(signal).slice(0, 256),
@@ -166,7 +166,7 @@ export function buildDiscordPayload(input: DiscordNotification): DiscordPayload 
   ].filter((item): item is DiscordEmbedField => item !== null);
 
   return {
-    username: "git-webhooks",
+    username: "patchbay",
     embeds: [
       {
         title: eventTitle(event).slice(0, 256),
@@ -175,7 +175,7 @@ export function buildDiscordPayload(input: DiscordNotification): DiscordPayload 
         fields,
         timestamp: event.receivedAt,
         footer: {
-          text: "git-webhooks",
+          text: "patchbay",
         },
       },
     ],

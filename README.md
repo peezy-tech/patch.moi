@@ -1,4 +1,4 @@
-# git-webhooks
+# patchbay
 
 Containerized Bun service for GitHub and jojo.build webhooks.
 
@@ -6,9 +6,12 @@ Containerized Bun service for GitHub and jojo.build webhooks.
 
 ```text
 GET  /healthz
-POST /git-webhooks/jojo
-POST /git-webhooks/github
+POST /patchbay/jojo
+POST /patchbay/github
 ```
+
+Existing `/git-webhooks/jojo` and `/git-webhooks/github` routes remain
+compatibility aliases for existing webhook registrations.
 
 ## Environment
 
