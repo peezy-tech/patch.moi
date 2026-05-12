@@ -31,7 +31,7 @@ describe("server", () => {
 
   test("rejects invalid signatures", async () => {
     const handler = createHandler({ githubSecret: "gh", jojoSecret: "jojo", dataDir: await mkdtemp(join(tmpdir(), "patchbay-")) });
-    const response = await handler(new Request("http://localhost/patchbay/github", {
+    const response = await handler(new Request("http://localhost/github", {
       method: "POST",
       headers: { "x-hub-signature-256": "sha256=bad" },
       body: "{}",
@@ -39,16 +39,18 @@ describe("server", () => {
     expect(response.status).toBe(401);
   });
 
-  test("does not serve legacy git-webhooks routes", async () => {
+  test("does not serve old path-prefixed routes", async () => {
     const handler = createHandler({ githubSecret: "gh", jojoSecret: "jojo", dataDir: await mkdtemp(join(tmpdir(), "patchbay-")) });
-    const response = await handler(new Request("http://localhost/git-webhooks/jojo", { method: "POST", body: "{}" }));
-    expect(response.status).toBe(404);
+    const legacyGitWebhooks = await handler(new Request("http://localhost/git-webhooks/jojo", { method: "POST", body: "{}" }));
+    const legacyPatchbay = await handler(new Request("http://localhost/patchbay/jojo", { method: "POST", body: "{}" }));
+    expect(legacyGitWebhooks.status).toBe(404);
+    expect(legacyPatchbay.status).toBe(404);
   });
 
   test("accepts jojo main pushes and queues a job", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "patchbay-"));
     const handler = createHandler({ githubSecret: "gh", jojoSecret: "jojo", dataDir });
-    const request = await signedRequest("/patchbay/jojo", "jojo", "jojo", {
+    const request = await signedRequest("/jojo", "jojo", "jojo", {
       ref: "refs/heads/main",
       after: "abc123",
       repository: {
@@ -79,7 +81,7 @@ describe("server", () => {
           notifyEvents: new Set(["push"]),
         },
       });
-      const request = await signedRequest("/patchbay/jojo", "jojo", "jojo", {
+      const request = await signedRequest("/jojo", "jojo", "jojo", {
         ref: "refs/heads/main",
         after: "abc123",
         repository: {

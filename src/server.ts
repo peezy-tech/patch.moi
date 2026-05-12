@@ -101,10 +101,10 @@ export function createHandler(config: ServerConfig): (request: Request) => Promi
     if (url.pathname === "/healthz") {
       return textResponse("ok\n");
     }
-    if (url.pathname === "/patchbay/github") {
+    if (url.pathname === "/github") {
       return handleGithub(request, config, store);
     }
-    if (url.pathname === "/patchbay/jojo") {
+    if (url.pathname === "/jojo") {
       return handleJojo(request, config, store);
     }
     return jsonResponse({ error: "not_found" }, { status: 404 });

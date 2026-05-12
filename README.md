@@ -6,8 +6,8 @@ Containerized Bun service for GitHub and jojo.build webhooks.
 
 ```text
 GET  /healthz
-POST /patchbay/jojo
-POST /patchbay/github
+POST /jojo
+POST /github
 ```
 
 ## Environment
