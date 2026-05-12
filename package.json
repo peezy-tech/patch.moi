@@ -1,0 +1,17 @@
+{
+  "name": "@peezy.tech/git-webhooks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "start": "bun src/server.ts",
+    "test": "bun test",
+    "check:types": "tsc --noEmit",
+    "check": "bun run check:types && bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
+  }
+}

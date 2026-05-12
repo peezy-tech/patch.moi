@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+*.log
+.env
+data/*.jsonl
+data/events
+data/jobs
+.DS_Store
