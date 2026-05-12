@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { notifyDiscord, parseDiscordConfig, type DiscordConfig } from "./discord";
 import { jsonResponse, methodNotAllowed, textResponse } from "./http";
 import { normalizeGithubEvent } from "./providers/github";
 import { normalizeJojoEvent } from "./providers/jojo";
@@ -12,6 +13,7 @@ export type ServerConfig = {
   githubSecret: string;
   jojoSecret: string;
   dataDir: string;
+  discord?: DiscordConfig;
 };
 
 function getHeader(headers: Headers, name: string, fallback: string): string {
@@ -31,12 +33,25 @@ async function parseJsonBody(request: Request): Promise<{ body: string; payload:
   }
 }
 
-async function persistAcceptedEvent(store: EventStore, event: GitWebhookEvent): Promise<Response> {
+async function persistAcceptedEvent(store: EventStore, event: GitWebhookEvent, discord?: DiscordConfig): Promise<Response> {
   await store.appendEvent(event);
   const job = jobForEvent(event);
   if (job) {
     await store.appendJob(job);
   }
+
+  try {
+    await notifyDiscord(discord ?? parseDiscordConfig({}), { event, job });
+  } catch (error) {
+    console.error(JSON.stringify({
+      type: "discord.notify_failed",
+      provider: event.provider,
+      event: event.event,
+      deliveryId: event.deliveryId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
   console.log(JSON.stringify({ type: "webhook.accepted", provider: event.provider, event: event.event, deliveryId: event.deliveryId, job: job?.id }));
   return jsonResponse({ status: event.event === "ping" ? "ok" : "accepted", event: event.event, deliveryId: event.deliveryId }, {
     status: event.event === "ping" ? 200 : 202,
@@ -57,7 +72,7 @@ async function handleGithub(request: Request, config: ServerConfig, store: Event
     receivedAt: new Date().toISOString(),
     payload: parsed.payload as never,
   });
-  return persistAcceptedEvent(store, event);
+  return persistAcceptedEvent(store, event, config.discord);
 }
 
 async function handleJojo(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
@@ -74,7 +89,7 @@ async function handleJojo(request: Request, config: ServerConfig, store: EventSt
     receivedAt: new Date().toISOString(),
     payload: parsed.payload as never,
   });
-  return persistAcceptedEvent(store, event);
+  return persistAcceptedEvent(store, event, config.discord);
 }
 
 export function createHandler(config: ServerConfig): (request: Request) => Promise<Response> | Response {
@@ -102,6 +117,10 @@ if (import.meta.main) {
     githubSecret: process.env.GITHUB_WEBHOOK_SECRET ?? "",
     jojoSecret: process.env.JOJO_WEBHOOK_SECRET ?? "",
     dataDir: process.env.DATA_DIR ?? "./data",
+    discord: parseDiscordConfig({
+      webhookUrl: process.env.DISCORD_WEBHOOK_URL,
+      notifyEvents: process.env.DISCORD_NOTIFY_EVENTS,
+    }),
   };
 
   Bun.serve({

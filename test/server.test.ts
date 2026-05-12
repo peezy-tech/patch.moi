@@ -57,4 +57,38 @@ describe("server", () => {
     expect(await readFile(join(dataDir, "events.jsonl"), "utf8")).toContain("\"provider\":\"jojo\"");
     expect(await readFile(join(dataDir, "jobs.jsonl"), "utf8")).toContain("\"kind\":\"main_push\"");
   });
+
+  test("continues accepting webhooks when Discord returns an error", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response("bad", { status: 500 })) as unknown as typeof fetch;
+
+    try {
+      const dataDir = await mkdtemp(join(tmpdir(), "git-webhooks-"));
+      const handler = createHandler({
+        githubSecret: "gh",
+        jojoSecret: "jojo",
+        dataDir,
+        discord: {
+          webhookUrl: "https://discord.example/webhook",
+          notifyEvents: new Set(["push"]),
+        },
+      });
+      const request = await signedRequest("/git-webhooks/jojo", "jojo", "jojo", {
+        ref: "refs/heads/main",
+        after: "abc123",
+        repository: {
+          name: "git-webhooks",
+          full_name: "peezy-tech/git-webhooks",
+          owner: { username: "peezy-tech" },
+        },
+      });
+
+      const response = await handler(request);
+      expect(response.status).toBe(202);
+      expect(await readFile(join(dataDir, "events.jsonl"), "utf8")).toContain("\"provider\":\"jojo\"");
+      expect(await readFile(join(dataDir, "jobs.jsonl"), "utf8")).toContain("\"kind\":\"main_push\"");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
