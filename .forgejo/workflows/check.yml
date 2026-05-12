@@ -19,4 +19,7 @@ jobs:
       - name: Test
         run: bun test
       - name: Build container
-        run: docker build -t git-webhooks:ci .
+        run: |
+          apt-get update
+          apt-get install -y docker.io
+          docker build -t git-webhooks:ci .
