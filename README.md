@@ -10,9 +10,6 @@ POST /patchbay/jojo
 POST /patchbay/github
 ```
 
-Existing `/git-webhooks/jojo` and `/git-webhooks/github` routes remain
-compatibility aliases for existing webhook registrations.
-
 ## Environment
 
 ```text
