@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildDiscordPayload, notifyDiscord, parseDiscordConfig } from "../src/discord";
-import type { GitWebhookEvent } from "../src/types";
+import type { FeedSignal, GitWebhookEvent } from "../src/types";
 
 const pushEvent: GitWebhookEvent = {
   provider: "jojo",
@@ -23,6 +23,33 @@ const pushEvent: GitWebhookEvent = {
       url: "https://jojo.build/peezy-tech/git-webhooks/commit/0123456789abcdef",
     },
   },
+};
+
+const feedSignal: FeedSignal = {
+  sourceId: "github-openai-codex-main",
+  provider: "github",
+  event: "push",
+  entryId: "tag:github.com,2008:Grit::Commit/0123456789abcdef0123456789abcdef01234567",
+  title: "Tighten sandbox setup",
+  url: "https://github.com/openai/codex/commit/0123456789abcdef0123456789abcdef01234567",
+  author: "bookholt-oai",
+  publishedAt: "2026-05-12T21:00:00.000Z",
+  repo: {
+    owner: "openai",
+    name: "codex",
+    fullName: "openai/codex",
+    webUrl: "https://github.com/openai/codex",
+    defaultBranch: "main",
+  },
+  ref: "refs/heads/main",
+  sha: "0123456789abcdef0123456789abcdef01234567",
+  target: {
+    provider: "github",
+    repoFullName: "peezy-tech/codex",
+    branch: "main",
+    mode: "notify_only",
+  },
+  raw: {},
 };
 
 describe("discord notifications", () => {
@@ -53,6 +80,14 @@ describe("discord notifications", () => {
     expect(payload.embeds[0].title).toBe("[jojo] peezy-tech/git-webhooks push to main");
     expect(payload.embeds[0].url).toBe("https://jojo.build/peezy-tech/git-webhooks/commit/0123456789abcdef");
     expect(payload.embeds[0].fields).toContainEqual({ name: "Queued", value: "main_push", inline: true });
+  });
+
+  test("builds readable feed embeds", () => {
+    const payload = buildDiscordPayload({ signal: feedSignal });
+    expect(payload.embeds[0].title).toBe("[github] openai/codex upstream update on main");
+    expect(payload.embeds[0].description).toBe("Tighten sandbox setup");
+    expect(payload.embeds[0].url).toBe("https://github.com/openai/codex/commit/0123456789abcdef0123456789abcdef01234567");
+    expect(payload.embeds[0].footer.text).toBe("feed watcher");
   });
 
   test("does nothing without a webhook URL", async () => {

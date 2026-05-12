@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { notifyDiscord, parseDiscordConfig, type DiscordConfig } from "./discord";
+import { startFeedPolling } from "./feed";
 import { jsonResponse, methodNotAllowed, textResponse } from "./http";
 import { normalizeGithubEvent } from "./providers/github";
 import { normalizeJojoEvent } from "./providers/jojo";
@@ -122,6 +123,16 @@ if (import.meta.main) {
       notifyEvents: process.env.DISCORD_NOTIFY_EVENTS,
     }),
   };
+
+  if (process.env.FEED_SOURCES_PATH) {
+    startFeedPolling({
+      dataDir: config.dataDir,
+      sourcesPath: process.env.FEED_SOURCES_PATH,
+      discord: config.discord,
+    }).catch((error) => {
+      console.error(JSON.stringify({ type: "feed.start_failed", error: error instanceof Error ? error.message : String(error) }));
+    });
+  }
 
   Bun.serve({
     hostname,

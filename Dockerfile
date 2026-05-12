@@ -7,6 +7,7 @@ RUN bun install --frozen-lockfile
 
 COPY tsconfig.json ./
 COPY src ./src
+COPY feed-sources.json ./
 
 ENV HOST=0.0.0.0
 ENV PORT=3000

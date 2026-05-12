@@ -1,4 +1,4 @@
-import type { GitWebhookEvent, QueuedJob } from "./types";
+import type { FeedJob, FeedSignal, GitWebhookEvent, QueuedJob } from "./types";
 
 type DiscordEmbedField = {
   name: string;
@@ -31,8 +31,9 @@ export type DiscordConfig = {
 };
 
 export type DiscordNotification = {
-  event: GitWebhookEvent;
-  job?: QueuedJob | null;
+  event?: GitWebhookEvent;
+  job?: QueuedJob | FeedJob | null;
+  signal?: FeedSignal;
 };
 
 const defaultNotifyEvents = ["push", "pull_request", "release"];
@@ -76,6 +77,14 @@ function eventTitle(event: GitWebhookEvent): string {
   return `[${event.provider}] ${repo} ${event.event}`;
 }
 
+function feedTitle(signal: FeedSignal): string {
+  const branch = signal.ref?.startsWith("refs/heads/") ? signal.ref.slice("refs/heads/".length) : undefined;
+  if (signal.event === "push") {
+    return `[${signal.provider}] ${signal.repo.fullName} upstream update${branch ? ` on ${branch}` : ""}`;
+  }
+  return `[${signal.provider}] ${signal.repo.fullName} release ${signal.title}`;
+}
+
 function rawRecord(event: GitWebhookEvent): Record<string, unknown> {
   return typeof event.raw === "object" && event.raw !== null ? event.raw as Record<string, unknown> : {};
 }
@@ -109,6 +118,41 @@ function field(name: string, value?: string, inline = true): DiscordEmbedField |
 }
 
 export function buildDiscordPayload(input: DiscordNotification): DiscordPayload {
+  if (input.signal) {
+    const { signal, job } = input;
+    const fields = [
+      field("Provider", signal.provider),
+      field("Repo", signal.repo.fullName),
+      field("Event", signal.event),
+      field("Branch", branchName(signal.ref)),
+      field("Author", signal.author),
+      field("SHA", shortSha(signal.sha)),
+      field("Queued", job ? job.kind : undefined),
+      field("Source", signal.sourceId, false),
+    ].filter((item): item is DiscordEmbedField => item !== null);
+
+    return {
+      username: "git-webhooks",
+      embeds: [
+        {
+          title: feedTitle(signal).slice(0, 256),
+          description: signal.title.slice(0, 2048),
+          url: signal.url,
+          color: signal.provider === "github" ? 0x24292f : 0x2185d0,
+          fields,
+          timestamp: signal.publishedAt,
+          footer: {
+            text: "feed watcher",
+          },
+        },
+      ],
+    };
+  }
+
+  if (!input.event) {
+    throw new Error("Discord notification missing event or signal");
+  }
+
   const { event, job } = input;
   const fields = [
     field("Provider", event.provider),
@@ -143,7 +187,8 @@ export async function notifyDiscord(
   notification: DiscordNotification,
   fetchImpl: FetchLike = fetch,
 ): Promise<void> {
-  if (!config.webhookUrl || !config.notifyEvents.has(notification.event.event)) {
+  const eventName = notification.signal?.event ?? notification.event?.event;
+  if (!config.webhookUrl || !eventName || !config.notifyEvents.has(eventName)) {
     return;
   }
 

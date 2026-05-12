@@ -1,0 +1,84 @@
+{
+  "sources": [
+    {
+      "id": "codeberg-forgejo-branch",
+      "provider": "codeberg",
+      "url": "https://codeberg.org/forgejo/forgejo/rss/branch/forgejo",
+      "event": "push",
+      "repo": {
+        "owner": "forgejo",
+        "name": "forgejo",
+        "fullName": "forgejo/forgejo",
+        "webUrl": "https://codeberg.org/forgejo/forgejo",
+        "defaultBranch": "forgejo"
+      },
+      "target": {
+        "provider": "jojo",
+        "repoFullName": "peezy-tech/jojo",
+        "branch": "forgejo",
+        "mode": "notify_only"
+      },
+      "pollIntervalSeconds": 300
+    },
+    {
+      "id": "codeberg-forgejo-releases",
+      "provider": "codeberg",
+      "url": "https://codeberg.org/forgejo/forgejo/releases.atom",
+      "event": "release",
+      "repo": {
+        "owner": "forgejo",
+        "name": "forgejo",
+        "fullName": "forgejo/forgejo",
+        "webUrl": "https://codeberg.org/forgejo/forgejo",
+        "defaultBranch": "forgejo"
+      },
+      "target": {
+        "provider": "jojo",
+        "repoFullName": "peezy-tech/jojo",
+        "branch": "forgejo",
+        "mode": "fork_sync"
+      },
+      "pollIntervalSeconds": 300
+    },
+    {
+      "id": "github-openai-codex-main",
+      "provider": "github",
+      "url": "https://github.com/openai/codex/commits/main.atom",
+      "event": "push",
+      "repo": {
+        "owner": "openai",
+        "name": "codex",
+        "fullName": "openai/codex",
+        "webUrl": "https://github.com/openai/codex",
+        "defaultBranch": "main"
+      },
+      "target": {
+        "provider": "github",
+        "repoFullName": "peezy-tech/codex",
+        "branch": "main",
+        "mode": "notify_only"
+      },
+      "pollIntervalSeconds": 300
+    },
+    {
+      "id": "github-openai-codex-releases",
+      "provider": "github",
+      "url": "https://github.com/openai/codex/releases.atom",
+      "event": "release",
+      "repo": {
+        "owner": "openai",
+        "name": "codex",
+        "fullName": "openai/codex",
+        "webUrl": "https://github.com/openai/codex",
+        "defaultBranch": "main"
+      },
+      "target": {
+        "provider": "github",
+        "repoFullName": "peezy-tech/codex",
+        "branch": "main",
+        "mode": "fork_sync"
+      },
+      "pollIntervalSeconds": 300
+    }
+  ]
+}
