@@ -129,6 +129,9 @@ if (import.meta.main) {
       dataDir: config.dataDir,
       sourcesPath: process.env.FEED_SOURCES_PATH,
       discord: config.discord,
+      flowDispatch: {
+        env: process.env,
+      },
     }).catch((error) => {
       console.error(JSON.stringify({ type: "feed.start_failed", error: error instanceof Error ? error.message : String(error) }));
     });

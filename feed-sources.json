@@ -73,10 +73,14 @@
         "defaultBranch": "main"
       },
       "target": {
-        "provider": "github",
-        "repoFullName": "peezy-tech/codex",
-        "branch": "main",
-        "mode": "fork_sync"
+        "mode": "flow_dispatch",
+        "eventType": "upstream.release",
+        "dispatchUrlEnv": "PATCHBAY_FLOW_DISPATCH_URL",
+        "dispatchSecretEnv": "PATCHBAY_FLOW_DISPATCH_SECRET",
+        "payload": {
+          "provider": "github",
+          "repo": "openai/codex"
+        }
       },
       "pollIntervalSeconds": 300
     }

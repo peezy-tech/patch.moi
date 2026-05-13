@@ -137,4 +137,64 @@ describe("feed watcher", () => {
     expect(await readFile(join(dataDir, "feed-jobs.jsonl"), "utf8")).toContain("\"kind\":\"fork_sync\"");
     expect(feedCalls).toBe(1);
   });
+
+  test("later polls dispatch generic flow events", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "patchbay-feed-"));
+    const sourcesPath = join(dataDir, "sources.json");
+    const releaseSource: FeedSourceConfig = {
+      ...source,
+      id: "github-openai-codex-releases",
+      url: "https://github.com/openai/codex/releases.atom",
+      event: "release",
+      target: {
+        mode: "flow_dispatch",
+        eventType: "upstream.release",
+        dispatchUrlEnv: "FLOW_URL",
+        dispatchSecretEnv: "FLOW_SECRET",
+        payload: {
+          repo: "openai/codex",
+          provider: "github",
+        },
+      },
+    };
+    await writeFile(sourcesPath, JSON.stringify({ sources: [releaseSource] }), "utf8");
+    await writeFile(join(dataDir, "feed-state.json"), JSON.stringify({
+      "github-openai-codex-releases": {
+        lastSeenId: "older-release",
+        lastCheckedAt: "2026-05-12T09:00:00.000Z",
+      },
+    }), "utf8");
+
+    let dispatchedBody = "";
+    let dispatchedSignature = "";
+    await pollFeedsOnce({
+      dataDir,
+      sourcesPath,
+      discord: { notifyEvents: new Set(["release"]) },
+      flowDispatch: {
+        env: {
+          FLOW_URL: "https://flow.example/events",
+          FLOW_SECRET: "secret",
+        },
+        fetchImpl: async (_url, init) => {
+          dispatchedBody = String(init.body);
+          const headers = init.headers as Record<string, string>;
+          dispatchedSignature = String(headers["x-patchbay-flow-signature-256"]);
+          return new Response(null, { status: 202 });
+        },
+      },
+    }, async () => {
+      return new Response(rss, { status: 200 });
+    });
+
+    const flowEventText = await readFile(join(dataDir, "flow-events.jsonl"), "utf8");
+    const flowEvent = JSON.parse(flowEventText.trim()) as Record<string, any>;
+    expect(flowEvent.type).toBe("upstream.release");
+    expect(flowEvent.source).toBe("patchbay");
+    expect(flowEvent.payload.repo).toBe("openai/codex");
+    expect(flowEvent.payload.tag).toBe("v1.2.3");
+    expect(JSON.parse(dispatchedBody).id).toBe(flowEvent.id);
+    expect(dispatchedSignature).toMatch(/^sha256=[0-9a-f]{64}$/);
+    expect(await readFile(join(dataDir, "flow-dispatches.jsonl"), "utf8")).toContain("\"status\":\"dispatched\"");
+  });
 });

@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { notifyDiscord, type DiscordConfig } from "./discord";
+import { dispatchFlowEventForFeedSignal, type FlowDispatchConfig } from "./flow";
 import { EventStore, jobForFeedSignal } from "./queue";
 import type { FeedEventName, FeedSignal, FeedSourceConfig } from "./types";
 
@@ -23,6 +24,7 @@ type FeedPollerConfig = {
   dataDir: string;
   sourcesPath: string;
   discord?: DiscordConfig;
+  flowDispatch?: FlowDispatchConfig;
 };
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -162,8 +164,9 @@ export async function pollFeedSource(input: {
   statePath: string;
   store: EventStore;
   discord?: DiscordConfig;
+  flowDispatch?: FlowDispatchConfig;
   fetchImpl?: FetchLike;
-}): Promise<{ signals: FeedSignal[]; jobs: number; primed: boolean }> {
+}): Promise<{ signals: FeedSignal[]; jobs: number; flowDispatches: number; primed: boolean }> {
   const response = await (input.fetchImpl ?? fetch)(input.source.url, {
     headers: { accept: "application/atom+xml, application/rss+xml, application/xml, text/xml;q=0.9" },
   });
@@ -178,6 +181,7 @@ export async function pollFeedSource(input: {
   const selectedEntries = primed && input.source.primeOnly !== false ? [] : unseenEntries(entries, previous?.lastSeenId);
   const signals: FeedSignal[] = [];
   let jobs = 0;
+  let flowDispatches = 0;
 
   for (const entry of selectedEntries) {
     const signal = signalFromEntry(input.source, entry);
@@ -187,9 +191,28 @@ export async function pollFeedSource(input: {
       await input.store.appendFeedJob(job);
       jobs += 1;
     }
+    const flowDispatch = await dispatchFlowEventForFeedSignal(signal, input.flowDispatch);
+    if (flowDispatch.event) {
+      await input.store.appendFlowEvent(flowDispatch.event);
+    }
+    if (flowDispatch.record) {
+      await input.store.appendFlowDispatch(flowDispatch.record);
+      if (flowDispatch.record.status === "dispatched") {
+        flowDispatches += 1;
+      }
+    }
     await notifyDiscord(input.discord ?? { notifyEvents: new Set() }, { signal, job });
     signals.push(signal);
-    console.log(JSON.stringify({ type: "feed.accepted", sourceId: signal.sourceId, provider: signal.provider, event: signal.event, entryId: signal.entryId, job: job?.id }));
+    console.log(JSON.stringify({
+      type: "feed.accepted",
+      sourceId: signal.sourceId,
+      provider: signal.provider,
+      event: signal.event,
+      entryId: signal.entryId,
+      job: job?.id,
+      flowEvent: flowDispatch.event?.id,
+      flowDispatch: flowDispatch.record?.status,
+    }));
   }
 
   if (newestId) {
@@ -200,7 +223,7 @@ export async function pollFeedSource(input: {
     await saveState(input.statePath, input.state);
   }
 
-  return { signals, jobs, primed };
+  return { signals, jobs, flowDispatches, primed };
 }
 
 export async function pollFeedsOnce(config: FeedPollerConfig, fetchImpl?: FetchLike): Promise<void> {
@@ -211,7 +234,15 @@ export async function pollFeedsOnce(config: FeedPollerConfig, fetchImpl?: FetchL
 
   for (const source of sources) {
     try {
-      await pollFeedSource({ source, state, statePath, store, discord: config.discord, fetchImpl });
+      await pollFeedSource({
+        source,
+        state,
+        statePath,
+        store,
+        discord: config.discord,
+        flowDispatch: config.flowDispatch,
+        fetchImpl,
+      });
     } catch (error) {
       console.error(JSON.stringify({
         type: "feed.poll_failed",

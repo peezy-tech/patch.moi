@@ -1,6 +1,6 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { FeedJob, FeedSignal, GitWebhookEvent, QueuedJob } from "./types";
+import type { FeedJob, FeedSignal, FlowDispatchRecord, FlowEvent, GitWebhookEvent, QueuedJob } from "./types";
 
 async function appendJsonLine(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
@@ -12,12 +12,16 @@ export class EventStore {
   readonly jobsPath: string;
   readonly feedEventsPath: string;
   readonly feedJobsPath: string;
+  readonly flowEventsPath: string;
+  readonly flowDispatchesPath: string;
 
   constructor(dataDir: string) {
     this.eventsPath = join(dataDir, "events.jsonl");
     this.jobsPath = join(dataDir, "jobs.jsonl");
     this.feedEventsPath = join(dataDir, "feed-events.jsonl");
     this.feedJobsPath = join(dataDir, "feed-jobs.jsonl");
+    this.flowEventsPath = join(dataDir, "flow-events.jsonl");
+    this.flowDispatchesPath = join(dataDir, "flow-dispatches.jsonl");
   }
 
   async appendEvent(event: GitWebhookEvent): Promise<void> {
@@ -34,6 +38,14 @@ export class EventStore {
 
   async appendFeedJob(job: FeedJob): Promise<void> {
     await appendJsonLine(this.feedJobsPath, job);
+  }
+
+  async appendFlowEvent(event: FlowEvent): Promise<void> {
+    await appendJsonLine(this.flowEventsPath, event);
+  }
+
+  async appendFlowDispatch(record: FlowDispatchRecord): Promise<void> {
+    await appendJsonLine(this.flowDispatchesPath, record);
   }
 }
 
