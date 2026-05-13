@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { notifyDiscord, parseDiscordConfig, type DiscordConfig } from "./discord";
 import { startFeedPolling } from "./feed";
+import { dispatchFlowEvent, replayFlowEvent } from "./flow";
 import { jsonResponse, methodNotAllowed, textResponse } from "./http";
 import { normalizeGithubEvent } from "./providers/github";
 import { normalizeJojoEvent } from "./providers/jojo";
@@ -15,6 +16,7 @@ export type ServerConfig = {
   jojoSecret: string;
   dataDir: string;
   discord?: DiscordConfig;
+  adminToken?: string;
 };
 
 function getHeader(headers: Headers, name: string, fallback: string): string {
@@ -56,6 +58,86 @@ async function persistAcceptedEvent(store: EventStore, event: GitWebhookEvent, d
   console.log(JSON.stringify({ type: "webhook.accepted", provider: event.provider, event: event.event, deliveryId: event.deliveryId, job: job?.id }));
   return jsonResponse({ status: event.event === "ping" ? "ok" : "accepted", event: event.event, deliveryId: event.deliveryId }, {
     status: event.event === "ping" ? 200 : 202,
+  });
+}
+
+function adminAuthorized(request: Request, config: ServerConfig): boolean {
+  if (!config.adminToken) {
+    return true;
+  }
+  const bearer = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const header = request.headers.get("x-patchbay-admin-token");
+  return bearer === config.adminToken || header === config.adminToken;
+}
+
+function requireAdmin(request: Request, config: ServerConfig): Response | undefined {
+  return adminAuthorized(request, config) ? undefined : jsonResponse({ error: "unauthorized" }, { status: 401 });
+}
+
+function numberParam(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function dispatchStatus(value: string | null) {
+  if (!value) return undefined;
+  if (value === "dispatched" || value === "failed" || value === "skipped") return value;
+  throw new Error("flow dispatch status must be dispatched, failed, or skipped");
+}
+
+async function handleFlowEvents(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
+  const unauthorized = requireAdmin(request, config);
+  if (unauthorized) return unauthorized;
+
+  const url = new URL(request.url);
+  if (request.method === "GET" && url.pathname === "/flow-events") {
+    return jsonResponse({
+      events: await store.listFlowEvents({
+        type: url.searchParams.get("type") ?? undefined,
+        limit: numberParam(url.searchParams.get("limit")),
+      }),
+    });
+  }
+
+  const eventMatch = url.pathname.match(/^\/flow-events\/([^/]+)(?:\/(retry|replay))?$/);
+  if (!eventMatch?.[1]) return jsonResponse({ error: "not_found" }, { status: 404 });
+
+  const eventId = decodeURIComponent(eventMatch[1]);
+  const event = await store.getFlowEvent(eventId);
+  if (!event) {
+    return jsonResponse({ error: "flow_event_not_found" }, { status: 404 });
+  }
+  if (request.method === "GET" && !eventMatch[2]) {
+    return jsonResponse({
+      event,
+      dispatches: await store.listFlowDispatches({ eventId, limit: numberParam(url.searchParams.get("limit")) }),
+    });
+  }
+  if (request.method === "POST" && eventMatch[2] === "retry") {
+    const record = await dispatchFlowEvent(event, {}, { env: process.env });
+    await store.appendFlowDispatch(record);
+    return jsonResponse({ event, record }, { status: record.status === "failed" ? 502 : 202 });
+  }
+  if (request.method === "POST" && eventMatch[2] === "replay") {
+    const record = await replayFlowEvent(event, {}, { env: process.env });
+    await store.appendFlowDispatch(record);
+    return jsonResponse({ event, record }, { status: record.status === "failed" ? 502 : 202 });
+  }
+  return methodNotAllowed();
+}
+
+async function handleFlowDispatches(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
+  const unauthorized = requireAdmin(request, config);
+  if (unauthorized) return unauthorized;
+  if (request.method !== "GET") return methodNotAllowed();
+  const url = new URL(request.url);
+  return jsonResponse({
+    dispatches: await store.listFlowDispatches({
+      eventId: url.searchParams.get("eventId") ?? undefined,
+      status: dispatchStatus(url.searchParams.get("status")),
+      limit: numberParam(url.searchParams.get("limit")),
+    }),
   });
 }
 
@@ -107,6 +189,12 @@ export function createHandler(config: ServerConfig): (request: Request) => Promi
     if (url.pathname === "/jojo") {
       return handleJojo(request, config, store);
     }
+    if (url.pathname === "/flow-events" || url.pathname.startsWith("/flow-events/")) {
+      return handleFlowEvents(request, config, store);
+    }
+    if (url.pathname === "/flow-dispatches") {
+      return handleFlowDispatches(request, config, store);
+    }
     return jsonResponse({ error: "not_found" }, { status: 404 });
   };
 }
@@ -118,6 +206,7 @@ if (import.meta.main) {
     githubSecret: process.env.GITHUB_WEBHOOK_SECRET ?? "",
     jojoSecret: process.env.JOJO_WEBHOOK_SECRET ?? "",
     dataDir: process.env.DATA_DIR ?? "./data",
+    adminToken: process.env.PATCHBAY_ADMIN_TOKEN,
     discord: parseDiscordConfig({
       webhookUrl: process.env.DISCORD_WEBHOOK_URL,
       notifyEvents: process.env.DISCORD_NOTIFY_EVENTS,

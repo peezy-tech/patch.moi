@@ -2,6 +2,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
+import { EventStore } from "../src/queue";
 import { createHandler } from "../src/server";
 import { hmacSha256Hex } from "../src/signatures";
 
@@ -97,6 +98,81 @@ describe("server", () => {
       expect(await readFile(join(dataDir, "jobs.jsonl"), "utf8")).toContain("\"kind\":\"main_push\"");
     } finally {
       globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("lists, retries, and replays stored flow events behind admin auth", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalDispatchUrl = process.env.PATCHBAY_FLOW_DISPATCH_URL;
+    const dataDir = await mkdtemp(join(tmpdir(), "patchbay-"));
+    const store = new EventStore(dataDir);
+    const event = {
+      id: "patchbay:source:entry:upstream.release",
+      type: "upstream.release",
+      source: "patchbay",
+      receivedAt: "2026-05-13T00:00:00.000Z",
+      payload: { repo: "openai/codex", tag: "v1.2.3" },
+    };
+    await store.appendFlowEvent(event);
+    await store.appendFlowDispatch({
+      eventId: event.id,
+      eventType: event.type,
+      status: "failed",
+      error: "network",
+      createdAt: "2026-05-13T00:00:01.000Z",
+    });
+
+    const calls: Array<{ url: string; body: string }> = [];
+    process.env.PATCHBAY_FLOW_DISPATCH_URL = "http://172.20.0.1:7345/events";
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), body: String(init?.body ?? "") });
+      return new Response("accepted", { status: 202 });
+    }) as unknown as typeof fetch;
+
+    try {
+      const handler = createHandler({
+        githubSecret: "gh",
+        jojoSecret: "jojo",
+        dataDir,
+        adminToken: "admin",
+      });
+
+      const unauthorized = await handler(new Request("http://localhost/flow-events"));
+      expect(unauthorized.status).toBe(401);
+
+      const list = await handler(new Request("http://localhost/flow-events", {
+        headers: { authorization: "Bearer admin" },
+      }));
+      expect(list.status).toBe(200);
+      expect(await list.json()).toMatchObject({ events: [{ id: event.id, type: event.type }] });
+
+      const dispatches = await handler(new Request("http://localhost/flow-dispatches?status=failed", {
+        headers: { "x-patchbay-admin-token": "admin" },
+      }));
+      expect(dispatches.status).toBe(200);
+      expect(await dispatches.json()).toMatchObject({ dispatches: [{ status: "failed", eventId: event.id }] });
+
+      const retry = await handler(new Request(`http://localhost/flow-events/${encodeURIComponent(event.id)}/retry`, {
+        method: "POST",
+        headers: { authorization: "Bearer admin" },
+      }));
+      expect(retry.status).toBe(202);
+      expect(calls.at(-1)?.url).toBe("http://172.20.0.1:7345/events");
+      expect(JSON.parse(calls.at(-1)?.body ?? "{}")).toMatchObject({ id: event.id });
+
+      const replay = await handler(new Request(`http://localhost/flow-events/${encodeURIComponent(event.id)}/replay`, {
+        method: "POST",
+        headers: { authorization: "Bearer admin" },
+      }));
+      expect(replay.status).toBe(202);
+      expect(calls.at(-1)?.url).toBe(`http://172.20.0.1:7345/events/${encodeURIComponent(event.id)}/replay`);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalDispatchUrl === undefined) {
+        delete process.env.PATCHBAY_FLOW_DISPATCH_URL;
+      } else {
+        process.env.PATCHBAY_FLOW_DISPATCH_URL = originalDispatchUrl;
+      }
     }
   });
 });

@@ -93,36 +93,25 @@ function targetDispatchSecret(
   return env[envName]?.trim() || undefined;
 }
 
-export async function dispatchFlowEventForFeedSignal(
-  signal: FeedSignal,
+export async function dispatchFlowEvent(
+  event: FlowEvent,
+  target: Partial<FeedFlowDispatchTarget> = {},
   config: FlowDispatchConfig = {},
-): Promise<{ event?: FlowEvent<Record<string, unknown>>; record?: FlowDispatchRecord }> {
-  if (!isFlowDispatchTarget(signal.target)) {
-    return {};
-  }
-
-  const event = flowEventForFeedSignal(signal);
-  if (!event) {
-    return {};
-  }
-
+): Promise<FlowDispatchRecord> {
   const env = config.env ?? process.env;
-  const url = targetDispatchUrl(signal.target, env);
+  const url = targetDispatchUrl({ mode: "flow_dispatch", eventType: event.type, ...target }, env);
   if (!url) {
     return {
-      event,
-      record: {
-        eventId: event.id,
-        eventType: event.type,
-        status: "skipped",
-        error: "flow dispatch URL is not configured",
-        createdAt: new Date().toISOString(),
-      },
+      eventId: event.id,
+      eventType: event.type,
+      status: "skipped",
+      error: "flow dispatch URL is not configured",
+      createdAt: new Date().toISOString(),
     };
   }
 
   const body = JSON.stringify(event);
-  const secret = targetDispatchSecret(signal.target, env);
+  const secret = targetDispatchSecret({ mode: "flow_dispatch", eventType: event.type, ...target }, env);
   const headers: Record<string, string> = {
     "content-type": "application/json",
     "x-patchbay-flow-event": event.type,
@@ -140,28 +129,97 @@ export async function dispatchFlowEventForFeedSignal(
       body,
     });
     return {
-      event,
-      record: {
-        eventId: event.id,
-        eventType: event.type,
-        url,
-        status: response.ok ? "dispatched" : "failed",
-        httpStatus: response.status,
-        error: response.ok ? undefined : `flow dispatch returned ${response.status}`,
-        createdAt: new Date().toISOString(),
-      },
+      eventId: event.id,
+      eventType: event.type,
+      url,
+      status: response.ok ? "dispatched" : "failed",
+      httpStatus: response.status,
+      error: response.ok ? undefined : `flow dispatch returned ${response.status}`,
+      createdAt: new Date().toISOString(),
     };
   } catch (error) {
     return {
-      event,
-      record: {
-        eventId: event.id,
-        eventType: event.type,
-        url,
-        status: "failed",
-        error: error instanceof Error ? error.message : String(error),
-        createdAt: new Date().toISOString(),
-      },
+      eventId: event.id,
+      eventType: event.type,
+      url,
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+      createdAt: new Date().toISOString(),
     };
   }
+}
+
+export async function replayFlowEvent(
+  event: FlowEvent,
+  target: Partial<FeedFlowDispatchTarget> = {},
+  config: FlowDispatchConfig = {},
+): Promise<FlowDispatchRecord> {
+  const env = config.env ?? process.env;
+  const dispatchUrl = targetDispatchUrl({ mode: "flow_dispatch", eventType: event.type, ...target }, env);
+  if (!dispatchUrl) {
+    return {
+      eventId: event.id,
+      eventType: event.type,
+      status: "skipped",
+      error: "flow dispatch URL is not configured",
+      createdAt: new Date().toISOString(),
+    };
+  }
+  const url = `${dispatchUrl.replace(/\/(?:events|flow-events)\/?$/, "")}/events/${encodeURIComponent(event.id)}/replay`;
+  const body = JSON.stringify({ wait: false });
+  const secret = targetDispatchSecret({ mode: "flow_dispatch", eventType: event.type, ...target }, env);
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "x-patchbay-flow-event": event.type,
+    "x-patchbay-flow-delivery": event.id,
+  };
+  if (secret) {
+    headers["x-patchbay-flow-signature-256"] =
+      `sha256=${await hmacSha256Hex(secret, body)}`;
+  }
+
+  try {
+    const response = await (config.fetchImpl ?? fetch)(url, {
+      method: "POST",
+      headers,
+      body,
+    });
+    return {
+      eventId: event.id,
+      eventType: event.type,
+      url,
+      status: response.ok ? "dispatched" : "failed",
+      httpStatus: response.status,
+      error: response.ok ? undefined : `flow replay returned ${response.status}`,
+      createdAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    return {
+      eventId: event.id,
+      eventType: event.type,
+      url,
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+      createdAt: new Date().toISOString(),
+    };
+  }
+}
+
+export async function dispatchFlowEventForFeedSignal(
+  signal: FeedSignal,
+  config: FlowDispatchConfig = {},
+): Promise<{ event?: FlowEvent<Record<string, unknown>>; record?: FlowDispatchRecord }> {
+  if (!isFlowDispatchTarget(signal.target)) {
+    return {};
+  }
+
+  const event = flowEventForFeedSignal(signal);
+  if (!event) {
+    return {};
+  }
+
+  return {
+    event,
+    record: await dispatchFlowEvent(event, signal.target, config),
+  };
 }

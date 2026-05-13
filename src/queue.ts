@@ -1,10 +1,32 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { FeedJob, FeedSignal, FlowDispatchRecord, FlowEvent, GitWebhookEvent, QueuedJob } from "./types";
 
 async function appendJsonLine(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await appendFile(path, `${JSON.stringify(value)}\n`, "utf8");
+}
+
+async function readJsonLines<T>(path: string): Promise<T[]> {
+  let text = "";
+  try {
+    text = await readFile(path, "utf8");
+  } catch (error) {
+    if (typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as T);
+}
+
+function limitNewest<T>(items: T[], limit = 50): T[] {
+  const safeLimit = Math.max(1, Math.min(500, Math.trunc(limit)));
+  return items.slice(-safeLimit).reverse();
 }
 
 export class EventStore {
@@ -46,6 +68,35 @@ export class EventStore {
 
   async appendFlowDispatch(record: FlowDispatchRecord): Promise<void> {
     await appendJsonLine(this.flowDispatchesPath, record);
+  }
+
+  async listFlowEvents(options: { limit?: number; type?: string } = {}): Promise<FlowEvent[]> {
+    const events = await readJsonLines<FlowEvent>(this.flowEventsPath);
+    return limitNewest(
+      options.type ? events.filter((event) => event.type === options.type) : events,
+      options.limit,
+    );
+  }
+
+  async getFlowEvent(eventId: string): Promise<FlowEvent | undefined> {
+    const events = await readJsonLines<FlowEvent>(this.flowEventsPath);
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      if (events[index]?.id === eventId) {
+        return events[index];
+      }
+    }
+    return undefined;
+  }
+
+  async listFlowDispatches(options: { limit?: number; eventId?: string; status?: FlowDispatchRecord["status"] } = {}): Promise<FlowDispatchRecord[]> {
+    const records = await readJsonLines<FlowDispatchRecord>(this.flowDispatchesPath);
+    return limitNewest(
+      records.filter((record) =>
+        (!options.eventId || record.eventId === options.eventId) &&
+        (!options.status || record.status === options.status),
+      ),
+      options.limit,
+    );
   }
 }
 
