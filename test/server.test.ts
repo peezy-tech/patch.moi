@@ -78,6 +78,7 @@ describe("server", () => {
         jojoSecret: "jojo",
         dataDir,
         discord: {
+          enabled: true,
           webhookUrl: "https://discord.example/webhook",
           notifyEvents: new Set(["push"]),
         },

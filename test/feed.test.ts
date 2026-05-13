@@ -95,7 +95,7 @@ describe("feed watcher", () => {
     const sourcesPath = join(dataDir, "sources.json");
     await writeFile(sourcesPath, JSON.stringify({ sources: [source] }), "utf8");
 
-    await pollFeedsOnce({ dataDir, sourcesPath, discord: { webhookUrl: "https://discord.example/webhook", notifyEvents: new Set(["push"]) } }, async () => {
+    await pollFeedsOnce({ dataDir, sourcesPath, discord: { enabled: true, webhookUrl: "https://discord.example/webhook", notifyEvents: new Set(["push"]) } }, async () => {
       return new Response(atom, { status: 200 });
     });
 
@@ -128,7 +128,7 @@ describe("feed watcher", () => {
     }), "utf8");
 
     let feedCalls = 0;
-    await pollFeedsOnce({ dataDir, sourcesPath, discord: { notifyEvents: new Set(["release"]) } }, async () => {
+    await pollFeedsOnce({ dataDir, sourcesPath, discord: { enabled: false, notifyEvents: new Set(["release"]) } }, async () => {
       feedCalls += 1;
       return new Response(rss, { status: 200 });
     });
@@ -170,7 +170,7 @@ describe("feed watcher", () => {
     await pollFeedsOnce({
       dataDir,
       sourcesPath,
-      discord: { notifyEvents: new Set(["release"]) },
+      discord: { enabled: false, notifyEvents: new Set(["release"]) },
       flowDispatch: {
         env: {
           FLOW_URL: "https://flow.example/events",

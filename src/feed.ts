@@ -201,7 +201,7 @@ export async function pollFeedSource(input: {
         flowDispatches += 1;
       }
     }
-    await notifyDiscord(input.discord ?? { notifyEvents: new Set() }, { signal, job });
+    await notifyDiscord(input.discord ?? { enabled: false, notifyEvents: new Set() }, { signal, job });
     signals.push(signal);
     console.log(JSON.stringify({
       type: "feed.accepted",

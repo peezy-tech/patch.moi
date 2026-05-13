@@ -55,10 +55,18 @@ const feedSignal: FeedSignal = {
 describe("discord notifications", () => {
   test("parses default notify events", () => {
     const config = parseDiscordConfig({});
+    expect(config.enabled).toBe(false);
     expect(config.notifyEvents.has("push")).toBe(true);
     expect(config.notifyEvents.has("pull_request")).toBe(true);
     expect(config.notifyEvents.has("release")).toBe(true);
     expect(config.notifyEvents.has("ping")).toBe(false);
+  });
+
+  test("parses explicit enable flag", () => {
+    expect(parseDiscordConfig({ enabled: "true" }).enabled).toBe(true);
+    expect(parseDiscordConfig({ enabled: "1" }).enabled).toBe(true);
+    expect(parseDiscordConfig({ enabled: "yes" }).enabled).toBe(true);
+    expect(parseDiscordConfig({ enabled: "false" }).enabled).toBe(false);
   });
 
   test("builds readable push embeds", () => {
@@ -92,7 +100,16 @@ describe("discord notifications", () => {
 
   test("does nothing without a webhook URL", async () => {
     let calls = 0;
-    await notifyDiscord(parseDiscordConfig({}), { event: pushEvent }, async () => {
+    await notifyDiscord(parseDiscordConfig({ enabled: "true" }), { event: pushEvent }, async () => {
+      calls += 1;
+      return new Response(null, { status: 204 });
+    });
+    expect(calls).toBe(0);
+  });
+
+  test("does nothing when Discord output is disabled", async () => {
+    let calls = 0;
+    await notifyDiscord(parseDiscordConfig({ webhookUrl: "https://discord.example/webhook", notifyEvents: "push" }), { event: pushEvent }, async () => {
       calls += 1;
       return new Response(null, { status: 204 });
     });
@@ -101,7 +118,7 @@ describe("discord notifications", () => {
 
   test("skips unconfigured events", async () => {
     let calls = 0;
-    await notifyDiscord(parseDiscordConfig({ webhookUrl: "https://discord.example/webhook", notifyEvents: "release" }), { event: pushEvent }, async () => {
+    await notifyDiscord(parseDiscordConfig({ enabled: "true", webhookUrl: "https://discord.example/webhook", notifyEvents: "release" }), { event: pushEvent }, async () => {
       calls += 1;
       return new Response(null, { status: 204 });
     });
@@ -110,7 +127,7 @@ describe("discord notifications", () => {
 
   test("posts configured events", async () => {
     let body = "";
-    await notifyDiscord(parseDiscordConfig({ webhookUrl: "https://discord.example/webhook", notifyEvents: "push" }), { event: pushEvent }, async (_url, init) => {
+    await notifyDiscord(parseDiscordConfig({ enabled: "true", webhookUrl: "https://discord.example/webhook", notifyEvents: "push" }), { event: pushEvent }, async (_url, init) => {
       body = String(init?.body);
       return new Response(null, { status: 204 });
     });
@@ -119,7 +136,7 @@ describe("discord notifications", () => {
   });
 
   test("throws on Discord failure", async () => {
-    await expect(notifyDiscord(parseDiscordConfig({ webhookUrl: "https://discord.example/webhook" }), { event: pushEvent }, async () => {
+    await expect(notifyDiscord(parseDiscordConfig({ enabled: "true", webhookUrl: "https://discord.example/webhook" }), { event: pushEvent }, async () => {
       return new Response("bad", { status: 500 });
     })).rejects.toThrow("Discord webhook returned 500");
   });

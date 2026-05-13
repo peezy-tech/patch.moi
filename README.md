@@ -18,6 +18,7 @@ PORT=3000
 DATA_DIR=/app/data
 JOJO_WEBHOOK_SECRET=...
 GITHUB_WEBHOOK_SECRET=...
+DISCORD_OUTPUT_ENABLED=false
 DISCORD_WEBHOOK_URL=
 DISCORD_NOTIFY_EVENTS=push,pull_request,release
 FEED_SOURCES_PATH=./feed-sources.json
@@ -25,9 +26,9 @@ PATCHBAY_FLOW_DISPATCH_URL=
 PATCHBAY_FLOW_DISPATCH_SECRET=
 ```
 
-Discord notifications are optional. When `DISCORD_WEBHOOK_URL` is unset, the
-service skips Discord output. `DISCORD_NOTIFY_EVENTS` is a comma-separated
-allow list and defaults to `push,pull_request,release`.
+Discord notifications are off by default. Set `DISCORD_OUTPUT_ENABLED=true`
+and `DISCORD_WEBHOOK_URL` to send Discord output. `DISCORD_NOTIFY_EVENTS` is a
+comma-separated allow list and defaults to `push,pull_request,release`.
 
 ## Development
 

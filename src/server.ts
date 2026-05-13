@@ -208,6 +208,7 @@ if (import.meta.main) {
     dataDir: process.env.DATA_DIR ?? "./data",
     adminToken: process.env.PATCHBAY_ADMIN_TOKEN,
     discord: parseDiscordConfig({
+      enabled: process.env.DISCORD_OUTPUT_ENABLED,
       webhookUrl: process.env.DISCORD_WEBHOOK_URL,
       notifyEvents: process.env.DISCORD_NOTIFY_EVENTS,
     }),

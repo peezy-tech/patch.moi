@@ -26,6 +26,7 @@ type DiscordPayload = {
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 export type DiscordConfig = {
+  enabled: boolean;
   webhookUrl?: string;
   notifyEvents: Set<string>;
 };
@@ -38,7 +39,13 @@ export type DiscordNotification = {
 
 const defaultNotifyEvents = ["push", "pull_request", "release"];
 
+function parseEnabled(value?: string): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
+}
+
 export function parseDiscordConfig(input: {
+  enabled?: string;
   webhookUrl?: string;
   notifyEvents?: string;
 }): DiscordConfig {
@@ -50,6 +57,7 @@ export function parseDiscordConfig(input: {
   );
 
   return {
+    enabled: parseEnabled(input.enabled),
     webhookUrl: input.webhookUrl?.trim() || undefined,
     notifyEvents,
   };
@@ -188,7 +196,7 @@ export async function notifyDiscord(
   fetchImpl: FetchLike = fetch,
 ): Promise<void> {
   const eventName = notification.signal?.event ?? notification.event?.event;
-  if (!config.webhookUrl || !eventName || !config.notifyEvents.has(eventName)) {
+  if (!config.enabled || !config.webhookUrl || !eventName || !config.notifyEvents.has(eventName)) {
     return;
   }
 
