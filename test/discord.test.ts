@@ -10,8 +10,8 @@ const pushEvent: GitWebhookEvent = {
   receivedAt: "2026-05-12T21:00:00.000Z",
   repo: {
     owner: "peezy-tech",
-    name: "patch",
-    fullName: "peezy-tech/patch",
+    name: "patch.moi",
+    fullName: "peezy-tech/patch.moi",
   },
   sender: {
     username: "matamune",
@@ -20,7 +20,7 @@ const pushEvent: GitWebhookEvent = {
   after: "0123456789abcdef",
   raw: {
     head_commit: {
-      url: "https://jojo.build/peezy-tech/patch/commit/0123456789abcdef",
+      url: "https://jojo.build/peezy-tech/patch.moi/commit/0123456789abcdef",
     },
   },
 };
@@ -76,7 +76,7 @@ describe("discord notifications", () => {
         id: "jojo:delivery-1:main_push",
         kind: "main_push",
         provider: "jojo",
-        repoFullName: "peezy-tech/patch",
+        repoFullName: "peezy-tech/patch.moi",
         ref: "refs/heads/main",
         sha: "0123456789abcdef",
         deliveryId: "delivery-1",
@@ -85,8 +85,8 @@ describe("discord notifications", () => {
     });
 
     expect(payload.username).toBe("patch");
-    expect(payload.embeds[0].title).toBe("[jojo] peezy-tech/patch push to main");
-    expect(payload.embeds[0].url).toBe("https://jojo.build/peezy-tech/patch/commit/0123456789abcdef");
+    expect(payload.embeds[0].title).toBe("[jojo] peezy-tech/patch.moi push to main");
+    expect(payload.embeds[0].url).toBe("https://jojo.build/peezy-tech/patch.moi/commit/0123456789abcdef");
     expect(payload.embeds[0].fields).toContainEqual({ name: "Queued", value: "main_push", inline: true });
   });
 
@@ -132,7 +132,7 @@ describe("discord notifications", () => {
       return new Response(null, { status: 204 });
     });
 
-    expect(JSON.parse(body).embeds[0].title).toBe("[jojo] peezy-tech/patch push to main");
+    expect(JSON.parse(body).embeds[0].title).toBe("[jojo] peezy-tech/patch.moi push to main");
   });
 
   test("throws on Discord failure", async () => {

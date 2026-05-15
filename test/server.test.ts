@@ -55,8 +55,8 @@ describe("server", () => {
       ref: "refs/heads/main",
       after: "abc123",
       repository: {
-        name: "patch",
-        full_name: "peezy-tech/patch",
+        name: "patch.moi",
+        full_name: "peezy-tech/patch.moi",
         owner: { username: "peezy-tech" },
       },
     });
@@ -87,8 +87,8 @@ describe("server", () => {
         ref: "refs/heads/main",
         after: "abc123",
         repository: {
-          name: "patch",
-          full_name: "peezy-tech/patch",
+          name: "patch.moi",
+          full_name: "peezy-tech/patch.moi",
           owner: { username: "peezy-tech" },
         },
       });
