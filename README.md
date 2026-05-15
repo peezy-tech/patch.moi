@@ -29,9 +29,6 @@ PATCH_FLOW_DISPATCH_SECRET=
 PATCH_ADMIN_TOKEN=
 ```
 
-The legacy `PATCHBAY_FLOW_DISPATCH_URL`, `PATCHBAY_FLOW_DISPATCH_SECRET`, and
-`PATCHBAY_ADMIN_TOKEN` names remain accepted during the migration window.
-
 Discord notifications are off by default. Set `DISCORD_OUTPUT_ENABLED=true`
 and `DISCORD_WEBHOOK_URL` to send Discord output. `DISCORD_NOTIFY_EVENTS` is a
 comma-separated allow list and defaults to `push,pull_request,release`.

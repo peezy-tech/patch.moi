@@ -54,14 +54,6 @@ function flowPayloadFromSignal(signal: FeedSignal): Record<string, unknown> {
   };
 }
 
-function envValue(
-  env: Record<string, string | undefined>,
-  preferred: string,
-  legacy?: string,
-): string | undefined {
-  return env[preferred]?.trim() || (legacy ? env[legacy]?.trim() : undefined) || undefined;
-}
-
 export function flowEventForFeedSignal(
   signal: FeedSignal,
   receivedAt = new Date().toISOString(),
@@ -93,12 +85,9 @@ function targetDispatchUrl(
   }
   const envName = target.dispatchUrlEnv?.trim();
   if (envName) {
-    if (envName === "PATCH_FLOW_DISPATCH_URL" || envName === "PATCHBAY_FLOW_DISPATCH_URL") {
-      return envValue(env, "PATCH_FLOW_DISPATCH_URL", "PATCHBAY_FLOW_DISPATCH_URL");
-    }
     return env[envName]?.trim() || undefined;
   }
-  return envValue(env, "PATCH_FLOW_DISPATCH_URL", "PATCHBAY_FLOW_DISPATCH_URL");
+  return env.PATCH_FLOW_DISPATCH_URL?.trim() || undefined;
 }
 
 function targetDispatchSecret(
@@ -107,12 +96,9 @@ function targetDispatchSecret(
 ): string | undefined {
   const envName = target.dispatchSecretEnv?.trim();
   if (envName) {
-    if (envName === "PATCH_FLOW_DISPATCH_SECRET" || envName === "PATCHBAY_FLOW_DISPATCH_SECRET") {
-      return envValue(env, "PATCH_FLOW_DISPATCH_SECRET", "PATCHBAY_FLOW_DISPATCH_SECRET");
-    }
     return env[envName]?.trim() || undefined;
   }
-  return envValue(env, "PATCH_FLOW_DISPATCH_SECRET", "PATCHBAY_FLOW_DISPATCH_SECRET");
+  return env.PATCH_FLOW_DISPATCH_SECRET?.trim() || undefined;
 }
 
 async function flowHeaders(event: FlowEvent, body: string, secret?: string): Promise<Record<string, string>> {
@@ -122,8 +108,6 @@ async function flowHeaders(event: FlowEvent, body: string, secret?: string): Pro
     "x-flow-delivery": event.id,
     "x-patch-flow-event": event.type,
     "x-patch-flow-delivery": event.id,
-    "x-patchbay-flow-event": event.type,
-    "x-patchbay-flow-delivery": event.id,
   };
   if (!secret) {
     return headers;
@@ -131,7 +115,6 @@ async function flowHeaders(event: FlowEvent, body: string, secret?: string): Pro
   const digest = await hmacSha256Hex(secret, body);
   headers["x-flow-signature-256"] = `sha256=${digest}`;
   headers["x-patch-flow-signature-256"] = `sha256=${digest}`;
-  headers["x-patchbay-flow-signature-256"] = `sha256=${digest}`;
   return headers;
 }
 

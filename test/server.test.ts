@@ -42,10 +42,10 @@ describe("server", () => {
 
   test("does not serve old path-prefixed routes", async () => {
     const handler = createHandler({ githubSecret: "gh", jojoSecret: "jojo", dataDir: await mkdtemp(join(tmpdir(), "patch-")) });
-    const legacyGitWebhooks = await handler(new Request("http://localhost/git-webhooks/jojo", { method: "POST", body: "{}" }));
-    const legacyPatchbay = await handler(new Request("http://localhost/patchbay/jojo", { method: "POST", body: "{}" }));
-    expect(legacyGitWebhooks.status).toBe(404);
-    expect(legacyPatchbay.status).toBe(404);
+    const prefixedJojo = await handler(new Request("http://localhost/prefix/jojo", { method: "POST", body: "{}" }));
+    const prefixedGithub = await handler(new Request("http://localhost/prefix/github", { method: "POST", body: "{}" }));
+    expect(prefixedJojo.status).toBe(404);
+    expect(prefixedGithub.status).toBe(404);
   });
 
   test("accepts jojo main pushes and queues a job", async () => {
@@ -105,7 +105,6 @@ describe("server", () => {
   test("lists, retries, and replays stored flow events behind admin auth", async () => {
     const originalFetch = globalThis.fetch;
     const originalDispatchUrl = process.env.PATCH_FLOW_DISPATCH_URL;
-    const originalLegacyDispatchUrl = process.env.PATCHBAY_FLOW_DISPATCH_URL;
     const dataDir = await mkdtemp(join(tmpdir(), "patch-"));
     const store = new EventStore(dataDir);
     const event = {
@@ -126,7 +125,6 @@ describe("server", () => {
 
     const calls: Array<{ url: string; body: string; headers: Record<string, string> }> = [];
     process.env.PATCH_FLOW_DISPATCH_URL = "http://172.20.0.1:7345/events";
-    delete process.env.PATCHBAY_FLOW_DISPATCH_URL;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       calls.push({
         url: String(url),
@@ -159,11 +157,6 @@ describe("server", () => {
       expect(dispatches.status).toBe(200);
       expect(await dispatches.json()).toMatchObject({ dispatches: [{ status: "failed", eventId: event.id }] });
 
-      const legacyHeader = await handler(new Request("http://localhost/flow-dispatches?status=failed", {
-        headers: { "x-patchbay-admin-token": "admin" },
-      }));
-      expect(legacyHeader.status).toBe(200);
-
       const retry = await handler(new Request(`http://localhost/flow-events/${encodeURIComponent(event.id)}/retry`, {
         method: "POST",
         headers: { authorization: "Bearer admin" },
@@ -172,7 +165,6 @@ describe("server", () => {
       expect(calls.at(-1)?.url).toBe("http://172.20.0.1:7345/events");
       expect(JSON.parse(calls.at(-1)?.body ?? "{}")).toMatchObject({ id: event.id });
       expect(calls.at(-1)?.headers["x-flow-delivery"]).toBe(event.id);
-      expect(calls.at(-1)?.headers["x-patchbay-flow-delivery"]).toBe(event.id);
 
       const replay = await handler(new Request(`http://localhost/flow-events/${encodeURIComponent(event.id)}/replay`, {
         method: "POST",
@@ -186,11 +178,6 @@ describe("server", () => {
         delete process.env.PATCH_FLOW_DISPATCH_URL;
       } else {
         process.env.PATCH_FLOW_DISPATCH_URL = originalDispatchUrl;
-      }
-      if (originalLegacyDispatchUrl === undefined) {
-        delete process.env.PATCHBAY_FLOW_DISPATCH_URL;
-      } else {
-        process.env.PATCHBAY_FLOW_DISPATCH_URL = originalLegacyDispatchUrl;
       }
     }
   });

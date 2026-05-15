@@ -169,7 +169,6 @@ describe("feed watcher", () => {
     let dispatchedBody = "";
     let dispatchedSignature = "";
     let dispatchedGenericSignature = "";
-    let dispatchedLegacySignature = "";
     await pollFeedsOnce({
       dataDir,
       sourcesPath,
@@ -184,7 +183,6 @@ describe("feed watcher", () => {
           const headers = init.headers as Record<string, string>;
           dispatchedSignature = String(headers["x-patch-flow-signature-256"]);
           dispatchedGenericSignature = String(headers["x-flow-signature-256"]);
-          dispatchedLegacySignature = String(headers["x-patchbay-flow-signature-256"]);
           return new Response(null, { status: 202 });
         },
       },
@@ -201,11 +199,10 @@ describe("feed watcher", () => {
     expect(JSON.parse(dispatchedBody).id).toBe(flowEvent.id);
     expect(dispatchedSignature).toMatch(/^sha256=[0-9a-f]{64}$/);
     expect(dispatchedGenericSignature).toBe(dispatchedSignature);
-    expect(dispatchedLegacySignature).toBe(dispatchedSignature);
     expect(await readFile(join(dataDir, "flow-dispatches.jsonl"), "utf8")).toContain("\"status\":\"dispatched\"");
   });
 
-  test("flow dispatch accepts legacy env names during migration", async () => {
+  test("flow dispatch uses default Patch env names", async () => {
     let dispatchedUrl = "";
     let dispatchedSignature = "";
 
@@ -217,8 +214,8 @@ describe("feed watcher", () => {
       payload: { repo: "openai/codex", tag: "v1.2.3" },
     }, {}, {
       env: {
-        PATCHBAY_FLOW_DISPATCH_URL: "https://flow.example/events",
-        PATCHBAY_FLOW_DISPATCH_SECRET: "secret",
+        PATCH_FLOW_DISPATCH_URL: "https://flow.example/events",
+        PATCH_FLOW_DISPATCH_SECRET: "secret",
       },
       fetchImpl: async (url, init) => {
         dispatchedUrl = url;
