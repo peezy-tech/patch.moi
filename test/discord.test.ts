@@ -1,29 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildDiscordPayload, notifyDiscord, parseDiscordConfig } from "../src/discord";
-import type { FeedSignal, GitWebhookEvent } from "../src/types";
-
-const pushEvent: GitWebhookEvent = {
-  provider: "jojo",
-  event: "push",
-  providerEvent: "push",
-  deliveryId: "delivery-1",
-  receivedAt: "2026-05-12T21:00:00.000Z",
-  repo: {
-    owner: "peezy-tech",
-    name: "patch.moi",
-    fullName: "peezy-tech/patch.moi",
-  },
-  sender: {
-    username: "matamune",
-  },
-  ref: "refs/heads/main",
-  after: "0123456789abcdef",
-  raw: {
-    head_commit: {
-      url: "https://jojo.build/peezy-tech/patch.moi/commit/0123456789abcdef",
-    },
-  },
-};
+import type { FeedSignal } from "../src/types";
 
 const feedSignal: FeedSignal = {
   sourceId: "github-openai-codex-main",
@@ -57,7 +34,6 @@ describe("discord notifications", () => {
     const config = parseDiscordConfig({});
     expect(config.enabled).toBe(false);
     expect(config.notifyEvents.has("push")).toBe(true);
-    expect(config.notifyEvents.has("pull_request")).toBe(true);
     expect(config.notifyEvents.has("release")).toBe(true);
     expect(config.notifyEvents.has("ping")).toBe(false);
   });
@@ -69,29 +45,9 @@ describe("discord notifications", () => {
     expect(parseDiscordConfig({ enabled: "false" }).enabled).toBe(false);
   });
 
-  test("builds readable push embeds", () => {
-    const payload = buildDiscordPayload({
-      event: pushEvent,
-      job: {
-        id: "jojo:delivery-1:main_push",
-        kind: "main_push",
-        provider: "jojo",
-        repoFullName: "peezy-tech/patch.moi",
-        ref: "refs/heads/main",
-        sha: "0123456789abcdef",
-        deliveryId: "delivery-1",
-        createdAt: "2026-05-12T21:00:00.000Z",
-      },
-    });
-
-    expect(payload.username).toBe("patch");
-    expect(payload.embeds[0].title).toBe("[jojo] peezy-tech/patch.moi push to main");
-    expect(payload.embeds[0].url).toBe("https://jojo.build/peezy-tech/patch.moi/commit/0123456789abcdef");
-    expect(payload.embeds[0].fields).toContainEqual({ name: "Queued", value: "main_push", inline: true });
-  });
-
   test("builds readable feed embeds", () => {
     const payload = buildDiscordPayload({ signal: feedSignal });
+    expect(payload.username).toBe("patch");
     expect(payload.embeds[0].title).toBe("[github] openai/codex upstream update on main");
     expect(payload.embeds[0].description).toBe("Tighten sandbox setup");
     expect(payload.embeds[0].url).toBe("https://github.com/openai/codex/commit/0123456789abcdef0123456789abcdef01234567");
@@ -100,7 +56,7 @@ describe("discord notifications", () => {
 
   test("does nothing without a webhook URL", async () => {
     let calls = 0;
-    await notifyDiscord(parseDiscordConfig({ enabled: "true" }), { event: pushEvent }, async () => {
+    await notifyDiscord(parseDiscordConfig({ enabled: "true" }), { signal: feedSignal }, async () => {
       calls += 1;
       return new Response(null, { status: 204 });
     });
@@ -109,7 +65,7 @@ describe("discord notifications", () => {
 
   test("does nothing when Discord output is disabled", async () => {
     let calls = 0;
-    await notifyDiscord(parseDiscordConfig({ webhookUrl: "https://discord.example/webhook", notifyEvents: "push" }), { event: pushEvent }, async () => {
+    await notifyDiscord(parseDiscordConfig({ webhookUrl: "https://discord.example/webhook", notifyEvents: "push" }), { signal: feedSignal }, async () => {
       calls += 1;
       return new Response(null, { status: 204 });
     });
@@ -118,7 +74,7 @@ describe("discord notifications", () => {
 
   test("skips unconfigured events", async () => {
     let calls = 0;
-    await notifyDiscord(parseDiscordConfig({ enabled: "true", webhookUrl: "https://discord.example/webhook", notifyEvents: "release" }), { event: pushEvent }, async () => {
+    await notifyDiscord(parseDiscordConfig({ enabled: "true", webhookUrl: "https://discord.example/webhook", notifyEvents: "release" }), { signal: feedSignal }, async () => {
       calls += 1;
       return new Response(null, { status: 204 });
     });
@@ -127,16 +83,16 @@ describe("discord notifications", () => {
 
   test("posts configured events", async () => {
     let body = "";
-    await notifyDiscord(parseDiscordConfig({ enabled: "true", webhookUrl: "https://discord.example/webhook", notifyEvents: "push" }), { event: pushEvent }, async (_url, init) => {
+    await notifyDiscord(parseDiscordConfig({ enabled: "true", webhookUrl: "https://discord.example/webhook", notifyEvents: "push" }), { signal: feedSignal }, async (_url, init) => {
       body = String(init?.body);
       return new Response(null, { status: 204 });
     });
 
-    expect(JSON.parse(body).embeds[0].title).toBe("[jojo] peezy-tech/patch.moi push to main");
+    expect(JSON.parse(body).embeds[0].title).toBe("[github] openai/codex upstream update on main");
   });
 
   test("throws on Discord failure", async () => {
-    await expect(notifyDiscord(parseDiscordConfig({ enabled: "true", webhookUrl: "https://discord.example/webhook" }), { event: pushEvent }, async () => {
+    await expect(notifyDiscord(parseDiscordConfig({ enabled: "true", webhookUrl: "https://discord.example/webhook" }), { signal: feedSignal }, async () => {
       return new Response("bad", { status: 500 });
     })).rejects.toThrow("Discord webhook returned 500");
   });
