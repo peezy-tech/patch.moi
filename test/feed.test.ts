@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import { loadSources, parseFeedEntries, pollFeedsOnce, signalFromEntry } from "../src/feed";
-import { dispatchFlowEvent } from "../src/flow";
+import { dispatchFlowEvent, patchUpstreamReleaseEvent } from "../src/flow";
 import type { FeedSourceConfig } from "../src/types";
 
 const atom = `<?xml version="1.0"?>
@@ -168,7 +168,6 @@ describe("feed watcher", () => {
 
     let dispatchedBody = "";
     let dispatchedSignature = "";
-    let dispatchedGenericSignature = "";
     await pollFeedsOnce({
       dataDir,
       sourcesPath,
@@ -180,10 +179,8 @@ describe("feed watcher", () => {
         },
         fetchImpl: async (_url, init) => {
           dispatchedBody = String(init.body);
-          const headers = init.headers as Record<string, string>;
-          dispatchedSignature = String(headers["x-patch-flow-signature-256"]);
-          dispatchedGenericSignature = String(headers["x-flow-signature-256"]);
-          return new Response(null, { status: 202 });
+          dispatchedSignature = headerValue(init.headers, "x-flow-signature-256");
+          return Response.json({ status: "accepted", eventId: "event-1", runIds: [], matched: 0 }, { status: 202 });
         },
       },
     }, async () => {
@@ -198,7 +195,6 @@ describe("feed watcher", () => {
     expect(flowEvent.payload.tag).toBe("v1.2.3");
     expect(JSON.parse(dispatchedBody).id).toBe(flowEvent.id);
     expect(dispatchedSignature).toMatch(/^sha256=[0-9a-f]{64}$/);
-    expect(dispatchedGenericSignature).toBe(dispatchedSignature);
     expect(await readFile(join(dataDir, "flow-dispatches.jsonl"), "utf8")).toContain("\"status\":\"dispatched\"");
   });
 
@@ -219,9 +215,8 @@ describe("feed watcher", () => {
       },
       fetchImpl: async (url, init) => {
         dispatchedUrl = url;
-        const headers = init.headers as Record<string, string>;
-        dispatchedSignature = String(headers["x-flow-signature-256"]);
-        return new Response(null, { status: 202 });
+        dispatchedSignature = headerValue(init.headers, "x-flow-signature-256");
+        return Response.json({ status: "accepted", eventId: "event-1", runIds: [], matched: 0 }, { status: 202 });
       },
     });
 
@@ -229,4 +224,117 @@ describe("feed watcher", () => {
     expect(dispatchedUrl).toBe("https://flow.example/events");
     expect(dispatchedSignature).toMatch(/^sha256=[0-9a-f]{64}$/);
   });
+
+  test("flow dispatch records backend HTTP failures", async () => {
+    const record = await dispatchFlowEvent({
+      id: "patch:source:entry:upstream.release",
+      type: "upstream.release",
+      source: "patch",
+      receivedAt: "2026-05-13T00:00:00.000Z",
+      payload: { repo: "openai/codex", tag: "v1.2.3" },
+    }, {}, {
+      env: {
+        PATCH_FLOW_DISPATCH_URL: "https://flow.example/events",
+      },
+      fetchImpl: async () => Response.json({ error: "bad" }, { status: 500 }),
+    });
+
+    expect(record).toMatchObject({
+      eventId: "patch:source:entry:upstream.release",
+      status: "failed",
+      httpStatus: 500,
+    });
+  });
+
+  test("flow dispatch uses local mode when no backend URL is configured", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "patch-flow-local-"));
+    await writeDemoFlow(dataDir);
+
+    const record = await dispatchFlowEvent({
+      id: "patch:local:demo",
+      type: "demo.event",
+      source: "patch",
+      receivedAt: "2026-05-15T00:00:00.000Z",
+      payload: { name: "Ada" },
+    }, {}, {
+      cwd: dataDir,
+      env: {},
+    });
+
+    expect(record).toMatchObject({
+      eventId: "patch:local:demo",
+      eventType: "demo.event",
+      status: "dispatched",
+    });
+    expect(record.url).toBeUndefined();
+    expect(JSON.parse(await readFile(join(dataDir, "local-flow-output.json"), "utf8"))).toEqual({
+      name: "Ada",
+    });
+  });
+
+  test("Patch upstream release helper creates deterministic product events", () => {
+    expect(patchUpstreamReleaseEvent({
+      repo: "openai/codex",
+      tag: "rust-v1.2.3",
+      receivedAt: "2026-05-15T00:00:00.000Z",
+    })).toEqual({
+      id: "patch:upstream.release:openai/codex:rust-v1.2.3",
+      type: "upstream.release",
+      source: "patch",
+      receivedAt: "2026-05-15T00:00:00.000Z",
+      payload: {
+        repo: "openai/codex",
+        tag: "rust-v1.2.3",
+      },
+    });
+  });
 });
+
+function headerValue(headers: HeadersInit | undefined, name: string): string {
+  return new Headers(headers).get(name) ?? "";
+}
+
+async function writeDemoFlow(root: string): Promise<void> {
+  const flowRoot = join(root, "flows/demo");
+  await mkdir(join(flowRoot, "exec"), { recursive: true });
+  await mkdir(join(flowRoot, "schemas"), { recursive: true });
+  await writeFile(
+    join(flowRoot, "flow.toml"),
+    [
+      'name = "demo"',
+      "version = 1",
+      'description = "demo"',
+      "",
+      "[[steps]]",
+      'name = "hello"',
+      'runner = "bun"',
+      'script = "exec/hello.ts"',
+      "timeout_ms = 30000",
+      "",
+      "[steps.trigger]",
+      'type = "demo.event"',
+      'schema = "schemas/demo-event.schema.json"',
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    join(flowRoot, "schemas/demo-event.schema.json"),
+    JSON.stringify({
+      type: "object",
+      required: ["name"],
+      properties: {
+        name: { type: "string" },
+      },
+    }),
+  );
+  await writeFile(
+    join(flowRoot, "exec/hello.ts"),
+    [
+      'import { writeFileSync } from "node:fs";',
+      "const context = JSON.parse(await Bun.stdin.text());",
+      'writeFileSync("../../local-flow-output.json", JSON.stringify({ name: context.flow.event.payload.name }));',
+      'console.log(`FLOW_RESULT ${JSON.stringify({ status: "completed" })}`);',
+      "",
+    ].join("\n"),
+  );
+}

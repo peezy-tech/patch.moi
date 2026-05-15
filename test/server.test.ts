@@ -105,6 +105,7 @@ describe("server", () => {
   test("lists, retries, and replays stored flow events behind admin auth", async () => {
     const originalFetch = globalThis.fetch;
     const originalDispatchUrl = process.env.PATCH_FLOW_DISPATCH_URL;
+    const originalDispatchSecret = process.env.PATCH_FLOW_DISPATCH_SECRET;
     const dataDir = await mkdtemp(join(tmpdir(), "patch-"));
     const store = new EventStore(dataDir);
     const event = {
@@ -123,15 +124,16 @@ describe("server", () => {
       createdAt: "2026-05-13T00:00:01.000Z",
     });
 
-    const calls: Array<{ url: string; body: string; headers: Record<string, string> }> = [];
+    const calls: Array<{ url: string; body: string; headers: Headers }> = [];
     process.env.PATCH_FLOW_DISPATCH_URL = "http://172.20.0.1:7345/events";
+    process.env.PATCH_FLOW_DISPATCH_SECRET = "secret";
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       calls.push({
         url: String(url),
         body: String(init?.body ?? ""),
-        headers: init?.headers as Record<string, string>,
+        headers: new Headers(init?.headers),
       });
-      return new Response("accepted", { status: 202 });
+      return Response.json({ status: "accepted", eventId: event.id, runIds: [], matched: 0 }, { status: 202 });
     }) as unknown as typeof fetch;
 
     try {
@@ -164,7 +166,7 @@ describe("server", () => {
       expect(retry.status).toBe(202);
       expect(calls.at(-1)?.url).toBe("http://172.20.0.1:7345/events");
       expect(JSON.parse(calls.at(-1)?.body ?? "{}")).toMatchObject({ id: event.id });
-      expect(calls.at(-1)?.headers["x-flow-delivery"]).toBe(event.id);
+      expect(calls.at(-1)?.headers.get("x-flow-signature-256")).toMatch(/^sha256=[0-9a-f]{64}$/);
 
       const replay = await handler(new Request(`http://localhost/flow-events/${encodeURIComponent(event.id)}/replay`, {
         method: "POST",
@@ -172,12 +174,18 @@ describe("server", () => {
       }));
       expect(replay.status).toBe(202);
       expect(calls.at(-1)?.url).toBe(`http://172.20.0.1:7345/events/${encodeURIComponent(event.id)}/replay`);
+      expect(JSON.parse(calls.at(-1)?.body ?? "{}")).toEqual({ wait: false });
     } finally {
       globalThis.fetch = originalFetch;
       if (originalDispatchUrl === undefined) {
         delete process.env.PATCH_FLOW_DISPATCH_URL;
       } else {
         process.env.PATCH_FLOW_DISPATCH_URL = originalDispatchUrl;
+      }
+      if (originalDispatchSecret === undefined) {
+        delete process.env.PATCH_FLOW_DISPATCH_SECRET;
+      } else {
+        process.env.PATCH_FLOW_DISPATCH_SECRET = originalDispatchSecret;
       }
     }
   });

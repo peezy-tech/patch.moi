@@ -1,4 +1,4 @@
-import { hmacSha256Hex } from "./signatures";
+import { createFlowClient, type FlowClient } from "@peezy.tech/flow-runtime/client";
 import type {
   FeedFlowDispatchTarget,
   FeedSignal,
@@ -13,6 +13,7 @@ const serviceSource = "patch";
 export type FlowDispatchConfig = {
   env?: Record<string, string | undefined>;
   fetchImpl?: FetchLike;
+  cwd?: string;
 };
 
 function isFlowDispatchTarget(value: unknown): value is FeedFlowDispatchTarget {
@@ -75,7 +76,7 @@ export function flowEventForFeedSignal(
   };
 }
 
-function targetDispatchUrl(
+function targetFlowUrl(
   target: FeedFlowDispatchTarget,
   env: Record<string, string | undefined>,
 ): string | undefined {
@@ -86,6 +87,10 @@ function targetDispatchUrl(
   const envName = target.dispatchUrlEnv?.trim();
   if (envName) {
     return env[envName]?.trim() || undefined;
+  }
+  const backendUrl = env.PATCH_FLOW_BACKEND_URL?.trim();
+  if (backendUrl) {
+    return backendUrl;
   }
   return env.PATCH_FLOW_DISPATCH_URL?.trim() || undefined;
 }
@@ -101,21 +106,48 @@ function targetDispatchSecret(
   return env.PATCH_FLOW_DISPATCH_SECRET?.trim() || undefined;
 }
 
-async function flowHeaders(event: FlowEvent, body: string, secret?: string): Promise<Record<string, string>> {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    "x-flow-event": event.type,
-    "x-flow-delivery": event.id,
-    "x-patch-flow-event": event.type,
-    "x-patch-flow-delivery": event.id,
-  };
-  if (!secret) {
-    return headers;
+export function createFlowClientFromPatchConfig(
+  target: Partial<FeedFlowDispatchTarget> = {},
+  config: FlowDispatchConfig = {},
+): FlowClient {
+  const env = config.env ?? process.env;
+  const flowTarget = { mode: "flow_dispatch" as const, eventType: target.eventType ?? "flow.event", ...target };
+  const url = targetFlowUrl(flowTarget, env);
+  if (url) {
+    return createFlowClient({
+      mode: "http",
+      baseUrl: flowBackendBaseUrl(url),
+      hmacSecret: targetDispatchSecret(flowTarget, env),
+      ...(config.fetchImpl ? { fetch: patchFetch(config.fetchImpl) } : {}),
+    });
   }
-  const digest = await hmacSha256Hex(secret, body);
-  headers["x-flow-signature-256"] = `sha256=${digest}`;
-  headers["x-patch-flow-signature-256"] = `sha256=${digest}`;
-  return headers;
+  return createFlowClient({
+    mode: "local",
+    cwd: config.cwd ?? process.cwd(),
+    env,
+    codex: {
+      command: env.CODEX_APP_SERVER_CODEX_COMMAND,
+      codexHome: env.CODEX_HOME,
+      stream: true,
+    },
+  });
+}
+
+export function patchUpstreamReleaseEvent(input: {
+  repo: string;
+  tag: string;
+  receivedAt?: string;
+}): FlowEvent<Record<string, unknown>> {
+  return {
+    id: `${serviceSource}:upstream.release:${input.repo}:${input.tag}`,
+    type: "upstream.release",
+    source: serviceSource,
+    receivedAt: input.receivedAt ?? new Date().toISOString(),
+    payload: {
+      repo: input.repo,
+      tag: input.tag,
+    },
+  };
 }
 
 export async function dispatchFlowEvent(
@@ -124,42 +156,27 @@ export async function dispatchFlowEvent(
   config: FlowDispatchConfig = {},
 ): Promise<FlowDispatchRecord> {
   const env = config.env ?? process.env;
-  const url = targetDispatchUrl({ mode: "flow_dispatch", eventType: event.type, ...target }, env);
-  if (!url) {
-    return {
-      eventId: event.id,
-      eventType: event.type,
-      status: "skipped",
-      error: "flow dispatch URL is not configured",
-      createdAt: new Date().toISOString(),
-    };
-  }
-
-  const body = JSON.stringify(event);
-  const secret = targetDispatchSecret({ mode: "flow_dispatch", eventType: event.type, ...target }, env);
-  const headers = await flowHeaders(event, body, secret);
+  const flowTarget = { mode: "flow_dispatch" as const, eventType: event.type, ...target };
+  const url = targetFlowUrl(flowTarget, env);
+  const client = createFlowClientFromPatchConfig(flowTarget, config);
 
   try {
-    const response = await (config.fetchImpl ?? fetch)(url, {
-      method: "POST",
-      headers,
-      body,
-    });
+    await client.dispatchEvent(event);
     return {
       eventId: event.id,
       eventType: event.type,
-      url,
-      status: response.ok ? "dispatched" : "failed",
-      httpStatus: response.status,
-      error: response.ok ? undefined : `flow dispatch returned ${response.status}`,
+      url: url ? flowEventsUrl(url) : undefined,
+      status: "dispatched",
       createdAt: new Date().toISOString(),
     };
   } catch (error) {
+    const httpStatus = httpStatusFromError(error);
     return {
       eventId: event.id,
       eventType: event.type,
       url,
       status: "failed",
+      ...(httpStatus ? { httpStatus } : {}),
       error: error instanceof Error ? error.message : String(error),
       createdAt: new Date().toISOString(),
     };
@@ -172,42 +189,31 @@ export async function replayFlowEvent(
   config: FlowDispatchConfig = {},
 ): Promise<FlowDispatchRecord> {
   const env = config.env ?? process.env;
-  const dispatchUrl = targetDispatchUrl({ mode: "flow_dispatch", eventType: event.type, ...target }, env);
-  if (!dispatchUrl) {
-    return {
-      eventId: event.id,
-      eventType: event.type,
-      status: "skipped",
-      error: "flow dispatch URL is not configured",
-      createdAt: new Date().toISOString(),
-    };
-  }
-  const url = `${dispatchUrl.replace(/\/(?:events|flow-events)\/?$/, "")}/events/${encodeURIComponent(event.id)}/replay`;
-  const body = JSON.stringify({ wait: false });
-  const secret = targetDispatchSecret({ mode: "flow_dispatch", eventType: event.type, ...target }, env);
-  const headers = await flowHeaders(event, body, secret);
+  const flowTarget = { mode: "flow_dispatch" as const, eventType: event.type, ...target };
+  const url = targetFlowUrl(flowTarget, env);
+  const client = createFlowClientFromPatchConfig(flowTarget, config);
 
   try {
-    const response = await (config.fetchImpl ?? fetch)(url, {
-      method: "POST",
-      headers,
-      body,
-    });
+    if (url) {
+      await client.replayEvent(event.id, { wait: false });
+    } else {
+      await client.dispatchEvent(event);
+    }
     return {
       eventId: event.id,
       eventType: event.type,
-      url,
-      status: response.ok ? "dispatched" : "failed",
-      httpStatus: response.status,
-      error: response.ok ? undefined : `flow replay returned ${response.status}`,
+      url: url ? `${flowBackendBaseUrl(url)}/events/${encodeURIComponent(event.id)}/replay` : undefined,
+      status: "dispatched",
       createdAt: new Date().toISOString(),
     };
   } catch (error) {
+    const httpStatus = httpStatusFromError(error);
     return {
       eventId: event.id,
       eventType: event.type,
       url,
       status: "failed",
+      ...(httpStatus ? { httpStatus } : {}),
       error: error instanceof Error ? error.message : String(error),
       createdAt: new Date().toISOString(),
     };
@@ -231,4 +237,24 @@ export async function dispatchFlowEventForFeedSignal(
     event,
     record: await dispatchFlowEvent(event, signal.target, config),
   };
+}
+
+function flowBackendBaseUrl(url: string): string {
+  return url.replace(/\/(?:events|flow-events)\/?$/, "").replace(/\/+$/, "");
+}
+
+function flowEventsUrl(url: string): string {
+  return `${flowBackendBaseUrl(url)}/events`;
+}
+
+function patchFetch(fetchImpl: FetchLike) {
+  return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    return fetchImpl(String(input), init ?? {});
+  };
+}
+
+function httpStatusFromError(error: unknown): number | undefined {
+  const message = error instanceof Error ? error.message : String(error);
+  const match = message.match(/\bfailed with (\d{3})\b/);
+  return match?.[1] ? Number(match[1]) : undefined;
 }
