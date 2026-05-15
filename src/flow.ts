@@ -8,6 +8,8 @@ import type {
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
+const serviceSource = "patch";
+
 export type FlowDispatchConfig = {
   env?: Record<string, string | undefined>;
   fetchImpl?: FetchLike;
@@ -52,6 +54,14 @@ function flowPayloadFromSignal(signal: FeedSignal): Record<string, unknown> {
   };
 }
 
+function envValue(
+  env: Record<string, string | undefined>,
+  preferred: string,
+  legacy?: string,
+): string | undefined {
+  return env[preferred]?.trim() || (legacy ? env[legacy]?.trim() : undefined) || undefined;
+}
+
 export function flowEventForFeedSignal(
   signal: FeedSignal,
   receivedAt = new Date().toISOString(),
@@ -61,9 +71,9 @@ export function flowEventForFeedSignal(
   }
 
   return {
-    id: `patchbay:${signal.sourceId}:${signal.entryId}:${signal.target.eventType}`,
+    id: `${serviceSource}:${signal.sourceId}:${signal.entryId}:${signal.target.eventType}`,
     type: signal.target.eventType,
-    source: "patchbay",
+    source: serviceSource,
     occurredAt: signal.publishedAt,
     receivedAt,
     payload: {
@@ -81,16 +91,48 @@ function targetDispatchUrl(
   if (explicit) {
     return explicit;
   }
-  const envName = target.dispatchUrlEnv?.trim() || "PATCHBAY_FLOW_DISPATCH_URL";
-  return env[envName]?.trim() || undefined;
+  const envName = target.dispatchUrlEnv?.trim();
+  if (envName) {
+    if (envName === "PATCH_FLOW_DISPATCH_URL" || envName === "PATCHBAY_FLOW_DISPATCH_URL") {
+      return envValue(env, "PATCH_FLOW_DISPATCH_URL", "PATCHBAY_FLOW_DISPATCH_URL");
+    }
+    return env[envName]?.trim() || undefined;
+  }
+  return envValue(env, "PATCH_FLOW_DISPATCH_URL", "PATCHBAY_FLOW_DISPATCH_URL");
 }
 
 function targetDispatchSecret(
   target: FeedFlowDispatchTarget,
   env: Record<string, string | undefined>,
 ): string | undefined {
-  const envName = target.dispatchSecretEnv?.trim() || "PATCHBAY_FLOW_DISPATCH_SECRET";
-  return env[envName]?.trim() || undefined;
+  const envName = target.dispatchSecretEnv?.trim();
+  if (envName) {
+    if (envName === "PATCH_FLOW_DISPATCH_SECRET" || envName === "PATCHBAY_FLOW_DISPATCH_SECRET") {
+      return envValue(env, "PATCH_FLOW_DISPATCH_SECRET", "PATCHBAY_FLOW_DISPATCH_SECRET");
+    }
+    return env[envName]?.trim() || undefined;
+  }
+  return envValue(env, "PATCH_FLOW_DISPATCH_SECRET", "PATCHBAY_FLOW_DISPATCH_SECRET");
+}
+
+async function flowHeaders(event: FlowEvent, body: string, secret?: string): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "x-flow-event": event.type,
+    "x-flow-delivery": event.id,
+    "x-patch-flow-event": event.type,
+    "x-patch-flow-delivery": event.id,
+    "x-patchbay-flow-event": event.type,
+    "x-patchbay-flow-delivery": event.id,
+  };
+  if (!secret) {
+    return headers;
+  }
+  const digest = await hmacSha256Hex(secret, body);
+  headers["x-flow-signature-256"] = `sha256=${digest}`;
+  headers["x-patch-flow-signature-256"] = `sha256=${digest}`;
+  headers["x-patchbay-flow-signature-256"] = `sha256=${digest}`;
+  return headers;
 }
 
 export async function dispatchFlowEvent(
@@ -112,15 +154,7 @@ export async function dispatchFlowEvent(
 
   const body = JSON.stringify(event);
   const secret = targetDispatchSecret({ mode: "flow_dispatch", eventType: event.type, ...target }, env);
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    "x-patchbay-flow-event": event.type,
-    "x-patchbay-flow-delivery": event.id,
-  };
-  if (secret) {
-    headers["x-patchbay-flow-signature-256"] =
-      `sha256=${await hmacSha256Hex(secret, body)}`;
-  }
+  const headers = await flowHeaders(event, body, secret);
 
   try {
     const response = await (config.fetchImpl ?? fetch)(url, {
@@ -168,15 +202,7 @@ export async function replayFlowEvent(
   const url = `${dispatchUrl.replace(/\/(?:events|flow-events)\/?$/, "")}/events/${encodeURIComponent(event.id)}/replay`;
   const body = JSON.stringify({ wait: false });
   const secret = targetDispatchSecret({ mode: "flow_dispatch", eventType: event.type, ...target }, env);
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    "x-patchbay-flow-event": event.type,
-    "x-patchbay-flow-delivery": event.id,
-  };
-  if (secret) {
-    headers["x-patchbay-flow-signature-256"] =
-      `sha256=${await hmacSha256Hex(secret, body)}`;
-  }
+  const headers = await flowHeaders(event, body, secret);
 
   try {
     const response = await (config.fetchImpl ?? fetch)(url, {

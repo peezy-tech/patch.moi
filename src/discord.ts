@@ -38,6 +38,7 @@ export type DiscordNotification = {
 };
 
 const defaultNotifyEvents = ["push", "pull_request", "release"];
+const serviceName = "patch";
 
 function parseEnabled(value?: string): boolean {
   const normalized = value?.trim().toLowerCase();
@@ -140,7 +141,7 @@ export function buildDiscordPayload(input: DiscordNotification): DiscordPayload 
     ].filter((item): item is DiscordEmbedField => item !== null);
 
     return {
-      username: "patchbay",
+      username: serviceName,
       embeds: [
         {
           title: feedTitle(signal).slice(0, 256),
@@ -174,7 +175,7 @@ export function buildDiscordPayload(input: DiscordNotification): DiscordPayload 
   ].filter((item): item is DiscordEmbedField => item !== null);
 
   return {
-    username: "patchbay",
+    username: serviceName,
     embeds: [
       {
         title: eventTitle(event).slice(0, 256),
@@ -183,7 +184,7 @@ export function buildDiscordPayload(input: DiscordNotification): DiscordPayload 
         fields,
         timestamp: event.receivedAt,
         footer: {
-          text: "patchbay",
+          text: serviceName,
         },
       },
     ],

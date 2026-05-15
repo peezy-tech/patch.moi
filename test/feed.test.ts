@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import { loadSources, parseFeedEntries, pollFeedsOnce, signalFromEntry } from "../src/feed";
+import { dispatchFlowEvent } from "../src/flow";
 import type { FeedSourceConfig } from "../src/types";
 
 const atom = `<?xml version="1.0"?>
@@ -91,7 +92,7 @@ describe("feed watcher", () => {
   });
 
   test("first poll primes state without emitting old entries", async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), "patchbay-feed-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "patch-feed-"));
     const sourcesPath = join(dataDir, "sources.json");
     await writeFile(sourcesPath, JSON.stringify({ sources: [source] }), "utf8");
 
@@ -105,7 +106,7 @@ describe("feed watcher", () => {
   });
 
   test("later polls emit new entries and release fork sync jobs", async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), "patchbay-feed-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "patch-feed-"));
     const sourcesPath = join(dataDir, "sources.json");
     const releaseSource: FeedSourceConfig = {
       ...source,
@@ -139,7 +140,7 @@ describe("feed watcher", () => {
   });
 
   test("later polls dispatch generic flow events", async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), "patchbay-feed-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "patch-feed-"));
     const sourcesPath = join(dataDir, "sources.json");
     const releaseSource: FeedSourceConfig = {
       ...source,
@@ -167,6 +168,8 @@ describe("feed watcher", () => {
 
     let dispatchedBody = "";
     let dispatchedSignature = "";
+    let dispatchedGenericSignature = "";
+    let dispatchedLegacySignature = "";
     await pollFeedsOnce({
       dataDir,
       sourcesPath,
@@ -179,7 +182,9 @@ describe("feed watcher", () => {
         fetchImpl: async (_url, init) => {
           dispatchedBody = String(init.body);
           const headers = init.headers as Record<string, string>;
-          dispatchedSignature = String(headers["x-patchbay-flow-signature-256"]);
+          dispatchedSignature = String(headers["x-patch-flow-signature-256"]);
+          dispatchedGenericSignature = String(headers["x-flow-signature-256"]);
+          dispatchedLegacySignature = String(headers["x-patchbay-flow-signature-256"]);
           return new Response(null, { status: 202 });
         },
       },
@@ -190,11 +195,41 @@ describe("feed watcher", () => {
     const flowEventText = await readFile(join(dataDir, "flow-events.jsonl"), "utf8");
     const flowEvent = JSON.parse(flowEventText.trim()) as Record<string, any>;
     expect(flowEvent.type).toBe("upstream.release");
-    expect(flowEvent.source).toBe("patchbay");
+    expect(flowEvent.source).toBe("patch");
     expect(flowEvent.payload.repo).toBe("openai/codex");
     expect(flowEvent.payload.tag).toBe("v1.2.3");
     expect(JSON.parse(dispatchedBody).id).toBe(flowEvent.id);
     expect(dispatchedSignature).toMatch(/^sha256=[0-9a-f]{64}$/);
+    expect(dispatchedGenericSignature).toBe(dispatchedSignature);
+    expect(dispatchedLegacySignature).toBe(dispatchedSignature);
     expect(await readFile(join(dataDir, "flow-dispatches.jsonl"), "utf8")).toContain("\"status\":\"dispatched\"");
+  });
+
+  test("flow dispatch accepts legacy env names during migration", async () => {
+    let dispatchedUrl = "";
+    let dispatchedSignature = "";
+
+    const record = await dispatchFlowEvent({
+      id: "patch:source:entry:upstream.release",
+      type: "upstream.release",
+      source: "patch",
+      receivedAt: "2026-05-13T00:00:00.000Z",
+      payload: { repo: "openai/codex", tag: "v1.2.3" },
+    }, {}, {
+      env: {
+        PATCHBAY_FLOW_DISPATCH_URL: "https://flow.example/events",
+        PATCHBAY_FLOW_DISPATCH_SECRET: "secret",
+      },
+      fetchImpl: async (url, init) => {
+        dispatchedUrl = url;
+        const headers = init.headers as Record<string, string>;
+        dispatchedSignature = String(headers["x-flow-signature-256"]);
+        return new Response(null, { status: 202 });
+      },
+    });
+
+    expect(record.status).toBe("dispatched");
+    expect(dispatchedUrl).toBe("https://flow.example/events");
+    expect(dispatchedSignature).toMatch(/^sha256=[0-9a-f]{64}$/);
   });
 });

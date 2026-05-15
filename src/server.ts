@@ -23,6 +23,10 @@ function getHeader(headers: Headers, name: string, fallback: string): string {
   return headers.get(name) ?? fallback;
 }
 
+function envValue(preferred: string, legacy?: string): string | undefined {
+  return process.env[preferred]?.trim() || (legacy ? process.env[legacy]?.trim() : undefined) || undefined;
+}
+
 async function parseJsonBody(request: Request): Promise<{ body: string; payload: unknown } | Response> {
   const body = await request.text();
   if (body.length > maxBodyBytes) {
@@ -66,7 +70,7 @@ function adminAuthorized(request: Request, config: ServerConfig): boolean {
     return true;
   }
   const bearer = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
-  const header = request.headers.get("x-patchbay-admin-token");
+  const header = request.headers.get("x-patch-admin-token") ?? request.headers.get("x-patchbay-admin-token");
   return bearer === config.adminToken || header === config.adminToken;
 }
 
@@ -206,7 +210,7 @@ if (import.meta.main) {
     githubSecret: process.env.GITHUB_WEBHOOK_SECRET ?? "",
     jojoSecret: process.env.JOJO_WEBHOOK_SECRET ?? "",
     dataDir: process.env.DATA_DIR ?? "./data",
-    adminToken: process.env.PATCHBAY_ADMIN_TOKEN,
+    adminToken: envValue("PATCH_ADMIN_TOKEN", "PATCHBAY_ADMIN_TOKEN"),
     discord: parseDiscordConfig({
       enabled: process.env.DISCORD_OUTPUT_ENABLED,
       webhookUrl: process.env.DISCORD_WEBHOOK_URL,

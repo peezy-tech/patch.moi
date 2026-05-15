@@ -75,8 +75,8 @@
       "target": {
         "mode": "flow_dispatch",
         "eventType": "upstream.release",
-        "dispatchUrlEnv": "PATCHBAY_FLOW_DISPATCH_URL",
-        "dispatchSecretEnv": "PATCHBAY_FLOW_DISPATCH_SECRET",
+        "dispatchUrlEnv": "PATCH_FLOW_DISPATCH_URL",
+        "dispatchSecretEnv": "PATCH_FLOW_DISPATCH_SECRET",
         "payload": {
           "provider": "github",
           "repo": "openai/codex"

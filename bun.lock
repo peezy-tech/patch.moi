@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@peezy.tech/patchbay",
+      "name": "@peezy.tech/patch",
       "devDependencies": {
         "@types/bun": "latest",
         "typescript": "^5.9.3",
