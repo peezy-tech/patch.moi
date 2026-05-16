@@ -27,6 +27,9 @@ describe("server", () => {
 
   test("lists, retries, and replays stored flow events behind admin auth", async () => {
     const originalFetch = globalThis.fetch;
+    const originalWorkspaceUrl = process.env.PATCH_WORKSPACE_BACKEND_URL;
+    const originalWorkspaceSecret = process.env.PATCH_WORKSPACE_BACKEND_SECRET;
+    const originalBackendUrl = process.env.PATCH_FLOW_BACKEND_URL;
     const originalDispatchUrl = process.env.PATCH_FLOW_DISPATCH_URL;
     const originalDispatchSecret = process.env.PATCH_FLOW_DISPATCH_SECRET;
     const dataDir = await mkdtemp(join(tmpdir(), "patch-"));
@@ -39,7 +42,7 @@ describe("server", () => {
       payload: { repo: "openai/codex", tag: "v1.2.3" },
     };
     await store.appendFlowEvent(event);
-    await store.appendFlowDispatch({
+    await store.appendWorkspaceDispatch({
       eventId: event.id,
       eventType: event.type,
       status: "failed",
@@ -48,8 +51,11 @@ describe("server", () => {
     });
 
     const calls: Array<{ url: string; body: string; headers: Headers }> = [];
-    process.env.PATCH_FLOW_DISPATCH_URL = "http://172.20.0.1:7345/events";
-    process.env.PATCH_FLOW_DISPATCH_SECRET = "secret";
+    process.env.PATCH_WORKSPACE_BACKEND_URL = "http://172.20.0.1:3586/events";
+    process.env.PATCH_WORKSPACE_BACKEND_SECRET = "secret";
+    delete process.env.PATCH_FLOW_BACKEND_URL;
+    delete process.env.PATCH_FLOW_DISPATCH_URL;
+    delete process.env.PATCH_FLOW_DISPATCH_SECRET;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       calls.push({
         url: String(url),
@@ -74,7 +80,7 @@ describe("server", () => {
       expect(list.status).toBe(200);
       expect(await list.json()).toMatchObject({ events: [{ id: event.id, type: event.type }] });
 
-      const dispatches = await handler(new Request("http://localhost/flow-dispatches?status=failed", {
+      const dispatches = await handler(new Request("http://localhost/workspace-dispatches?status=failed", {
         headers: { "x-patch-admin-token": "admin" },
       }));
       expect(dispatches.status).toBe(200);
@@ -85,7 +91,7 @@ describe("server", () => {
         headers: { authorization: "Bearer admin" },
       }));
       expect(retry.status).toBe(202);
-      expect(calls.at(-1)?.url).toBe("http://172.20.0.1:7345/events");
+      expect(calls.at(-1)?.url).toBe("http://172.20.0.1:3586/events");
       expect(JSON.parse(calls.at(-1)?.body ?? "{}")).toMatchObject({ id: event.id });
       expect(calls.at(-1)?.headers.get("x-flow-signature-256")).toMatch(/^sha256=[0-9a-f]{64}$/);
 
@@ -94,10 +100,36 @@ describe("server", () => {
         headers: { authorization: "Bearer admin" },
       }));
       expect(replay.status).toBe(202);
-      expect(calls.at(-1)?.url).toBe(`http://172.20.0.1:7345/events/${encodeURIComponent(event.id)}/replay`);
+      expect(calls.at(-1)?.url).toBe(`http://172.20.0.1:3586/events/${encodeURIComponent(event.id)}/replay`);
       expect(JSON.parse(calls.at(-1)?.body ?? "{}")).toEqual({ wait: false });
+
+      const attempts = await handler(new Request(`http://localhost/maintenance-attempts?eventId=${encodeURIComponent(event.id)}`, {
+        headers: { authorization: "Bearer admin" },
+      }));
+      expect(attempts.status).toBe(200);
+      expect(await attempts.json()).toMatchObject({
+        attempts: [
+          { eventId: event.id, operation: "replay", status: "started", upstreamRepo: "openai/codex" },
+          { eventId: event.id, operation: "dispatch", status: "started", upstreamRepo: "openai/codex" },
+        ],
+      });
     } finally {
       globalThis.fetch = originalFetch;
+      if (originalWorkspaceUrl === undefined) {
+        delete process.env.PATCH_WORKSPACE_BACKEND_URL;
+      } else {
+        process.env.PATCH_WORKSPACE_BACKEND_URL = originalWorkspaceUrl;
+      }
+      if (originalWorkspaceSecret === undefined) {
+        delete process.env.PATCH_WORKSPACE_BACKEND_SECRET;
+      } else {
+        process.env.PATCH_WORKSPACE_BACKEND_SECRET = originalWorkspaceSecret;
+      }
+      if (originalBackendUrl === undefined) {
+        delete process.env.PATCH_FLOW_BACKEND_URL;
+      } else {
+        process.env.PATCH_FLOW_BACKEND_URL = originalBackendUrl;
+      }
       if (originalDispatchUrl === undefined) {
         delete process.env.PATCH_FLOW_DISPATCH_URL;
       } else {
@@ -107,6 +139,67 @@ describe("server", () => {
         delete process.env.PATCH_FLOW_DISPATCH_SECRET;
       } else {
         process.env.PATCH_FLOW_DISPATCH_SECRET = originalDispatchSecret;
+      }
+    }
+  });
+
+  test("inspects workspace backend runs and events behind admin auth", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalWorkspaceUrl = process.env.PATCH_WORKSPACE_BACKEND_URL;
+    const calls: Array<{ url: string; method?: string }> = [];
+    process.env.PATCH_WORKSPACE_BACKEND_URL = "http://127.0.0.1:3586";
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), method: init?.method });
+      if (String(url).includes("/runs/run-1")) {
+        return Response.json({ run: { id: "run-1", eventId: "event-1", status: "completed" } });
+      }
+      if (String(url).includes("/events/event-1")) {
+        return Response.json({ event: { id: "event-1", type: "upstream.release", runIds: ["run-1"] }, runs: [] });
+      }
+      if (String(url).includes("/events")) {
+        return Response.json({ events: [{ id: "event-1", type: "upstream.release", runIds: ["run-1"] }] });
+      }
+      return Response.json({ runs: [{ id: "run-1", eventId: "event-1", status: "completed" }] });
+    }) as unknown as typeof fetch;
+
+    try {
+      const handler = createHandler({
+        dataDir: await mkdtemp(join(tmpdir(), "patch-")),
+        adminToken: "admin",
+      });
+
+      const unauthorized = await handler(new Request("http://localhost/workspace-runs"));
+      expect(unauthorized.status).toBe(401);
+
+      const runs = await handler(new Request("http://localhost/workspace-runs?eventId=event-1", {
+        headers: { authorization: "Bearer admin" },
+      }));
+      expect(runs.status).toBe(200);
+      expect(await runs.json()).toMatchObject({ runs: [{ id: "run-1", eventId: "event-1" }] });
+
+      const run = await handler(new Request("http://localhost/workspace-runs/run-1", {
+        headers: { authorization: "Bearer admin" },
+      }));
+      expect(run.status).toBe(200);
+      expect(await run.json()).toMatchObject({ run: { id: "run-1", eventId: "event-1" } });
+
+      const event = await handler(new Request("http://localhost/workspace-events/event-1", {
+        headers: { authorization: "Bearer admin" },
+      }));
+      expect(event.status).toBe(200);
+      expect(await event.json()).toMatchObject({ event: { id: "event-1", type: "upstream.release" } });
+
+      expect(calls.map((call) => new URL(call.url).pathname)).toEqual([
+        "/runs",
+        "/runs/run-1",
+        "/events/event-1",
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalWorkspaceUrl === undefined) {
+        delete process.env.PATCH_WORKSPACE_BACKEND_URL;
+      } else {
+        process.env.PATCH_WORKSPACE_BACKEND_URL = originalWorkspaceUrl;
       }
     }
   });

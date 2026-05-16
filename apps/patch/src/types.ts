@@ -9,9 +9,12 @@ export type FeedForkSyncTarget = {
   mode: "notify_only" | "fork_sync";
 };
 
-export type FeedFlowDispatchTarget = {
-  mode: "flow_dispatch";
+export type FeedWorkspaceFlowTarget = {
+  mode: "workspace_flow" | "flow_dispatch";
   eventType: string;
+  workspaceUrl?: string;
+  workspaceUrlEnv?: string;
+  workspaceSecretEnv?: string;
   dispatchUrl?: string;
   dispatchUrlEnv?: string;
   dispatchSecretEnv?: string;
@@ -30,7 +33,7 @@ export type FeedSourceConfig = {
     webUrl: string;
     defaultBranch?: string;
   };
-  target?: FeedForkSyncTarget | FeedFlowDispatchTarget;
+  target?: FeedForkSyncTarget | FeedWorkspaceFlowTarget;
   pollIntervalSeconds?: number;
   primeOnly?: boolean;
 };
@@ -78,9 +81,35 @@ export type FlowEvent<T = unknown> = {
 export type FlowDispatchRecord = {
   eventId: string;
   eventType: string;
+  operation?: "dispatch" | "replay";
+  target?: "local" | "workspace-backend";
+  transport?: "local" | "workspace-http" | "workspace-ws";
+  workspaceBackendUrl?: string;
   url?: string;
   status: "dispatched" | "failed" | "skipped";
+  runIds?: string[];
+  matched?: number;
+  idempotent?: boolean;
   httpStatus?: number;
+  error?: string;
+  createdAt: string;
+};
+
+export type WorkspaceDispatchRecord = FlowDispatchRecord;
+
+export type MaintenanceAttemptRecord = {
+  id: string;
+  eventId: string;
+  eventType: string;
+  operation: "dispatch" | "replay";
+  status: "started" | "failed" | "skipped";
+  upstreamRepo?: string;
+  upstreamRef?: string;
+  upstreamSha?: string;
+  upstreamTag?: string;
+  workspaceBackendUrl?: string;
+  workspaceRunIds: string[];
+  candidateRefs: string[];
   error?: string;
   createdAt: string;
 };

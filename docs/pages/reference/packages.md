@@ -15,7 +15,8 @@ Responsibilities:
 - Poll configured feeds.
 - Normalize entries into `FeedSignal` records.
 - Store JSONL state.
-- Dispatch generic codex-flow events through `@peezy.tech/flow-runtime/client`.
+- Submit generic `FlowEvent` triggers through the patch.moi workspace backend
+  adapter.
 - Serve admin inspection, retry, and replay endpoints.
 
 The service package does not store patch contents. Maintained patch stacks live

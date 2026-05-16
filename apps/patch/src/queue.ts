@@ -1,6 +1,13 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { FeedJob, FeedSignal, FlowDispatchRecord, FlowEvent } from "./types";
+import type {
+  FeedJob,
+  FeedSignal,
+  FlowDispatchRecord,
+  FlowEvent,
+  MaintenanceAttemptRecord,
+  WorkspaceDispatchRecord,
+} from "./types";
 
 async function appendJsonLine(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
@@ -34,12 +41,16 @@ export class EventStore {
   readonly feedJobsPath: string;
   readonly flowEventsPath: string;
   readonly flowDispatchesPath: string;
+  readonly workspaceDispatchesPath: string;
+  readonly maintenanceAttemptsPath: string;
 
   constructor(dataDir: string) {
     this.feedEventsPath = join(dataDir, "feed-events.jsonl");
     this.feedJobsPath = join(dataDir, "feed-jobs.jsonl");
     this.flowEventsPath = join(dataDir, "flow-events.jsonl");
     this.flowDispatchesPath = join(dataDir, "flow-dispatches.jsonl");
+    this.workspaceDispatchesPath = join(dataDir, "workspace-dispatches.jsonl");
+    this.maintenanceAttemptsPath = join(dataDir, "maintenance-attempts.jsonl");
   }
 
   async appendFeedSignal(signal: FeedSignal): Promise<void> {
@@ -55,7 +66,15 @@ export class EventStore {
   }
 
   async appendFlowDispatch(record: FlowDispatchRecord): Promise<void> {
-    await appendJsonLine(this.flowDispatchesPath, record);
+    await this.appendWorkspaceDispatch(record);
+  }
+
+  async appendWorkspaceDispatch(record: WorkspaceDispatchRecord): Promise<void> {
+    await appendJsonLine(this.workspaceDispatchesPath, record);
+  }
+
+  async appendMaintenanceAttempt(record: MaintenanceAttemptRecord): Promise<void> {
+    await appendJsonLine(this.maintenanceAttemptsPath, record);
   }
 
   async listFlowEvents(options: { limit?: number; type?: string } = {}): Promise<FlowEvent[]> {
@@ -77,7 +96,29 @@ export class EventStore {
   }
 
   async listFlowDispatches(options: { limit?: number; eventId?: string; status?: FlowDispatchRecord["status"] } = {}): Promise<FlowDispatchRecord[]> {
-    const records = await readJsonLines<FlowDispatchRecord>(this.flowDispatchesPath);
+    return this.listWorkspaceDispatches(options);
+  }
+
+  async listWorkspaceDispatches(options: { limit?: number; eventId?: string; status?: WorkspaceDispatchRecord["status"] } = {}): Promise<WorkspaceDispatchRecord[]> {
+    const records = [
+      ...await readJsonLines<WorkspaceDispatchRecord>(this.flowDispatchesPath),
+      ...await readJsonLines<WorkspaceDispatchRecord>(this.workspaceDispatchesPath),
+    ];
+    return limitNewest(
+      records.filter((record) =>
+        (!options.eventId || record.eventId === options.eventId) &&
+        (!options.status || record.status === options.status),
+      ),
+      options.limit,
+    );
+  }
+
+  async listMaintenanceAttempts(options: {
+    limit?: number;
+    eventId?: string;
+    status?: MaintenanceAttemptRecord["status"];
+  } = {}): Promise<MaintenanceAttemptRecord[]> {
+    const records = await readJsonLines<MaintenanceAttemptRecord>(this.maintenanceAttemptsPath);
     return limitNewest(
       records.filter((record) =>
         (!options.eventId || record.eventId === options.eventId) &&

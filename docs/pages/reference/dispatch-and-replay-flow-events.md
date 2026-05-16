@@ -1,6 +1,6 @@
 ---
 title: Flow event retry and replay
-description: Reference for local or HTTP flow execution and retrying stored update triggers.
+description: Reference for local or workspace backend execution and retrying stored update triggers.
 ---
 
 # Flow Event Retry And Replay
@@ -11,27 +11,29 @@ Patch creates deterministic event ids:
 patch:<sourceId>:<entryId>:<eventType>
 ```
 
-Dispatch is idempotent at the flow backend by event id. Replay intentionally
-asks the backend to create another attempt for the stored event.
+Dispatch is idempotent at the workspace backend flow capability by event id.
+Replay intentionally asks that capability to create another attempt for the
+stored event.
 
 For patch-stack maintenance, treat the event as an update trigger. The
 authoritative patch state still comes from Git when the local workspace or forge
 runner runs.
 
-## Select HTTP dispatch
+## Select a workspace backend
 
 ```bash
-PATCH_FLOW_DISPATCH_URL=http://127.0.0.1:7345/events
-PATCH_FLOW_DISPATCH_SECRET=dev-secret
+PATCH_WORKSPACE_BACKEND_URL=http://127.0.0.1:3586
+PATCH_WORKSPACE_BACKEND_SECRET=dev-secret
 ```
 
-Patch signs HTTP dispatches with the shared flow HMAC header when a secret is
-configured.
+Patch signs HTTP workspace dispatches with the shared flow HMAC header when a
+secret is configured. The backend URL can be a base URL or `/events` URL.
 
 ## Use local dispatch
 
-Leave `PATCH_FLOW_DISPATCH_URL` unset. Patch creates a local flow client rooted
-at the app working directory and runs matching flows synchronously.
+Leave `PATCH_WORKSPACE_BACKEND_URL`, `PATCH_FLOW_BACKEND_URL`, and
+`PATCH_FLOW_DISPATCH_URL` unset. Patch creates a local flow client rooted at the
+app working directory and runs matching flows synchronously.
 
 ## Retry or replay
 
@@ -40,9 +42,22 @@ curl -X POST http://127.0.0.1:3000/flow-events/<event-id>/retry
 curl -X POST http://127.0.0.1:3000/flow-events/<event-id>/replay
 ```
 
-`retry` dispatches the stored event again. `replay` calls the backend replay
-endpoint when HTTP mode is configured, or dispatches locally when no backend URL
-is configured.
+`retry` dispatches the stored event again. `replay` calls the configured
+workspace backend replay operation when a backend URL is configured, or
+dispatches locally when no backend URL is configured.
+
+Each retry or replay writes a maintenance attempt record:
+
+```bash
+curl http://127.0.0.1:3000/maintenance-attempts?eventId=<event-id>
+```
+
+Use workspace inspection endpoints to read backend-owned run state:
+
+```bash
+curl http://127.0.0.1:3000/workspace-runs?eventId=<event-id>
+curl http://127.0.0.1:3000/workspace-events/<event-id>
+```
 
 Retrying or replaying an event should not rewrite patch branches by itself. The
 workspace or flow package decides whether to push candidate refs after it checks

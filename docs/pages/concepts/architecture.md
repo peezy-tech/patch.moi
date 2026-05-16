@@ -22,9 +22,10 @@ The current service has these runtime pieces:
 
 - The HTTP server exposes health and admin flow endpoints.
 - The feed poller reads configured upstream feeds on an interval.
-- The JSONL store keeps feed signals, flow events, and dispatch outcomes under
-  `DATA_DIR`.
-- The flow client can execute locally or dispatch to an HTTP flow backend.
+- The JSONL store keeps feed signals, flow events, maintenance attempts, and
+  workspace dispatch records under `DATA_DIR`.
+- The workspace backend adapter can execute locally or call a configured Codex
+  workspace backend, such as `codex-workspace-backend-local`.
 
 Those pieces are the intake layer. The patch-stack layer can run in local mode
 against a checkout, or in service mode through a remote forge workflow and

@@ -29,21 +29,22 @@ feeds. Patch normalizes both into `FeedSignal` records.
 }
 ```
 
-`flow_dispatch` creates a generic `FlowEvent` and dispatches it:
+`workspace_flow` creates a generic `FlowEvent` and submits it to the workspace
+backend adapter:
 
 ```json
 {
-  "mode": "flow_dispatch",
+  "mode": "workspace_flow",
   "eventType": "upstream.release",
-  "dispatchUrlEnv": "PATCH_FLOW_DISPATCH_URL",
-  "dispatchSecretEnv": "PATCH_FLOW_DISPATCH_SECRET",
+  "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",
+  "workspaceSecretEnv": "PATCH_WORKSPACE_BACKEND_SECRET",
   "payload": {
     "repo": "openai/codex"
   }
 }
 ```
 
-For patch-stack maintenance, prefer `flow_dispatch` to create an
+For patch-stack maintenance, prefer `workspace_flow` to create an
 `upstream.release` or `upstream.update` trigger. Let the receiving workspace read
 Git to discover the maintained patch branch and candidate refs.
 

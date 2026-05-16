@@ -1,6 +1,14 @@
 import { parseDiscordConfig, type DiscordConfig } from "./discord";
 import { startFeedPolling } from "./feed";
-import { dispatchFlowEvent, replayFlowEvent } from "./flow";
+import {
+  dispatchWorkspaceEvent,
+  getWorkspaceEvent,
+  getWorkspaceRun,
+  listWorkspaceEvents,
+  listWorkspaceRuns,
+  maintenanceAttemptForWorkspaceDispatch,
+  replayWorkspaceEvent,
+} from "./flow";
 import { jsonResponse, methodNotAllowed, textResponse } from "./http";
 import { EventStore } from "./queue";
 
@@ -32,7 +40,13 @@ function numberParam(value: string | null): number | undefined {
 function dispatchStatus(value: string | null) {
   if (!value) return undefined;
   if (value === "dispatched" || value === "failed" || value === "skipped") return value;
-  throw new Error("flow dispatch status must be dispatched, failed, or skipped");
+  throw new Error("workspace dispatch status must be dispatched, failed, or skipped");
+}
+
+function maintenanceStatus(value: string | null) {
+  if (!value) return undefined;
+  if (value === "started" || value === "failed" || value === "skipped") return value;
+  throw new Error("maintenance attempt status must be started, failed, or skipped");
 }
 
 async function handleFlowEvents(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
@@ -64,13 +78,15 @@ async function handleFlowEvents(request: Request, config: ServerConfig, store: E
     });
   }
   if (request.method === "POST" && eventMatch[2] === "retry") {
-    const record = await dispatchFlowEvent(event, {}, { env: process.env });
-    await store.appendFlowDispatch(record);
+    const record = await dispatchWorkspaceEvent(event, {}, { env: process.env });
+    await store.appendWorkspaceDispatch(record);
+    await store.appendMaintenanceAttempt(maintenanceAttemptForWorkspaceDispatch(event, record));
     return jsonResponse({ event, record }, { status: record.status === "failed" ? 502 : 202 });
   }
   if (request.method === "POST" && eventMatch[2] === "replay") {
-    const record = await replayFlowEvent(event, {}, { env: process.env });
-    await store.appendFlowDispatch(record);
+    const record = await replayWorkspaceEvent(event, {}, { env: process.env });
+    await store.appendWorkspaceDispatch(record);
+    await store.appendMaintenanceAttempt(maintenanceAttemptForWorkspaceDispatch(event, record));
     return jsonResponse({ event, record }, { status: record.status === "failed" ? 502 : 202 });
   }
   return methodNotAllowed();
@@ -82,12 +98,67 @@ async function handleFlowDispatches(request: Request, config: ServerConfig, stor
   if (request.method !== "GET") return methodNotAllowed();
   const url = new URL(request.url);
   return jsonResponse({
-    dispatches: await store.listFlowDispatches({
+    dispatches: await store.listWorkspaceDispatches({
       eventId: url.searchParams.get("eventId") ?? undefined,
       status: dispatchStatus(url.searchParams.get("status")),
       limit: numberParam(url.searchParams.get("limit")),
     }),
   });
+}
+
+async function handleMaintenanceAttempts(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
+  const unauthorized = requireAdmin(request, config);
+  if (unauthorized) return unauthorized;
+  if (request.method !== "GET") return methodNotAllowed();
+  const url = new URL(request.url);
+  return jsonResponse({
+    attempts: await store.listMaintenanceAttempts({
+      eventId: url.searchParams.get("eventId") ?? undefined,
+      status: maintenanceStatus(url.searchParams.get("status")),
+      limit: numberParam(url.searchParams.get("limit")),
+    }),
+  });
+}
+
+async function handleWorkspaceRuns(request: Request, config: ServerConfig): Promise<Response> {
+  const unauthorized = requireAdmin(request, config);
+  if (unauthorized) return unauthorized;
+
+  const url = new URL(request.url);
+  if (request.method === "GET" && url.pathname === "/workspace-runs") {
+    return jsonResponse(await listWorkspaceRuns({ env: process.env }, {
+      eventId: url.searchParams.get("eventId") ?? undefined,
+      status: url.searchParams.get("status") ?? undefined,
+      limit: numberParam(url.searchParams.get("limit")),
+    }));
+  }
+
+  const runMatch = url.pathname.match(/^\/workspace-runs\/([^/]+)$/);
+  if (request.method === "GET" && runMatch?.[1]) {
+    return jsonResponse({ run: await getWorkspaceRun(decodeURIComponent(runMatch[1]), { env: process.env }) });
+  }
+
+  return methodNotAllowed();
+}
+
+async function handleWorkspaceEvents(request: Request, config: ServerConfig): Promise<Response> {
+  const unauthorized = requireAdmin(request, config);
+  if (unauthorized) return unauthorized;
+
+  const url = new URL(request.url);
+  if (request.method === "GET" && url.pathname === "/workspace-events") {
+    return jsonResponse(await listWorkspaceEvents({ env: process.env }, {
+      type: url.searchParams.get("type") ?? undefined,
+      limit: numberParam(url.searchParams.get("limit")),
+    }));
+  }
+
+  const eventMatch = url.pathname.match(/^\/workspace-events\/([^/]+)$/);
+  if (request.method === "GET" && eventMatch?.[1]) {
+    return jsonResponse({ event: await getWorkspaceEvent(decodeURIComponent(eventMatch[1]), { env: process.env }) });
+  }
+
+  return methodNotAllowed();
 }
 
 export function createHandler(config: ServerConfig): (request: Request) => Promise<Response> | Response {
@@ -101,8 +172,17 @@ export function createHandler(config: ServerConfig): (request: Request) => Promi
     if (url.pathname === "/flow-events" || url.pathname.startsWith("/flow-events/")) {
       return handleFlowEvents(request, config, store);
     }
-    if (url.pathname === "/flow-dispatches") {
+    if (url.pathname === "/workspace-dispatches" || url.pathname === "/flow-dispatches") {
       return handleFlowDispatches(request, config, store);
+    }
+    if (url.pathname === "/maintenance-attempts") {
+      return handleMaintenanceAttempts(request, config, store);
+    }
+    if (url.pathname === "/workspace-runs" || url.pathname.startsWith("/workspace-runs/")) {
+      return handleWorkspaceRuns(request, config);
+    }
+    if (url.pathname === "/workspace-events" || url.pathname.startsWith("/workspace-events/")) {
+      return handleWorkspaceEvents(request, config);
     }
     return jsonResponse({ error: "not_found" }, { status: 404 });
   };
@@ -126,7 +206,7 @@ if (import.meta.main) {
       dataDir: config.dataDir,
       sourcesPath: process.env.FEED_SOURCES_PATH,
       discord: config.discord,
-      flowDispatch: {
+      workspaceBackend: {
         env: process.env,
       },
     }).catch((error) => {

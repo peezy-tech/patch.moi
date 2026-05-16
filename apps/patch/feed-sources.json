@@ -73,10 +73,10 @@
         "defaultBranch": "main"
       },
       "target": {
-        "mode": "flow_dispatch",
+        "mode": "workspace_flow",
         "eventType": "upstream.release",
-        "dispatchUrlEnv": "PATCH_FLOW_DISPATCH_URL",
-        "dispatchSecretEnv": "PATCH_FLOW_DISPATCH_SECRET",
+        "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",
+        "workspaceSecretEnv": "PATCH_WORKSPACE_BACKEND_SECRET",
         "payload": {
           "provider": "github",
           "repo": "openai/codex"

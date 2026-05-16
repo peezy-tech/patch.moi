@@ -13,12 +13,15 @@ operational state. They are not the patch stack.
 | `feed-state.json` | Per-source last seen entry and last checked timestamp. |
 | `feed-events.jsonl` | Normalized `FeedSignal` records. |
 | `flow-events.jsonl` | Generic `FlowEvent` records emitted by flow targets. |
-| `flow-dispatches.jsonl` | Dispatch, retry, replay, and failure records. |
+| `maintenance-attempts.jsonl` | patch.moi-owned attempt records linking update events to workspace run ids and candidate refs. |
+| `workspace-dispatches.jsonl` | Workspace dispatch, retry, replay, and failure records. |
+| `flow-dispatches.jsonl` | Legacy dispatch record file read for compatibility. |
 
-Admin endpoints read `flow-events.jsonl` and `flow-dispatches.jsonl`. The feed
-poller appends to all relevant files as it accepts new feed entries.
+Admin endpoints read `flow-events.jsonl`, `maintenance-attempts.jsonl`,
+`workspace-dispatches.jsonl`, and the legacy `flow-dispatches.jsonl` file. The
+feed poller appends to all relevant files as it accepts new feed entries.
 
 If a runner checkout is lost, patch.moi should be able to recreate the
 maintenance context from remote Git refs and forge records. JSONL state explains
-feed and dispatch history; Git and the forge remain the source of truth for
-patch contents and review state.
+feed, attempt, and dispatch history; Git and the forge remain the source of
+truth for patch contents and review state.

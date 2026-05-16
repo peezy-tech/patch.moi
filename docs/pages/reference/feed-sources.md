@@ -24,18 +24,21 @@ type FeedSourceConfig = {
     webUrl: string;
     defaultBranch?: string;
   };
-  target?: FeedFlowDispatchTarget;
+  target?: FeedWorkspaceFlowTarget;
   pollIntervalSeconds?: number;
   primeOnly?: boolean;
 };
 ```
 
-## Flow dispatch target
+## Workspace flow target
 
 ```ts
-type FeedFlowDispatchTarget = {
-  mode: "flow_dispatch";
+type FeedWorkspaceFlowTarget = {
+  mode: "workspace_flow" | "flow_dispatch";
   eventType: string;
+  workspaceUrl?: string;
+  workspaceUrlEnv?: string;
+  workspaceSecretEnv?: string;
   dispatchUrl?: string;
   dispatchUrlEnv?: string;
   dispatchSecretEnv?: string;
@@ -43,9 +46,10 @@ type FeedFlowDispatchTarget = {
 };
 ```
 
-The flow payload includes provider, event, source id, entry id, title, URL,
-author, published time, repository fields, ref, SHA, tag, and raw feed metadata.
-Values from `target.payload` are merged last.
+The target creates a generic `FlowEvent` and hands it to the workspace backend
+adapter. The flow payload includes provider, event, source id, entry id, title,
+URL, author, published time, repository fields, ref, SHA, tag, and raw feed
+metadata. Values from `target.payload` are merged last.
 
 For release maintenance, use a stable event type such as `upstream.release` and
 include only routing hints in `payload`. Avoid copying branch topology into the

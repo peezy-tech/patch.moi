@@ -38,10 +38,10 @@ Create or edit `apps/patch/feed-sources.json`:
         "defaultBranch": "main"
       },
       "target": {
-        "mode": "flow_dispatch",
+        "mode": "workspace_flow",
         "eventType": "upstream.release",
-        "dispatchUrlEnv": "PATCH_FLOW_DISPATCH_URL",
-        "dispatchSecretEnv": "PATCH_FLOW_DISPATCH_SECRET",
+        "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",
+        "workspaceSecretEnv": "PATCH_WORKSPACE_BACKEND_SECRET",
         "payload": {
           "provider": "github",
           "repo": "openai/codex"
@@ -72,10 +72,13 @@ When the feed later contains an unseen release entry, Patch appends:
 
 - `data/feed-events.jsonl` for the normalized signal.
 - `data/flow-events.jsonl` for the generic flow event.
-- `data/flow-dispatches.jsonl` for the dispatch outcome.
+- `data/maintenance-attempts.jsonl` for the patch.moi maintenance attempt.
+- `data/workspace-dispatches.jsonl` for the workspace dispatch outcome.
 
-If `PATCH_FLOW_DISPATCH_URL` is not set, Patch uses local flow execution from
-the working directory. If it is set, Patch sends the event to the HTTP backend.
+If no workspace backend URL is set, Patch uses local flow execution from the
+working directory. If `PATCH_WORKSPACE_BACKEND_URL` is set, Patch sends the
+event to that workspace backend's flow capability. Legacy
+`PATCH_FLOW_BACKEND_URL` and `PATCH_FLOW_DISPATCH_URL` values remain accepted.
 
 ## 4. Connect patch work
 

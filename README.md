@@ -10,7 +10,7 @@ Canonical public host: `https://patch.moi`.
 This is a Bun monorepo:
 
 - `apps/patch`: the Patch service, feed poller, JSONL store, Discord output,
-  and flow dispatch adapter.
+  and workspace backend adapter.
 - `docs`: Tome documentation site for patch.moi.
 
 patch.moi treats Git as the source of truth for maintained projects. Upstream
@@ -26,7 +26,10 @@ GET  /flow-events
 GET  /flow-events/:id
 POST /flow-events/:id/retry
 POST /flow-events/:id/replay
-GET  /flow-dispatches
+GET  /maintenance-attempts
+GET  /workspace-dispatches
+GET  /workspace-events
+GET  /workspace-runs
 ```
 
 ## Environment
@@ -39,6 +42,9 @@ DISCORD_OUTPUT_ENABLED=false
 DISCORD_WEBHOOK_URL=
 DISCORD_NOTIFY_EVENTS=push,release
 FEED_SOURCES_PATH=./feed-sources.json
+PATCH_WORKSPACE_BACKEND_URL=
+PATCH_WORKSPACE_BACKEND_SECRET=
+PATCH_FLOW_BACKEND_URL=
 PATCH_FLOW_DISPATCH_URL=
 PATCH_FLOW_DISPATCH_SECRET=
 PATCH_ADMIN_TOKEN=
@@ -59,10 +65,12 @@ bun run dev
 Feed watcher events are configured in `apps/patch/feed-sources.json`. The first
 poll primes `DATA_DIR/feed-state.json`; later polls append upstream activity to
 `DATA_DIR/feed-events.jsonl`. Targets using `mode: "fork_sync"` append legacy
-work to `DATA_DIR/feed-jobs.jsonl`. Targets using `mode: "flow_dispatch"`
-append generic flow events to `DATA_DIR/flow-events.jsonl`, POST them to the
-configured dispatch URL, and record dispatch outcomes in
-`DATA_DIR/flow-dispatches.jsonl`.
+work to `DATA_DIR/feed-jobs.jsonl`. Targets using `mode: "workspace_flow"`
+append generic flow events to `DATA_DIR/flow-events.jsonl`, send them to the
+configured workspace backend or local adapter, and record dispatch outcomes in
+`DATA_DIR/workspace-dispatches.jsonl`. Each dispatch also creates a
+patch.moi-owned `DATA_DIR/maintenance-attempts.jsonl` entry that links the
+upstream update to workspace run ids and future candidate refs.
 
 ## Documentation
 

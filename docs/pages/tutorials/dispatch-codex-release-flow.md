@@ -33,18 +33,20 @@ git status --short --branch
 If `git status` shows local changes or untracked files, resolve them before an
 automated rebase.
 
-## 2. Point Patch at a backend
+## 2. Point Patch at a workspace backend
 
 ```bash
-PATCH_FLOW_DISPATCH_URL=http://127.0.0.1:7345/events \
-PATCH_FLOW_DISPATCH_SECRET=dev-secret \
+PATCH_WORKSPACE_BACKEND_URL=http://127.0.0.1:3586 \
+PATCH_WORKSPACE_BACKEND_SECRET=dev-secret \
 DATA_DIR=./data \
 FEED_SOURCES_PATH=./feed-sources.json \
 bun run --filter @peezy.tech/patch start
 ```
 
-`PATCH_FLOW_DISPATCH_URL` can point at the `/events` endpoint or at the backend
-base URL. Patch normalizes either form before it creates the shared flow client.
+`PATCH_WORKSPACE_BACKEND_URL` can point at the Codex workspace backend base URL
+or its `/events` endpoint. Patch normalizes either HTTP form before calling the
+workspace flow capability. `PATCH_FLOW_BACKEND_URL` and
+`PATCH_FLOW_DISPATCH_URL` remain accepted for older feed targets.
 
 ## 3. Inspect the stored event
 

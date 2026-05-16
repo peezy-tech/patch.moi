@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import { loadSources, parseFeedEntries, pollFeedsOnce, signalFromEntry } from "../src/feed";
-import { dispatchFlowEvent, patchUpstreamReleaseEvent } from "../src/flow";
+import { dispatchWorkspaceEvent, patchUpstreamReleaseEvent } from "../src/flow";
 import type { FeedSourceConfig } from "../src/types";
 
 const atom = `<?xml version="1.0"?>
@@ -139,7 +139,7 @@ describe("feed watcher", () => {
     expect(feedCalls).toBe(1);
   });
 
-  test("later polls dispatch generic flow events", async () => {
+  test("later polls dispatch generic flow events through the workspace backend adapter", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "patch-feed-"));
     const sourcesPath = join(dataDir, "sources.json");
     const releaseSource: FeedSourceConfig = {
@@ -148,10 +148,10 @@ describe("feed watcher", () => {
       url: "https://github.com/openai/codex/releases.atom",
       event: "release",
       target: {
-        mode: "flow_dispatch",
+        mode: "workspace_flow",
         eventType: "upstream.release",
-        dispatchUrlEnv: "FLOW_URL",
-        dispatchSecretEnv: "FLOW_SECRET",
+        workspaceUrlEnv: "WORKSPACE_URL",
+        workspaceSecretEnv: "WORKSPACE_SECRET",
         payload: {
           repo: "openai/codex",
           provider: "github",
@@ -174,8 +174,8 @@ describe("feed watcher", () => {
       discord: { enabled: false, notifyEvents: new Set(["release"]) },
       flowDispatch: {
         env: {
-          FLOW_URL: "https://flow.example/events",
-          FLOW_SECRET: "secret",
+          WORKSPACE_URL: "https://workspace.example/events",
+          WORKSPACE_SECRET: "secret",
         },
         fetchImpl: async (_url, init) => {
           dispatchedBody = String(init.body);
@@ -195,14 +195,26 @@ describe("feed watcher", () => {
     expect(flowEvent.payload.tag).toBe("v1.2.3");
     expect(JSON.parse(dispatchedBody).id).toBe(flowEvent.id);
     expect(dispatchedSignature).toMatch(/^sha256=[0-9a-f]{64}$/);
-    expect(await readFile(join(dataDir, "flow-dispatches.jsonl"), "utf8")).toContain("\"status\":\"dispatched\"");
+    expect(await readFile(join(dataDir, "workspace-dispatches.jsonl"), "utf8")).toContain("\"transport\":\"workspace-http\"");
+    const attempt = JSON.parse((await readFile(join(dataDir, "maintenance-attempts.jsonl"), "utf8")).trim());
+    expect(attempt).toMatchObject({
+      eventId: flowEvent.id,
+      eventType: "upstream.release",
+      operation: "dispatch",
+      status: "started",
+      upstreamRepo: "openai/codex",
+      upstreamTag: "v1.2.3",
+      workspaceBackendUrl: "https://workspace.example",
+      workspaceRunIds: [],
+      candidateRefs: [],
+    });
   });
 
-  test("flow dispatch uses default Patch env names", async () => {
+  test("workspace dispatch uses default workspace backend env names", async () => {
     let dispatchedUrl = "";
     let dispatchedSignature = "";
 
-    const record = await dispatchFlowEvent({
+    const record = await dispatchWorkspaceEvent({
       id: "patch:source:entry:upstream.release",
       type: "upstream.release",
       source: "patch",
@@ -210,8 +222,8 @@ describe("feed watcher", () => {
       payload: { repo: "openai/codex", tag: "v1.2.3" },
     }, {}, {
       env: {
-        PATCH_FLOW_DISPATCH_URL: "https://flow.example/events",
-        PATCH_FLOW_DISPATCH_SECRET: "secret",
+        PATCH_WORKSPACE_BACKEND_URL: "https://workspace.example",
+        PATCH_WORKSPACE_BACKEND_SECRET: "secret",
       },
       fetchImpl: async (url, init) => {
         dispatchedUrl = url;
@@ -221,12 +233,130 @@ describe("feed watcher", () => {
     });
 
     expect(record.status).toBe("dispatched");
-    expect(dispatchedUrl).toBe("https://flow.example/events");
+    expect(record).toMatchObject({ target: "workspace-backend", transport: "workspace-http" });
+    expect(dispatchedUrl).toBe("https://workspace.example/events");
     expect(dispatchedSignature).toMatch(/^sha256=[0-9a-f]{64}$/);
   });
 
-  test("flow dispatch records backend HTTP failures", async () => {
-    const record = await dispatchFlowEvent({
+  test("workspace dispatch accepts legacy Patch dispatch URL env name", async () => {
+    let dispatchedUrl = "";
+
+    const record = await dispatchWorkspaceEvent({
+      id: "patch:source:entry:upstream.release",
+      type: "upstream.release",
+      source: "patch",
+      receivedAt: "2026-05-13T00:00:00.000Z",
+      payload: { repo: "openai/codex", tag: "v1.2.3" },
+    }, {}, {
+      env: {
+        PATCH_FLOW_DISPATCH_URL: "https://flow.example/events",
+      },
+      fetchImpl: async (url) => {
+        dispatchedUrl = url;
+        return Response.json({ status: "accepted", eventId: "event-1", runIds: [], matched: 0 }, { status: 202 });
+      },
+    });
+
+    expect(record.status).toBe("dispatched");
+    expect(dispatchedUrl).toBe("https://flow.example/events");
+  });
+
+  test("workspace dispatch accepts legacy Patch backend URL env name", async () => {
+    let dispatchedUrl = "";
+
+    const record = await dispatchWorkspaceEvent({
+      id: "patch:source:entry:upstream.release",
+      type: "upstream.release",
+      source: "patch",
+      receivedAt: "2026-05-13T00:00:00.000Z",
+      payload: { repo: "openai/codex", tag: "v1.2.3" },
+    }, {}, {
+      env: {
+        PATCH_FLOW_BACKEND_URL: "https://flow.example",
+      },
+      fetchImpl: async (url) => {
+        dispatchedUrl = url;
+        return Response.json({ status: "accepted", eventId: "event-1", runIds: [], matched: 0 }, { status: 202 });
+      },
+    });
+
+    expect(record.status).toBe("dispatched");
+    expect(dispatchedUrl).toBe("https://flow.example/events");
+  });
+
+  test("workspace dispatch can use the workspace backend websocket flow method", async () => {
+    const methods: string[] = [];
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request, bunServer) {
+        if (bunServer.upgrade(request)) {
+          return undefined;
+        }
+        return new Response("upgrade required", { status: 426 });
+      },
+      websocket: {
+        message(socket, message) {
+          const request = JSON.parse(String(message)) as {
+            id: number;
+            method: string;
+            params?: { capabilities?: { appServerPassThrough?: boolean }; event?: { id?: string } };
+          };
+          methods.push(request.method);
+          if (request.method === "workspace.initialize") {
+            expect(request.params?.capabilities?.appServerPassThrough).toBe(true);
+            socket.send(JSON.stringify({
+              jsonrpc: "2.0",
+              id: request.id,
+              result: {
+                ok: true,
+                serverInfo: { name: "test", version: "0.0.0" },
+                capabilities: { appServerPassThrough: true, workspaceMethods: ["flow.dispatch"], flowInspection: true },
+              },
+            }));
+            return;
+          }
+          socket.send(JSON.stringify({
+            jsonrpc: "2.0",
+            id: request.id,
+            result: {
+              status: "accepted",
+              eventId: request.params?.event?.id,
+              runIds: ["run-1"],
+              matched: 1,
+            },
+          }));
+        },
+      },
+    });
+
+    try {
+      const record = await dispatchWorkspaceEvent({
+        id: "patch:source:entry:upstream.release",
+        type: "upstream.release",
+        source: "patch",
+        receivedAt: "2026-05-13T00:00:00.000Z",
+        payload: { repo: "openai/codex", tag: "v1.2.3" },
+      }, {}, {
+        env: {
+          PATCH_WORKSPACE_BACKEND_URL: `ws://127.0.0.1:${server.port}`,
+        },
+      });
+
+      expect(methods).toEqual(["workspace.initialize", "flow.dispatch"]);
+      expect(record).toMatchObject({
+        status: "dispatched",
+        transport: "workspace-ws",
+        runIds: ["run-1"],
+        matched: 1,
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("workspace dispatch records backend HTTP failures", async () => {
+    const record = await dispatchWorkspaceEvent({
       id: "patch:source:entry:upstream.release",
       type: "upstream.release",
       source: "patch",
@@ -246,11 +376,11 @@ describe("feed watcher", () => {
     });
   });
 
-  test("flow dispatch uses local mode when no backend URL is configured", async () => {
+  test("workspace dispatch uses local mode when no backend URL is configured", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "patch-flow-local-"));
     await writeDemoFlow(dataDir);
 
-    const record = await dispatchFlowEvent({
+    const record = await dispatchWorkspaceEvent({
       id: "patch:local:demo",
       type: "demo.event",
       source: "patch",
@@ -265,6 +395,8 @@ describe("feed watcher", () => {
       eventId: "patch:local:demo",
       eventType: "demo.event",
       status: "dispatched",
+      target: "local",
+      transport: "local",
     });
     expect(record.url).toBeUndefined();
     expect(JSON.parse(await readFile(join(dataDir, "local-flow-output.json"), "utf8"))).toEqual({

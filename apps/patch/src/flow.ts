@@ -1,26 +1,27 @@
-import { createFlowClient, type FlowClient } from "@peezy.tech/flow-runtime/client";
 import type {
-  FeedFlowDispatchTarget,
+  FeedWorkspaceFlowTarget,
   FeedSignal,
   FlowDispatchRecord,
   FlowEvent,
+  MaintenanceAttemptRecord,
 } from "./types";
-
-type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
+import {
+  createPatchWorkspaceBackend,
+  targetWorkspaceBackendUrl,
+  type WorkspaceBackendConfig,
+} from "./workspace-backend";
 
 const serviceSource = "patch";
 
-export type FlowDispatchConfig = {
-  env?: Record<string, string | undefined>;
-  fetchImpl?: FetchLike;
-  cwd?: string;
-};
+export type FlowDispatchConfig = WorkspaceBackendConfig;
+export type WorkspaceDispatchConfig = WorkspaceBackendConfig;
 
-function isFlowDispatchTarget(value: unknown): value is FeedFlowDispatchTarget {
+function isWorkspaceFlowTarget(value: unknown): value is FeedWorkspaceFlowTarget {
   return (
     typeof value === "object" &&
     value !== null &&
-    (value as { mode?: unknown }).mode === "flow_dispatch"
+    ((value as { mode?: unknown }).mode === "workspace_flow" ||
+      (value as { mode?: unknown }).mode === "flow_dispatch")
   );
 }
 
@@ -59,7 +60,7 @@ export function flowEventForFeedSignal(
   signal: FeedSignal,
   receivedAt = new Date().toISOString(),
 ): FlowEvent<Record<string, unknown>> | undefined {
-  if (!isFlowDispatchTarget(signal.target)) {
+  if (!isWorkspaceFlowTarget(signal.target)) {
     return undefined;
   }
 
@@ -74,63 +75,6 @@ export function flowEventForFeedSignal(
       ...(signal.target.payload ?? {}),
     },
   };
-}
-
-function targetFlowUrl(
-  target: FeedFlowDispatchTarget,
-  env: Record<string, string | undefined>,
-): string | undefined {
-  const explicit = target.dispatchUrl?.trim();
-  if (explicit) {
-    return explicit;
-  }
-  const envName = target.dispatchUrlEnv?.trim();
-  if (envName) {
-    return env[envName]?.trim() || undefined;
-  }
-  const backendUrl = env.PATCH_FLOW_BACKEND_URL?.trim();
-  if (backendUrl) {
-    return backendUrl;
-  }
-  return env.PATCH_FLOW_DISPATCH_URL?.trim() || undefined;
-}
-
-function targetDispatchSecret(
-  target: FeedFlowDispatchTarget,
-  env: Record<string, string | undefined>,
-): string | undefined {
-  const envName = target.dispatchSecretEnv?.trim();
-  if (envName) {
-    return env[envName]?.trim() || undefined;
-  }
-  return env.PATCH_FLOW_DISPATCH_SECRET?.trim() || undefined;
-}
-
-export function createFlowClientFromPatchConfig(
-  target: Partial<FeedFlowDispatchTarget> = {},
-  config: FlowDispatchConfig = {},
-): FlowClient {
-  const env = config.env ?? process.env;
-  const flowTarget = { mode: "flow_dispatch" as const, eventType: target.eventType ?? "flow.event", ...target };
-  const url = targetFlowUrl(flowTarget, env);
-  if (url) {
-    return createFlowClient({
-      mode: "http",
-      baseUrl: flowBackendBaseUrl(url),
-      hmacSecret: targetDispatchSecret(flowTarget, env),
-      ...(config.fetchImpl ? { fetch: patchFetch(config.fetchImpl) } : {}),
-    });
-  }
-  return createFlowClient({
-    mode: "local",
-    cwd: config.cwd ?? process.cwd(),
-    env,
-    codex: {
-      command: env.CODEX_APP_SERVER_CODEX_COMMAND,
-      codexHome: env.CODEX_HOME,
-      stream: true,
-    },
-  });
 }
 
 export function patchUpstreamReleaseEvent(input: {
@@ -152,21 +96,34 @@ export function patchUpstreamReleaseEvent(input: {
 
 export async function dispatchFlowEvent(
   event: FlowEvent,
-  target: Partial<FeedFlowDispatchTarget> = {},
+  target: Partial<FeedWorkspaceFlowTarget> = {},
   config: FlowDispatchConfig = {},
 ): Promise<FlowDispatchRecord> {
-  const env = config.env ?? process.env;
-  const flowTarget = { mode: "flow_dispatch" as const, eventType: event.type, ...target };
-  const url = targetFlowUrl(flowTarget, env);
-  const client = createFlowClientFromPatchConfig(flowTarget, config);
+  return dispatchWorkspaceEvent(event, target, config);
+}
+
+export async function dispatchWorkspaceEvent(
+  event: FlowEvent,
+  target: Partial<FeedWorkspaceFlowTarget> = {},
+  config: WorkspaceDispatchConfig = {},
+): Promise<FlowDispatchRecord> {
+  const workspaceTarget = { mode: "workspace_flow" as const, eventType: event.type, ...target };
+  const backend = createPatchWorkspaceBackend(workspaceTarget, config);
 
   try {
-    await client.dispatchEvent(event);
+    const result = await backend.client.dispatchEvent(event);
     return {
       eventId: event.id,
       eventType: event.type,
-      url: url ? flowEventsUrl(url) : undefined,
+      operation: "dispatch",
+      target: backend.mode === "local" ? "local" : "workspace-backend",
+      transport: backend.mode,
+      workspaceBackendUrl: backend.url,
+      url: backend.eventsUrl,
       status: "dispatched",
+      runIds: result.runIds,
+      matched: result.matched,
+      idempotent: result.idempotent,
       createdAt: new Date().toISOString(),
     };
   } catch (error) {
@@ -174,7 +131,11 @@ export async function dispatchFlowEvent(
     return {
       eventId: event.id,
       eventType: event.type,
-      url,
+      operation: "dispatch",
+      target: backend.mode === "local" ? "local" : "workspace-backend",
+      transport: backend.mode,
+      workspaceBackendUrl: backend.url,
+      url: backend.eventsUrl,
       status: "failed",
       ...(httpStatus ? { httpStatus } : {}),
       error: error instanceof Error ? error.message : String(error),
@@ -185,25 +146,38 @@ export async function dispatchFlowEvent(
 
 export async function replayFlowEvent(
   event: FlowEvent,
-  target: Partial<FeedFlowDispatchTarget> = {},
+  target: Partial<FeedWorkspaceFlowTarget> = {},
   config: FlowDispatchConfig = {},
 ): Promise<FlowDispatchRecord> {
+  return replayWorkspaceEvent(event, target, config);
+}
+
+export async function replayWorkspaceEvent(
+  event: FlowEvent,
+  target: Partial<FeedWorkspaceFlowTarget> = {},
+  config: WorkspaceDispatchConfig = {},
+): Promise<FlowDispatchRecord> {
   const env = config.env ?? process.env;
-  const flowTarget = { mode: "flow_dispatch" as const, eventType: event.type, ...target };
-  const url = targetFlowUrl(flowTarget, env);
-  const client = createFlowClientFromPatchConfig(flowTarget, config);
+  const workspaceTarget = { mode: "workspace_flow" as const, eventType: event.type, ...target };
+  const backend = createPatchWorkspaceBackend(workspaceTarget, config);
+  const configuredUrl = targetWorkspaceBackendUrl(workspaceTarget, env);
 
   try {
-    if (url) {
-      await client.replayEvent(event.id, { wait: false });
-    } else {
-      await client.dispatchEvent(event);
-    }
+    const result = configuredUrl
+      ? await backend.client.replayEvent(event.id, { wait: false })
+      : await backend.client.dispatchEvent(event);
     return {
       eventId: event.id,
       eventType: event.type,
-      url: url ? `${flowBackendBaseUrl(url)}/events/${encodeURIComponent(event.id)}/replay` : undefined,
+      operation: "replay",
+      target: backend.mode === "local" ? "local" : "workspace-backend",
+      transport: backend.mode,
+      workspaceBackendUrl: backend.url,
+      url: backend.eventsUrl ? `${backend.eventsUrl}/${encodeURIComponent(event.id)}/replay` : undefined,
       status: "dispatched",
+      runIds: result.runIds,
+      matched: result.matched,
+      idempotent: result.idempotent,
       createdAt: new Date().toISOString(),
     };
   } catch (error) {
@@ -211,7 +185,11 @@ export async function replayFlowEvent(
     return {
       eventId: event.id,
       eventType: event.type,
-      url,
+      operation: "replay",
+      target: backend.mode === "local" ? "local" : "workspace-backend",
+      transport: backend.mode,
+      workspaceBackendUrl: backend.url,
+      url: backend.eventsUrl,
       status: "failed",
       ...(httpStatus ? { httpStatus } : {}),
       error: error instanceof Error ? error.message : String(error),
@@ -220,11 +198,34 @@ export async function replayFlowEvent(
   }
 }
 
-export async function dispatchFlowEventForFeedSignal(
+export async function listWorkspaceRuns(config: WorkspaceDispatchConfig = {}, options: {
+  eventId?: string;
+  status?: string;
+  limit?: number;
+} = {}) {
+  return await createPatchWorkspaceBackend({}, config).client.listRuns(options);
+}
+
+export async function getWorkspaceRun(runId: string, config: WorkspaceDispatchConfig = {}) {
+  return await createPatchWorkspaceBackend({}, config).client.getRun(runId);
+}
+
+export async function getWorkspaceEvent(eventId: string, config: WorkspaceDispatchConfig = {}) {
+  return await createPatchWorkspaceBackend({}, config).client.getEvent(eventId);
+}
+
+export async function listWorkspaceEvents(config: WorkspaceDispatchConfig = {}, options: {
+  type?: string;
+  limit?: number;
+} = {}) {
+  return await createPatchWorkspaceBackend({}, config).client.listEvents(options);
+}
+
+export async function dispatchWorkspaceEventForFeedSignal(
   signal: FeedSignal,
-  config: FlowDispatchConfig = {},
+  config: WorkspaceDispatchConfig = {},
 ): Promise<{ event?: FlowEvent<Record<string, unknown>>; record?: FlowDispatchRecord }> {
-  if (!isFlowDispatchTarget(signal.target)) {
+  if (!isWorkspaceFlowTarget(signal.target)) {
     return {};
   }
 
@@ -235,21 +236,41 @@ export async function dispatchFlowEventForFeedSignal(
 
   return {
     event,
-    record: await dispatchFlowEvent(event, signal.target, config),
+    record: await dispatchWorkspaceEvent(event, signal.target, config),
   };
 }
 
-function flowBackendBaseUrl(url: string): string {
-  return url.replace(/\/(?:events|flow-events)\/?$/, "").replace(/\/+$/, "");
+export async function dispatchFlowEventForFeedSignal(
+  signal: FeedSignal,
+  config: FlowDispatchConfig = {},
+): Promise<{ event?: FlowEvent<Record<string, unknown>>; record?: FlowDispatchRecord }> {
+  return dispatchWorkspaceEventForFeedSignal(signal, config);
 }
 
-function flowEventsUrl(url: string): string {
-  return `${flowBackendBaseUrl(url)}/events`;
-}
+export function maintenanceAttemptForWorkspaceDispatch(
+  event: FlowEvent,
+  record: FlowDispatchRecord,
+): MaintenanceAttemptRecord {
+  const payload = typeof event.payload === "object" && event.payload !== null
+    ? event.payload as Record<string, unknown>
+    : {};
+  const operation = record.operation ?? "dispatch";
 
-function patchFetch(fetchImpl: FetchLike) {
-  return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    return fetchImpl(String(input), init ?? {});
+  return {
+    id: `${event.id}:${operation}:${record.createdAt}`,
+    eventId: event.id,
+    eventType: event.type,
+    operation,
+    status: record.status === "dispatched" ? "started" : record.status,
+    upstreamRepo: stringValue(payload.repo),
+    upstreamRef: stringValue(payload.ref),
+    upstreamSha: stringValue(payload.sha),
+    upstreamTag: stringValue(payload.tag),
+    workspaceBackendUrl: record.workspaceBackendUrl,
+    workspaceRunIds: record.runIds ?? [],
+    candidateRefs: [],
+    error: record.error,
+    createdAt: record.createdAt,
   };
 }
 
@@ -257,4 +278,8 @@ function httpStatusFromError(error: unknown): number | undefined {
   const message = error instanceof Error ? error.message : String(error);
   const match = message.match(/\bfailed with (\d{3})\b/);
   return match?.[1] ? Number(match[1]) : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
 }

@@ -2,7 +2,11 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { notifyDiscord, type DiscordConfig } from "./discord";
-import { dispatchFlowEventForFeedSignal, type FlowDispatchConfig } from "./flow";
+import {
+  dispatchWorkspaceEventForFeedSignal,
+  maintenanceAttemptForWorkspaceDispatch,
+  type WorkspaceDispatchConfig,
+} from "./flow";
 import { EventStore, jobForFeedSignal } from "./queue";
 import type { FeedEventName, FeedSignal, FeedSourceConfig } from "./types";
 
@@ -24,7 +28,8 @@ type FeedPollerConfig = {
   dataDir: string;
   sourcesPath: string;
   discord?: DiscordConfig;
-  flowDispatch?: FlowDispatchConfig;
+  workspaceBackend?: WorkspaceDispatchConfig;
+  flowDispatch?: WorkspaceDispatchConfig;
 };
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -164,7 +169,8 @@ export async function pollFeedSource(input: {
   statePath: string;
   store: EventStore;
   discord?: DiscordConfig;
-  flowDispatch?: FlowDispatchConfig;
+  workspaceBackend?: WorkspaceDispatchConfig;
+  flowDispatch?: WorkspaceDispatchConfig;
   fetchImpl?: FetchLike;
 }): Promise<{ signals: FeedSignal[]; jobs: number; flowDispatches: number; primed: boolean }> {
   const response = await (input.fetchImpl ?? fetch)(input.source.url, {
@@ -191,13 +197,21 @@ export async function pollFeedSource(input: {
       await input.store.appendFeedJob(job);
       jobs += 1;
     }
-    const flowDispatch = await dispatchFlowEventForFeedSignal(signal, input.flowDispatch);
-    if (flowDispatch.event) {
-      await input.store.appendFlowEvent(flowDispatch.event);
+    const workspaceDispatch = await dispatchWorkspaceEventForFeedSignal(
+      signal,
+      input.workspaceBackend ?? input.flowDispatch,
+    );
+    if (workspaceDispatch.event) {
+      await input.store.appendFlowEvent(workspaceDispatch.event);
     }
-    if (flowDispatch.record) {
-      await input.store.appendFlowDispatch(flowDispatch.record);
-      if (flowDispatch.record.status === "dispatched") {
+    if (workspaceDispatch.record) {
+      await input.store.appendWorkspaceDispatch(workspaceDispatch.record);
+      if (workspaceDispatch.event) {
+        await input.store.appendMaintenanceAttempt(
+          maintenanceAttemptForWorkspaceDispatch(workspaceDispatch.event, workspaceDispatch.record),
+        );
+      }
+      if (workspaceDispatch.record.status === "dispatched") {
         flowDispatches += 1;
       }
     }
@@ -210,8 +224,8 @@ export async function pollFeedSource(input: {
       event: signal.event,
       entryId: signal.entryId,
       job: job?.id,
-      flowEvent: flowDispatch.event?.id,
-      flowDispatch: flowDispatch.record?.status,
+      flowEvent: workspaceDispatch.event?.id,
+      workspaceDispatch: workspaceDispatch.record?.status,
     }));
   }
 
@@ -240,6 +254,7 @@ export async function pollFeedsOnce(config: FeedPollerConfig, fetchImpl?: FetchL
         statePath,
         store,
         discord: config.discord,
+        workspaceBackend: config.workspaceBackend,
         flowDispatch: config.flowDispatch,
         fetchImpl,
       });

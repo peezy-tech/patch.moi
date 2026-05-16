@@ -57,9 +57,10 @@ DATA_DIR=./data FEED_SOURCES_PATH=./feed-sources.json bun run dev
 
 `GET /healthz` returns `ok` when the server is running.
 
-Local flow dispatch runs from the process working directory when
-`PATCH_FLOW_DISPATCH_URL` is unset. That makes local mode useful for testing a
-patch application workspace before sending the same event to a service backend.
+Local workspace execution runs from the process working directory when no
+workspace backend URL is set. That makes local mode useful for testing a patch
+application workspace before sending the same event to a configured workspace
+backend or service runner.
 
 Local mode is checkout-oriented. Service mode is forge-oriented: patch.moi
 should talk to the remote forge, trigger a runner, and let that runner perform
