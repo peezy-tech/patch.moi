@@ -53,6 +53,41 @@ describe("patch.moi harness flow", () => {
     expect(afterHead).toBe(beforeHead);
     expect(await git(["status", "--porcelain=v1"])).toBe("");
   });
+
+  test("matches installed Codex release flows without executing release work", async () => {
+    const flows = await discoverFlows({ cwd: workspaceRoot });
+    const matches = await matchingSteps(flows, {
+      id: "patch:upstream.release:openai/codex:rust-v0.130.0",
+      type: "upstream.release",
+      source: "patch",
+      receivedAt: "2026-05-16T00:00:00.000Z",
+      payload: { repo: "openai/codex", tag: "rust-v0.130.0" },
+    });
+
+    expect(matches.map(({ flow, step }) => `${flow.manifest.name}/${step.name}`)).toEqual([
+      "openai-codex-bindings/regenerate-bindings",
+      "peezy-codex-fork/rebase-patch-stack",
+    ]);
+
+    const codeModeMatch = matches.find((entry) => entry.flow.manifest.name === "peezy-codex-fork");
+    expect(codeModeMatch?.step.runner).toBe("code-mode");
+    if (!codeModeMatch) {
+      return;
+    }
+
+    await expect(runFlowStep({
+      flow: codeModeMatch.flow,
+      step: codeModeMatch.step,
+      event: {
+        id: "patch:upstream.release:openai/codex:rust-v0.130.0",
+        type: "upstream.release",
+        source: "patch",
+        receivedAt: "2026-05-16T00:00:00.000Z",
+        payload: { repo: "openai/codex", tag: "rust-v0.130.0" },
+      },
+      env: {},
+    })).rejects.toThrow("requires CODEX_FLOWS_ENABLE_CODE_MODE=1");
+  });
 });
 
 async function git(args: string[]): Promise<string> {

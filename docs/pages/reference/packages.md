@@ -44,6 +44,21 @@ bun run workspace:run:harness
 Those commands are operator automation around the repo. They do not replace the
 Patch service package or its `DATA_DIR` state.
 
+## Installed Flow Capabilities
+
+External flow capabilities are installed under `.codex/flows` and tracked in
+`.codex/pack-lock.json`. The current install brings in the Codex release
+maintenance flows from the sibling `../codex-flows` repository:
+
+```bash
+codex-flows pack doctor --json
+```
+
+`openai-codex-bindings` and `peezy-codex-fork` both match
+`upstream.release` events for `openai/codex`. They are installed capabilities,
+not patch.moi product state. patch.moi still records feed-owned flow events,
+workspace dispatches, and maintenance attempts under `DATA_DIR`.
+
 ## Related Runtime Packages
 
 These published packages define the current patch.moi integration baseline:

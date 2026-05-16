@@ -34,7 +34,32 @@ git status --short --branch
 If `git status` shows local changes or untracked files, resolve them before an
 automated rebase.
 
-## 2. Point Patch at a workspace backend
+## 2. Install the Codex release capabilities
+
+The Codex release maintenance capabilities are installed from the neighboring
+`../codex-flows` pack into `.codex/flows`:
+
+```bash
+codex-flows pack add ../codex-flows \
+  --include openai-codex-bindings \
+  --include peezy-codex-fork \
+  --apply
+codex-flows pack doctor --json
+```
+
+The current local install pins `openai-codex-bindings` and `peezy-codex-fork`
+in `.codex/pack-lock.json`. `@peezy.tech/flow-runtime@0.4.0` discovers
+installed `.codex/flows/*` before source-owned `flows/*`, so the installed
+Codex capabilities are visible to patch.moi while the harness remains a
+source-owned repo flow.
+
+Safe local verification stops at event matching and runner gating. The test
+suite confirms that a stored `upstream.release` event for `openai/codex`
+selects both installed Codex release steps, and that the Code Mode step still
+requires `CODEX_FLOWS_ENABLE_CODE_MODE=1`. Do not fabricate a full
+`openai/codex` release lifecycle just to exercise the flow.
+
+## 3. Point Patch at a workspace backend
 
 ```bash
 PATCH_WORKSPACE_BACKEND_URL=http://127.0.0.1:3586 \
@@ -52,7 +77,7 @@ workspace flow capability. `PATCH_FLOW_BACKEND_URL` and
 Leave `PATCH_WORKSPACE_BACKEND_URL` unset only when you intentionally want local
 flow execution from the Patch process working directory.
 
-## 3. Inspect the stored event
+## 4. Inspect the stored event
 
 ```bash
 curl http://127.0.0.1:3000/flow-events
@@ -61,7 +86,7 @@ curl http://127.0.0.1:3000/flow-events
 When `PATCH_ADMIN_TOKEN` is set, include either `Authorization: Bearer <token>`
 or `X-Patch-Admin-Token: <token>`.
 
-## 4. Keep completion workspace-owned, state app-owned
+## 5. Keep completion workspace-owned, state app-owned
 
 Patch dispatches the generic event. The installed Codex release flow or
 workspace owns the work that happens next:

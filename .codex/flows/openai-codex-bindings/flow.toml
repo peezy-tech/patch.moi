@@ -1,0 +1,24 @@
+name = "openai-codex-bindings"
+version = 1
+description = "Regenerate @peezy.tech/codex-flows bindings from a canonical openai/codex release."
+
+[config]
+package_name = "@peezy.tech/codex-flows"
+generated_dir = "packages/codex-client/src/app-server/generated"
+package_json = "packages/codex-client/package.json"
+commit = true
+push = false
+publish = false
+github_repo = "peezy-tech/codex-flows"
+github_publish_workflow = "publish-codex-flows.yml"
+
+[[steps]]
+name = "regenerate-bindings"
+runner = "bun"
+script = "exec/update-bindings.ts"
+cwd = "../.."
+timeout_ms = 1200000
+
+[steps.trigger]
+type = "upstream.release"
+schema = "schemas/upstream-release.schema.json"

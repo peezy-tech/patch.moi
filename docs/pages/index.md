@@ -104,6 +104,8 @@ DATA_DIR=./data FEED_SOURCES_PATH=./feed-sources.json bun run --filter @peezy.te
 - `apps/patch`: Patch service, feed poller, JSONL store, admin API, Discord
   output, and workspace backend adapter.
 - `flows/patch-moi-harness`: executable maintenance flow for the harness repos.
+- `.codex/flows`: installed external flow capabilities, currently the Codex
+  release maintenance flows from the neighboring `../codex-flows` pack.
 - `harness`: upstream and maintained fork repositories used for rehearsal.
 - `.codex/workspace.toml`: optional repo-native workspace automation config.
 - `docs`: this Tome documentation site.

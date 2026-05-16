@@ -1,0 +1,30 @@
+name = "peezy-codex-fork"
+version = 1
+description = "Rebase the Peezy Codex fork patch stack onto a canonical openai/codex release."
+
+[config]
+package_name = "@peezy.tech/codex"
+codex_repo_env = "PEEZY_CODEX_REPO"
+codex_repo = "/home/peezy/meta-workspace/codex"
+target_branch_env = "PEEZY_CODEX_TARGET_BRANCH"
+target_branch = "code-mode-exec-hooks"
+upstream_remote = "upstream"
+upstream_repo_url = "https://github.com/openai/codex.git"
+cargo_target_dir_env = "PEEZY_CODEX_CARGO_TARGET_DIR"
+cargo_target_dir = "/tmp/peezy-codex-flow-target"
+squash_patch_stack = true
+push = false
+publish = false
+
+[guidance]
+skills = ["jojo-development-flow"]
+
+[[steps]]
+name = "rebase-patch-stack"
+runner = "code-mode"
+script = "exec/update-fork.code-mode.js"
+timeout_ms = 3600000
+
+[steps.trigger]
+type = "upstream.release"
+schema = "schemas/upstream-release.schema.json"
