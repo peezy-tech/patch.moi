@@ -1,6 +1,6 @@
 ---
 title: Environment
-description: Runtime environment variables used by Patch.
+description: Runtime environment variables used by patch.moi.
 ---
 
 # Environment
@@ -15,11 +15,14 @@ description: Runtime environment variables used by Patch.
 | `PATCH_FLOW_DISPATCH_URL` | unset | Default flow backend URL for dispatch targets. |
 | `PATCH_FLOW_BACKEND_URL` | unset | Alternate default backend base URL. |
 | `PATCH_FLOW_DISPATCH_SECRET` | unset | HMAC secret for HTTP flow dispatch. |
-| `DISCORD_OUTPUT_ENABLED` | `false` | Enables Discord webhook output. |
-| `DISCORD_WEBHOOK_URL` | unset | Discord webhook target. |
-| `DISCORD_NOTIFY_EVENTS` | `push,release` | Comma-separated notification allow list. |
 | `CODEX_APP_SERVER_CODEX_COMMAND` | unset | Passed to local code-mode flow execution. |
 | `CODEX_HOME` | unset | Passed to local code-mode flow execution. |
 
 Feed target fields can override backend settings with `dispatchUrl`,
 `dispatchUrlEnv`, and `dispatchSecretEnv`.
+
+Git topology is intentionally not represented here. Local mode should read
+upstream, fork, branch, and tag state from Git. Service mode should read remote
+repository, branch, workflow, and review state from the forge. Environment
+variables should stay limited to runtime concerns such as dispatch URLs, data
+directories, and Codex execution settings.

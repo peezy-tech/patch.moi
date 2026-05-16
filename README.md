@@ -1,6 +1,7 @@
 # patch.moi
 
-Feed watching and flow dispatch service for upstream project events.
+Git-first maintenance control plane for custom patches on top of upstream open
+source software.
 
 Canonical public host: `https://patch.moi`.
 
@@ -10,7 +11,12 @@ This is a Bun monorepo:
 
 - `apps/patch`: the Patch service, feed poller, JSONL store, Discord output,
   and flow dispatch adapter.
-- `docs`: Tome documentation site published under `/docs`.
+- `docs`: Tome documentation site for patch.moi.
+
+patch.moi treats Git as the source of truth for maintained projects. Upstream
+and fork remotes, patch branches, tags, and commits describe the patch stack.
+Patch records update intake, dispatch attempts, and operational history around
+those Git facts.
 
 ## Endpoints
 

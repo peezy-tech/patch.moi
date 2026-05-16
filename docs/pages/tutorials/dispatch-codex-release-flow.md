@@ -1,18 +1,37 @@
 ---
 title: Dispatch a Codex release flow
-description: Connect the OpenAI Codex release feed to codex-flow automation.
+description: Connect the OpenAI Codex release feed to a Codex patch-stack maintenance workspace.
 ---
 
 # Dispatch a Codex release flow
 
-Patch was built to let upstream release activity trigger generic codex-flow
-automation without putting Codex-specific completion logic into Patch itself.
+This tutorial connects upstream OpenAI Codex releases to the Codex fork
+maintenance flow. The flow rebases a maintained patch stack onto an upstream
+release tag and verifies the candidate.
 
 ## 1. Use the release source
 
 The bundled `apps/patch/feed-sources.json` includes
 `github-openai-codex-releases`. Its target emits `upstream.release` events with
 the upstream repository and release tag in the payload.
+
+The maintained Codex fork should still be modeled in Git. In the neighboring
+`../codex` checkout, `origin` is `https://github.com/peezy-tech/codex` and
+`code-mode-exec-hooks` is the maintained patch branch.
+
+Before running release maintenance, make sure the checkout has a canonical
+upstream remote:
+
+```bash
+cd ../codex
+git remote get-url upstream || git remote add upstream https://github.com/openai/codex.git
+git fetch upstream --tags --prune
+git fetch origin --prune
+git status --short --branch
+```
+
+If `git status` shows local changes or untracked files, resolve them before an
+automated rebase.
 
 ## 2. Point Patch at a backend
 
@@ -38,7 +57,26 @@ or `X-Patch-Admin-Token: <token>`.
 
 ## 4. Keep completion app-owned
 
-Patch dispatches the generic event. The installed Codex release flow owns the
-work that happens next: matching `flow.toml`, running steps, checking gates, and
-emitting `FLOW_RESULT`. Product-specific completion stays in that flow package
-or its backend worker.
+Patch dispatches the generic event. The installed Codex release flow or
+workspace owns the work that happens next:
+
+- fetch upstream tags
+- resolve the release tag
+- rebase the maintained patch branch
+- collect conflict context when the rebase stops
+- run the configured checks
+- optionally push a candidate ref
+
+That candidate can be used for an internal build/link workflow before a public
+release exists: build the local native binary, place it in the npm wrapper's
+vendor layout, and link the package with Bun. Public npm publishing should stay
+a separate channel because it may need GitHub Actions, trusted publishing,
+release review, and upstream schedule alignment.
+
+For the current Codex fork, public release is the `rust-v*` tag workflow that
+publishes the `@peezy.tech/*` npm packages.
+
+In service mode, patch.moi should trigger this work through the remote forge
+instead of depending on a persistent local checkout. The service creates or
+updates a maintenance branch, starts a runner workflow, and records the PR,
+issue, check, artifact, or candidate ref that the runner produces.

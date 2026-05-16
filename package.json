@@ -1,7 +1,7 @@
 {
   "name": "patch-moi",
   "version": "0.1.0",
-  "description": "Feed watching and flow dispatch service for patch.moi.",
+  "description": "Git-first maintenance control plane for upstream patch stacks.",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.11",

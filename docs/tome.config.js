@@ -1,7 +1,7 @@
 /** @type {import('@tomehq/core').TomeConfig} */
 export default {
   name: "patch.moi",
-  basePath: "/docs",
+  basePath: "/",
   theme: {
     preset: "editorial",
     mode: "auto",
@@ -21,8 +21,6 @@ export default {
       pages: [
         "guides/run-patch-locally",
         "guides/configure-feed-sources",
-        "guides/dispatch-and-replay-flow-events",
-        "guides/enable-discord-output",
       ],
     },
     {
@@ -31,6 +29,7 @@ export default {
         "reference/environment",
         "reference/feed-sources",
         "reference/http-api",
+        "reference/dispatch-and-replay-flow-events",
         "reference/jsonl-state",
         "reference/packages",
       ],
@@ -39,9 +38,12 @@ export default {
       group: "Concepts",
       pages: [
         "concepts/architecture",
+        "concepts/git-source-of-truth",
+        "concepts/codex-fork-model",
+        "concepts/forge-service-mode",
+        "concepts/workspaces-and-channels",
         "concepts/flow-boundary",
-        "concepts/upstream-use-cases",
-        "concepts/forgejo-forking-problem-space",
+        "concepts/codex-use-case",
       ],
     },
   ],

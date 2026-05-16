@@ -1,48 +1,60 @@
 ---
 title: patch.moi
-description: Feed watching and flow dispatch for upstream project events.
+description: Hands-off maintenance for custom patches on top of upstream open source software.
 ---
 
 # patch.moi
 
-Patch is a small Bun service that watches upstream Atom/RSS feeds and turns
-selected upstream activity into durable Patch records, Discord notifications,
-or generic codex-flow events.
+patch.moi keeps custom features alive on top of upstream open source projects.
+It watches upstream movement, records durable update signals, and hands the
+actual patch work to local workspaces or remote forge runners that operate on
+normal Git repositories.
 
-The service keeps the product boundary narrow:
+The product boundary is Git-first:
 
-- Feeds describe upstream repositories and events.
-- Patch normalizes feed entries into `FeedSignal` records.
-- Targets decide whether a signal is notification-only, a legacy fork-sync job,
-  or a generic flow dispatch.
-- Flow dispatch uses `@peezy.tech/flow-runtime/client` so Patch can run flows
-  locally during development or send events to an HTTP backend in service mode.
-- Admin endpoints inspect stored flow events and dispatch records, then retry or
-  replay events when an upstream automation needs another attempt.
+- Upstream projects stay upstream remotes, tags, branches, and release feeds.
+- Maintained forks stay fork remotes and patch branches.
+- Patch stacks are commits, branches, and tags, not a second Patch-specific
+  project file.
+- patch.moi records observations, dispatch attempts, workflow runs, and review
+  state around those Git facts.
+- Local Codex workspaces or forge runners do the maintenance work: rebase patch
+  commits, resolve conflicts, build candidates, and leave human intervention
+  points when needed.
 
 ```mermaid
 flowchart LR
-  Feed["Atom or RSS feed"] --> Patch["Patch poller"]
-  Patch --> Signal["FeedSignal JSONL"]
-  Signal --> Notify["Discord output"]
-  Signal --> Job["fork_sync job JSONL"]
-  Signal --> Event["FlowEvent JSONL"]
-  Event --> Client["flow-runtime client"]
-  Client --> Local["local flow execution"]
-  Client --> Backend["HTTP flow backend"]
+  Upstream["upstream repo"] --> Feed["release and branch feeds"]
+  Upstream --> Git["upstream remote"]
+  Fork["maintained fork"] --> Git
+  Feed --> Patch["patch.moi intake"]
+  Patch --> Event["durable update signal"]
+  Event --> Workspace["local workspace or forge runner"]
+  Git --> Workspace
+  Workspace --> Candidate["remote candidate branch, tag, or artifact"]
+  Candidate --> Internal["internal build channel"]
+  Candidate --> Public["public release channel"]
 ```
 
 ## Start here
 
 - New service setup: [Watch an upstream release](tutorials/watch-upstream-release).
-- Codex release automation: [Dispatch a Codex release flow](tutorials/dispatch-codex-release-flow).
+- Codex patch-stack automation: [Dispatch a Codex release flow](tutorials/dispatch-codex-release-flow).
 - Running the service: [Run Patch locally](guides/run-patch-locally).
+- Git model: [Git source of truth](concepts/git-source-of-truth).
+- Concrete Codex model: [Codex fork model](concepts/codex-fork-model).
+- Service mode: [Forge service mode](concepts/forge-service-mode).
+- Release channels: [Workspaces and channels](concepts/workspaces-and-channels).
 - Exact feed shape: [Feed sources](reference/feed-sources).
 - Admin operations: [HTTP API](reference/http-api).
 
 ## What is in this repo
 
-- `apps/patch`: the Patch Bun service, feed poller, JSONL store, Discord output,
-  and flow dispatch adapter.
+- `apps/patch`: the Patch Bun service, feed poller, JSONL store, and flow
+  dispatch adapter.
 - `docs`: this Tome documentation site, organized with the Diataxis framework.
 - `Dockerfile`: container image for the Patch service app.
+
+The current service implements upstream intake and dispatch. Patch-stack
+maintenance is performed by the local workspace, forge runner, or codex-flow
+package that receives the event.

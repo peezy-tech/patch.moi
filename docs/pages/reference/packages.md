@@ -1,6 +1,6 @@
 ---
 title: Packages
-description: Workspace packages in the Patch monorepo.
+description: Workspace packages in the patch.moi monorepo.
 ---
 
 # Packages
@@ -15,9 +15,11 @@ Responsibilities:
 - Poll configured feeds.
 - Normalize entries into `FeedSignal` records.
 - Store JSONL state.
-- Emit optional Discord notifications.
 - Dispatch generic codex-flow events through `@peezy.tech/flow-runtime/client`.
 - Serve admin inspection, retry, and replay endpoints.
+
+The service package does not store patch contents. Maintained patch stacks live
+in Git repositories operated on by local workspaces or forge runners.
 
 ## `@peezy.tech/patch-docs`
 

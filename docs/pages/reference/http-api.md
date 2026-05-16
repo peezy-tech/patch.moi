@@ -1,6 +1,6 @@
 ---
 title: HTTP API
-description: Health, flow event inspection, retry, replay, and dispatch history.
+description: Health, update-trigger inspection, retry, replay, and dispatch history.
 ---
 
 # HTTP API
@@ -24,6 +24,9 @@ POST /flow-events/:id/replay
 
 The list endpoint returns stored events newest first. The detail endpoint
 returns the event and matching dispatch records.
+
+These endpoints inspect update triggers and dispatch attempts. They do not
+inspect or modify Git patch stacks directly.
 
 ## Dispatches
 
