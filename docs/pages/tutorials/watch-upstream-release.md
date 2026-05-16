@@ -72,7 +72,8 @@ When the feed later contains an unseen release entry, Patch appends:
 
 - `data/feed-events.jsonl` for the normalized signal.
 - `data/flow-events.jsonl` for the generic flow event.
-- `data/maintenance-attempts.jsonl` for the patch.moi maintenance attempt.
+- `data/maintenance-attempts.jsonl` for the patch.moi maintenance attempt and
+  later candidate refs.
 - `data/workspace-dispatches.jsonl` for the workspace dispatch outcome.
 
 If no workspace backend URL is set, Patch uses local flow execution from the

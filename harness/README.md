@@ -115,8 +115,9 @@ the upstream update event, creates a maintenance attempt record, and hands the
 same flow event to the configured workspace backend.
 
 The default fixture targets `v0.1.3`, which should verify the current fork
-without changing it. For a new upstream tag, run the same command with an event
-file whose `payload.tag` names that tag.
+without changing it and report `candidateRefs` for the maintained fork branch.
+For a new upstream tag, run the same command with an event file whose
+`payload.tag` names that tag.
 
 ## Scenario: Fork Release
 

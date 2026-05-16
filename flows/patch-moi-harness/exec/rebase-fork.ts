@@ -32,6 +32,7 @@ const payload = context.flow.event.payload ?? {};
 const releaseTag = tagFromPayload(payload);
 const repo = stringValue(payload.repo, "payload.repo");
 const forkRepo = path.resolve(workspaceRoot, stringConfig("fork_repo", "harness/fork"));
+const forkRepoFullName = stringConfig("fork_repo_full_name", "matamune-peezy/patch-moi-harness");
 const targetBranch = stringConfig("target_branch", "main");
 const upstreamRemote = stringConfig("upstream_remote", "upstream");
 const upstreamRepoUrl = stringConfig("upstream_repo_url", "https://github.com/peezy-tech/patch-moi-harness.git");
@@ -114,12 +115,15 @@ try {
     eventId: context.flow.event.id,
     repo,
     forkRepo,
+    forkRepoFullName,
     targetBranch,
     releaseTag,
     releaseSha,
     beforeSha,
     afterSha,
     pushed: enabled("push", false),
+    checks: verifyCommands.map((command) => ({ name: command, status: "passed" })),
+    candidateRefs: candidateRefsFor(afterSha),
   });
 } catch (error) {
   finish("failed", error instanceof Error ? error.message : String(error));
@@ -244,6 +248,19 @@ function harnessMessage(beforeSha: string, afterSha: string): string {
     return `Harness fork already contains ${releaseTag}; package checks passed.`;
   }
   return `Harness fork rebased onto ${releaseTag}; package checks passed.`;
+}
+
+function candidateRefsFor(sha: string): Array<Record<string, unknown>> {
+  const pushed = enabled("push", false);
+  const remotes = pushed ? pushRemotes : ["local"];
+  return remotes.map((remote) => ({
+    kind: "branch",
+    repo: forkRepoFullName,
+    remote,
+    ref: `refs/heads/${targetBranch}`,
+    sha,
+    pushed,
+  }));
 }
 
 function enabled(name: string, fallback: boolean): boolean {

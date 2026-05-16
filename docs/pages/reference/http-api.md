@@ -31,12 +31,19 @@ inspect or modify Git patch stacks directly.
 ## Maintenance attempts
 
 ```text
-GET /maintenance-attempts?eventId=<id>&status=started|failed|skipped&limit=<n>
+GET /maintenance-attempts?eventId=<id>&status=<status>&limit=<n>
+GET /maintenance-attempts/:id
+POST /maintenance-attempts/:id/sync
 ```
+
+`status` can be `started`, `completed`, `changed`, `needs_intervention`,
+`blocked`, `failed`, or `skipped`.
 
 Maintenance attempts are patch.moi-owned product records. They link an
 upstream update trigger to workspace run ids and candidate refs without copying
-workspace backend run state into patch.moi.
+workspace backend run state into patch.moi. `sync` reads the configured
+workspace backend run results, extracts patch.moi outcome fields such as
+candidate refs, and appends the latest attempt state.
 
 ## Dispatches
 

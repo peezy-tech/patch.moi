@@ -1,16 +1,18 @@
 import { parseDiscordConfig, type DiscordConfig } from "./discord";
 import { startFeedPolling } from "./feed";
 import {
-  dispatchWorkspaceEvent,
+  dispatchWorkspaceEventDetailed,
   getWorkspaceEvent,
   getWorkspaceRun,
   listWorkspaceEvents,
   listWorkspaceRuns,
   maintenanceAttemptForWorkspaceDispatch,
-  replayWorkspaceEvent,
+  maintenanceAttemptWithWorkspaceRuns,
+  replayWorkspaceEventDetailed,
 } from "./flow";
 import { jsonResponse, methodNotAllowed, textResponse } from "./http";
 import { EventStore } from "./queue";
+import type { MaintenanceAttemptRecord } from "./types";
 
 export type ServerConfig = {
   dataDir: string;
@@ -45,8 +47,16 @@ function dispatchStatus(value: string | null) {
 
 function maintenanceStatus(value: string | null) {
   if (!value) return undefined;
-  if (value === "started" || value === "failed" || value === "skipped") return value;
-  throw new Error("maintenance attempt status must be started, failed, or skipped");
+  if (
+    value === "started" ||
+    value === "completed" ||
+    value === "changed" ||
+    value === "needs_intervention" ||
+    value === "blocked" ||
+    value === "failed" ||
+    value === "skipped"
+  ) return value;
+  throw new Error("maintenance attempt status is invalid");
 }
 
 async function handleFlowEvents(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
@@ -78,15 +88,15 @@ async function handleFlowEvents(request: Request, config: ServerConfig, store: E
     });
   }
   if (request.method === "POST" && eventMatch[2] === "retry") {
-    const record = await dispatchWorkspaceEvent(event, {}, { env: process.env });
+    const { record, result } = await dispatchWorkspaceEventDetailed(event, {}, { env: process.env });
     await store.appendWorkspaceDispatch(record);
-    await store.appendMaintenanceAttempt(maintenanceAttemptForWorkspaceDispatch(event, record));
+    await store.appendMaintenanceAttempt(maintenanceAttemptForWorkspaceDispatch(event, record, result?.runs));
     return jsonResponse({ event, record }, { status: record.status === "failed" ? 502 : 202 });
   }
   if (request.method === "POST" && eventMatch[2] === "replay") {
-    const record = await replayWorkspaceEvent(event, {}, { env: process.env });
+    const { record, result } = await replayWorkspaceEventDetailed(event, {}, { env: process.env });
     await store.appendWorkspaceDispatch(record);
-    await store.appendMaintenanceAttempt(maintenanceAttemptForWorkspaceDispatch(event, record));
+    await store.appendMaintenanceAttempt(maintenanceAttemptForWorkspaceDispatch(event, record, result?.runs));
     return jsonResponse({ event, record }, { status: record.status === "failed" ? 502 : 202 });
   }
   return methodNotAllowed();
@@ -109,14 +119,68 @@ async function handleFlowDispatches(request: Request, config: ServerConfig, stor
 async function handleMaintenanceAttempts(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
   const unauthorized = requireAdmin(request, config);
   if (unauthorized) return unauthorized;
-  if (request.method !== "GET") return methodNotAllowed();
   const url = new URL(request.url);
-  return jsonResponse({
-    attempts: await store.listMaintenanceAttempts({
-      eventId: url.searchParams.get("eventId") ?? undefined,
-      status: maintenanceStatus(url.searchParams.get("status")),
-      limit: numberParam(url.searchParams.get("limit")),
-    }),
+  if (request.method === "GET" && url.pathname === "/maintenance-attempts") {
+    return jsonResponse({
+      attempts: await store.listMaintenanceAttempts({
+        eventId: url.searchParams.get("eventId") ?? undefined,
+        status: maintenanceStatus(url.searchParams.get("status")),
+        limit: numberParam(url.searchParams.get("limit")),
+      }),
+    });
+  }
+
+  const attemptMatch = url.pathname.match(/^\/maintenance-attempts\/([^/]+)(?:\/(sync))?$/);
+  if (!attemptMatch?.[1]) return jsonResponse({ error: "not_found" }, { status: 404 });
+  const attemptId = decodeURIComponent(attemptMatch[1]);
+  const attempt = await store.getMaintenanceAttempt(attemptId);
+  if (!attempt) {
+    return jsonResponse({ error: "maintenance_attempt_not_found" }, { status: 404 });
+  }
+  if (request.method === "GET" && !attemptMatch[2]) {
+    return jsonResponse({ attempt });
+  }
+  if (request.method === "POST" && attemptMatch[2] === "sync") {
+    const next = await syncMaintenanceAttempt(store, attempt);
+    return jsonResponse({ attempt: next }, { status: 202 });
+  }
+  return methodNotAllowed();
+}
+
+async function syncMaintenanceAttempt(
+  store: EventStore,
+  attempt: MaintenanceAttemptRecord,
+): Promise<MaintenanceAttemptRecord> {
+  const runs = attempt.workspaceRunIds.length > 0
+    ? await Promise.all(attempt.workspaceRunIds.map((runId) => getWorkspaceRun(runId, { env: process.env })))
+    : (await listWorkspaceRuns({ env: process.env }, { eventId: attempt.eventId })).runs;
+  const next = maintenanceAttemptWithWorkspaceRuns(attempt, runs);
+  if (maintenanceAttemptChanged(attempt, next)) {
+    await store.appendMaintenanceAttempt(next);
+  }
+  return next;
+}
+
+function maintenanceAttemptChanged(
+  before: MaintenanceAttemptRecord,
+  after: MaintenanceAttemptRecord,
+): boolean {
+  return JSON.stringify({
+    status: before.status,
+    workspaceRunIds: before.workspaceRunIds,
+    workspaceRunStatuses: before.workspaceRunStatuses,
+    candidateRefs: before.candidateRefs,
+    message: before.message,
+    error: before.error,
+    completedAt: before.completedAt,
+  }) !== JSON.stringify({
+    status: after.status,
+    workspaceRunIds: after.workspaceRunIds,
+    workspaceRunStatuses: after.workspaceRunStatuses,
+    candidateRefs: after.candidateRefs,
+    message: after.message,
+    error: after.error,
+    completedAt: after.completedAt,
   });
 }
 
@@ -175,7 +239,7 @@ export function createHandler(config: ServerConfig): (request: Request) => Promi
     if (url.pathname === "/workspace-dispatches" || url.pathname === "/flow-dispatches") {
       return handleFlowDispatches(request, config, store);
     }
-    if (url.pathname === "/maintenance-attempts") {
+    if (url.pathname === "/maintenance-attempts" || url.pathname.startsWith("/maintenance-attempts/")) {
       return handleMaintenanceAttempts(request, config, store);
     }
     if (url.pathname === "/workspace-runs" || url.pathname.startsWith("/workspace-runs/")) {

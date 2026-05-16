@@ -118,7 +118,7 @@ export class EventStore {
     eventId?: string;
     status?: MaintenanceAttemptRecord["status"];
   } = {}): Promise<MaintenanceAttemptRecord[]> {
-    const records = await readJsonLines<MaintenanceAttemptRecord>(this.maintenanceAttemptsPath);
+    const records = latestRecordsById(await readJsonLines<MaintenanceAttemptRecord>(this.maintenanceAttemptsPath));
     return limitNewest(
       records.filter((record) =>
         (!options.eventId || record.eventId === options.eventId) &&
@@ -127,6 +127,30 @@ export class EventStore {
       options.limit,
     );
   }
+
+  async getMaintenanceAttempt(id: string): Promise<MaintenanceAttemptRecord | undefined> {
+    const records = await readJsonLines<MaintenanceAttemptRecord>(this.maintenanceAttemptsPath);
+    for (let index = records.length - 1; index >= 0; index -= 1) {
+      if (records[index]?.id === id) {
+        return records[index];
+      }
+    }
+    return undefined;
+  }
+}
+
+function latestRecordsById<T extends { id: string }>(records: T[]): T[] {
+  const seen = new Set<string>();
+  const latest: T[] = [];
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const record = records[index];
+    if (!record || seen.has(record.id)) {
+      continue;
+    }
+    seen.add(record.id);
+    latest.push(record);
+  }
+  return latest.reverse();
 }
 
 export function jobForFeedSignal(signal: FeedSignal): FeedJob | null {

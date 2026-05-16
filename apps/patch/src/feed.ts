@@ -208,7 +208,11 @@ export async function pollFeedSource(input: {
       await input.store.appendWorkspaceDispatch(workspaceDispatch.record);
       if (workspaceDispatch.event) {
         await input.store.appendMaintenanceAttempt(
-          maintenanceAttemptForWorkspaceDispatch(workspaceDispatch.event, workspaceDispatch.record),
+          maintenanceAttemptForWorkspaceDispatch(
+            workspaceDispatch.event,
+            workspaceDispatch.record,
+            workspaceDispatch.result?.runs,
+          ),
         );
       }
       if (workspaceDispatch.record.status === "dispatched") {

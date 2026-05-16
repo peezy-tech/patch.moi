@@ -4,6 +4,7 @@ description = "Rebase the maintained patch.moi harness fork onto an upstream har
 
 [config]
 fork_repo = "harness/fork"
+fork_repo_full_name = "matamune-peezy/patch-moi-harness"
 target_branch = "main"
 upstream_remote = "upstream"
 upstream_repo_url = "https://github.com/peezy-tech/patch-moi-harness.git"

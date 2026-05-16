@@ -1,9 +1,16 @@
 import type {
+  FlowDispatchResult,
+  FlowReplayResult,
+  FlowRunView,
+} from "@peezy.tech/flow-runtime/client";
+import type {
+  CandidateRefRecord,
   FeedWorkspaceFlowTarget,
   FeedSignal,
   FlowDispatchRecord,
   FlowEvent,
   MaintenanceAttemptRecord,
+  MaintenanceAttemptStatus,
 } from "./types";
 import {
   createPatchWorkspaceBackend,
@@ -15,6 +22,16 @@ const serviceSource = "patch";
 
 export type FlowDispatchConfig = WorkspaceBackendConfig;
 export type WorkspaceDispatchConfig = WorkspaceBackendConfig;
+
+export type WorkspaceDispatchOutcome = {
+  record: FlowDispatchRecord;
+  result?: FlowDispatchResult;
+};
+
+export type WorkspaceReplayOutcome = {
+  record: FlowDispatchRecord;
+  result?: FlowReplayResult;
+};
 
 function isWorkspaceFlowTarget(value: unknown): value is FeedWorkspaceFlowTarget {
   return (
@@ -107,39 +124,52 @@ export async function dispatchWorkspaceEvent(
   target: Partial<FeedWorkspaceFlowTarget> = {},
   config: WorkspaceDispatchConfig = {},
 ): Promise<FlowDispatchRecord> {
+  return (await dispatchWorkspaceEventDetailed(event, target, config)).record;
+}
+
+export async function dispatchWorkspaceEventDetailed(
+  event: FlowEvent,
+  target: Partial<FeedWorkspaceFlowTarget> = {},
+  config: WorkspaceDispatchConfig = {},
+): Promise<WorkspaceDispatchOutcome> {
   const workspaceTarget = { mode: "workspace_flow" as const, eventType: event.type, ...target };
   const backend = createPatchWorkspaceBackend(workspaceTarget, config);
 
   try {
     const result = await backend.client.dispatchEvent(event);
     return {
-      eventId: event.id,
-      eventType: event.type,
-      operation: "dispatch",
-      target: backend.mode === "local" ? "local" : "workspace-backend",
-      transport: backend.mode,
-      workspaceBackendUrl: backend.url,
-      url: backend.eventsUrl,
-      status: "dispatched",
-      runIds: result.runIds,
-      matched: result.matched,
-      idempotent: result.idempotent,
-      createdAt: new Date().toISOString(),
+      result,
+      record: {
+        eventId: event.id,
+        eventType: event.type,
+        operation: "dispatch",
+        target: backend.mode === "local" ? "local" : "workspace-backend",
+        transport: backend.mode,
+        workspaceBackendUrl: backend.url,
+        url: backend.eventsUrl,
+        status: "dispatched",
+        runIds: result.runIds,
+        matched: result.matched,
+        idempotent: result.idempotent,
+        createdAt: new Date().toISOString(),
+      },
     };
   } catch (error) {
     const httpStatus = httpStatusFromError(error);
     return {
-      eventId: event.id,
-      eventType: event.type,
-      operation: "dispatch",
-      target: backend.mode === "local" ? "local" : "workspace-backend",
-      transport: backend.mode,
-      workspaceBackendUrl: backend.url,
-      url: backend.eventsUrl,
-      status: "failed",
-      ...(httpStatus ? { httpStatus } : {}),
-      error: error instanceof Error ? error.message : String(error),
-      createdAt: new Date().toISOString(),
+      record: {
+        eventId: event.id,
+        eventType: event.type,
+        operation: "dispatch",
+        target: backend.mode === "local" ? "local" : "workspace-backend",
+        transport: backend.mode,
+        workspaceBackendUrl: backend.url,
+        url: backend.eventsUrl,
+        status: "failed",
+        ...(httpStatus ? { httpStatus } : {}),
+        error: error instanceof Error ? error.message : String(error),
+        createdAt: new Date().toISOString(),
+      },
     };
   }
 }
@@ -157,6 +187,14 @@ export async function replayWorkspaceEvent(
   target: Partial<FeedWorkspaceFlowTarget> = {},
   config: WorkspaceDispatchConfig = {},
 ): Promise<FlowDispatchRecord> {
+  return (await replayWorkspaceEventDetailed(event, target, config)).record;
+}
+
+export async function replayWorkspaceEventDetailed(
+  event: FlowEvent,
+  target: Partial<FeedWorkspaceFlowTarget> = {},
+  config: WorkspaceDispatchConfig = {},
+): Promise<WorkspaceReplayOutcome> {
   const env = config.env ?? process.env;
   const workspaceTarget = { mode: "workspace_flow" as const, eventType: event.type, ...target };
   const backend = createPatchWorkspaceBackend(workspaceTarget, config);
@@ -167,33 +205,38 @@ export async function replayWorkspaceEvent(
       ? await backend.client.replayEvent(event.id, { wait: false })
       : await backend.client.dispatchEvent(event);
     return {
-      eventId: event.id,
-      eventType: event.type,
-      operation: "replay",
-      target: backend.mode === "local" ? "local" : "workspace-backend",
-      transport: backend.mode,
-      workspaceBackendUrl: backend.url,
-      url: backend.eventsUrl ? `${backend.eventsUrl}/${encodeURIComponent(event.id)}/replay` : undefined,
-      status: "dispatched",
-      runIds: result.runIds,
-      matched: result.matched,
-      idempotent: result.idempotent,
-      createdAt: new Date().toISOString(),
+      result,
+      record: {
+        eventId: event.id,
+        eventType: event.type,
+        operation: "replay",
+        target: backend.mode === "local" ? "local" : "workspace-backend",
+        transport: backend.mode,
+        workspaceBackendUrl: backend.url,
+        url: backend.eventsUrl ? `${backend.eventsUrl}/${encodeURIComponent(event.id)}/replay` : undefined,
+        status: "dispatched",
+        runIds: result.runIds,
+        matched: result.matched,
+        idempotent: result.idempotent,
+        createdAt: new Date().toISOString(),
+      },
     };
   } catch (error) {
     const httpStatus = httpStatusFromError(error);
     return {
-      eventId: event.id,
-      eventType: event.type,
-      operation: "replay",
-      target: backend.mode === "local" ? "local" : "workspace-backend",
-      transport: backend.mode,
-      workspaceBackendUrl: backend.url,
-      url: backend.eventsUrl,
-      status: "failed",
-      ...(httpStatus ? { httpStatus } : {}),
-      error: error instanceof Error ? error.message : String(error),
-      createdAt: new Date().toISOString(),
+      record: {
+        eventId: event.id,
+        eventType: event.type,
+        operation: "replay",
+        target: backend.mode === "local" ? "local" : "workspace-backend",
+        transport: backend.mode,
+        workspaceBackendUrl: backend.url,
+        url: backend.eventsUrl,
+        status: "failed",
+        ...(httpStatus ? { httpStatus } : {}),
+        error: error instanceof Error ? error.message : String(error),
+        createdAt: new Date().toISOString(),
+      },
     };
   }
 }
@@ -224,7 +267,7 @@ export async function listWorkspaceEvents(config: WorkspaceDispatchConfig = {}, 
 export async function dispatchWorkspaceEventForFeedSignal(
   signal: FeedSignal,
   config: WorkspaceDispatchConfig = {},
-): Promise<{ event?: FlowEvent<Record<string, unknown>>; record?: FlowDispatchRecord }> {
+): Promise<{ event?: FlowEvent<Record<string, unknown>>; record?: FlowDispatchRecord; result?: FlowDispatchResult }> {
   if (!isWorkspaceFlowTarget(signal.target)) {
     return {};
   }
@@ -234,10 +277,8 @@ export async function dispatchWorkspaceEventForFeedSignal(
     return {};
   }
 
-  return {
-    event,
-    record: await dispatchWorkspaceEvent(event, signal.target, config),
-  };
+  const outcome = await dispatchWorkspaceEventDetailed(event, signal.target, config);
+  return { event, ...outcome };
 }
 
 export async function dispatchFlowEventForFeedSignal(
@@ -250,13 +291,15 @@ export async function dispatchFlowEventForFeedSignal(
 export function maintenanceAttemptForWorkspaceDispatch(
   event: FlowEvent,
   record: FlowDispatchRecord,
+  runs: FlowRunView[] = [],
 ): MaintenanceAttemptRecord {
   const payload = typeof event.payload === "object" && event.payload !== null
     ? event.payload as Record<string, unknown>
     : {};
   const operation = record.operation ?? "dispatch";
+  const createdAt = record.createdAt;
 
-  return {
+  return maintenanceAttemptWithWorkspaceRuns({
     id: `${event.id}:${operation}:${record.createdAt}`,
     eventId: event.id,
     eventType: event.type,
@@ -270,7 +313,56 @@ export function maintenanceAttemptForWorkspaceDispatch(
     workspaceRunIds: record.runIds ?? [],
     candidateRefs: [],
     error: record.error,
-    createdAt: record.createdAt,
+    createdAt,
+    updatedAt: createdAt,
+  }, runs, createdAt);
+}
+
+export function maintenanceAttemptWithWorkspaceRuns(
+  attempt: MaintenanceAttemptRecord,
+  runs: FlowRunView[],
+  updatedAt = new Date().toISOString(),
+): MaintenanceAttemptRecord {
+  if (runs.length === 0) {
+    return attempt;
+  }
+
+  const statuses = Object.fromEntries(
+    runs.map((run) => [run.id, String(run.effectiveStatus ?? run.status ?? "unknown")]),
+  );
+  const resultPayloads = runs
+    .map((run) => flowResultPayload(run.resultPayload))
+    .filter((payload): payload is Record<string, unknown> => payload !== undefined);
+  const status = statusFromRuns(runs);
+  const message = newestString(resultPayloads.map((payload) => payload.message)) ?? attempt.message;
+  const candidateRefs = uniqueCandidateRefs([
+    ...attempt.candidateRefs,
+    ...resultPayloads.flatMap(candidateRefsFromFlowResult),
+  ]);
+  const error = newestString([
+    ...runs.map((run) => run.error),
+    ...resultPayloads.map((payload) => payload.message).filter((_value, index) => {
+      const status = resultPayloads[index]?.status;
+      return status === "failed" || status === "blocked" || status === "needs_intervention";
+    }),
+  ]) ?? attempt.error;
+  const completedAt = status === "started"
+    ? attempt.completedAt
+    : newestString(runs.map((run) => run.completedAt)) ?? updatedAt;
+
+  return {
+    ...attempt,
+    status,
+    workspaceRunIds: uniqueStrings([
+      ...attempt.workspaceRunIds,
+      ...runs.map((run) => run.id).filter(Boolean),
+    ]),
+    workspaceRunStatuses: statuses,
+    candidateRefs,
+    ...(message ? { message } : {}),
+    ...(error ? { error } : {}),
+    updatedAt,
+    ...(completedAt ? { completedAt } : {}),
   };
 }
 
@@ -282,4 +374,100 @@ function httpStatusFromError(error: unknown): number | undefined {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function flowResultPayload(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const payload = value as Record<string, unknown>;
+  if (typeof payload.status === "string") {
+    return payload;
+  }
+  const nested = recordValue(payload.result);
+  return typeof nested.status === "string" ? nested : undefined;
+}
+
+function statusFromRuns(runs: FlowRunView[]): MaintenanceAttemptStatus {
+  const statuses = runs.map((run) => resultStatus(run));
+  if (statuses.some((status) => status === "needs_intervention")) return "needs_intervention";
+  if (statuses.some((status) => status === "blocked")) return "blocked";
+  if (statuses.some((status) => status === "failed")) return "failed";
+  if (statuses.some((status) => status === "changed")) return "changed";
+  if (statuses.length > 0 && statuses.every((status) => status === "skipped")) return "skipped";
+  if (statuses.length > 0 && statuses.every((status) => status === "completed" || status === "skipped")) return "completed";
+  return "started";
+}
+
+function resultStatus(run: FlowRunView): string {
+  const payload = flowResultPayload(run.resultPayload);
+  return stringValue(payload?.status) ?? String(run.effectiveStatus ?? run.status ?? "started");
+}
+
+function candidateRefsFromFlowResult(result: Record<string, unknown>): CandidateRefRecord[] {
+  const artifacts = recordValue(result.artifacts);
+  const candidates = [
+    ...arrayValue(artifacts.candidateRefs),
+    ...arrayValue(artifacts.candidates),
+    artifacts.candidateRef,
+  ];
+  return candidates.flatMap(candidateRefValue);
+}
+
+function candidateRefValue(value: unknown): CandidateRefRecord[] {
+  if (typeof value === "string" && value.trim()) {
+    return [{ kind: "ref", ref: value.trim() }];
+  }
+  const record = recordValue(value);
+  const ref = stringValue(record.ref);
+  if (!ref) {
+    return [];
+  }
+  return [{
+    kind: stringValue(record.kind) ?? "ref",
+    ref,
+    ...(stringValue(record.repo) ? { repo: stringValue(record.repo) } : {}),
+    ...(stringValue(record.remote) ? { remote: stringValue(record.remote) } : {}),
+    ...(stringValue(record.sha) ? { sha: stringValue(record.sha) } : {}),
+    ...(stringValue(record.url) ? { url: stringValue(record.url) } : {}),
+    ...(typeof record.pushed === "boolean" ? { pushed: record.pushed } : {}),
+  }];
+}
+
+function uniqueCandidateRefs(refs: CandidateRefRecord[]): CandidateRefRecord[] {
+  const seen = new Set<string>();
+  const result: CandidateRefRecord[] = [];
+  for (const ref of refs) {
+    const key = `${ref.kind}:${ref.repo ?? ""}:${ref.remote ?? ""}:${ref.ref}:${ref.sha ?? ""}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(ref);
+  }
+  return result;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function newestString(values: unknown[]): string | undefined {
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    const value = stringValue(values[index]);
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }

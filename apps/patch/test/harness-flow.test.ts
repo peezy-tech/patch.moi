@@ -40,6 +40,16 @@ describe("patch.moi harness flow", () => {
 
     expect(result.status).toBe("completed");
     expect(result.message).toContain("package checks passed");
+    expect(result.artifacts?.candidateRefs).toMatchObject([
+      {
+        kind: "branch",
+        repo: "matamune-peezy/patch-moi-harness",
+        remote: "local",
+        ref: "refs/heads/main",
+        sha: afterHead,
+        pushed: false,
+      },
+    ]);
     expect(afterHead).toBe(beforeHead);
     expect(await git(["status", "--porcelain=v1"])).toBe("");
   });

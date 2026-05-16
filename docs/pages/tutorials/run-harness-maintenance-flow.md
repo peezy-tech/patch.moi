@@ -33,7 +33,8 @@ bun run harness:flow
 
 The fixture event is `v0.1.3`, which the current fork already contains. The
 flow should skip rebase work, run `npm test` and `npm run pack:dry-run` in the
-fork, and leave the fork checkout unchanged.
+fork, report `candidateRefs` for the maintained fork branch, and leave the fork
+checkout unchanged.
 
 ## 3. Rehearse a real upstream release
 
@@ -58,7 +59,8 @@ bun run harness:flow <event-file>
 ```
 
 Use an event file whose `payload.tag` is the new upstream tag. The flow rebases
-`harness/fork` onto that tag, verifies the fork package, and keeps pushes off.
+`harness/fork` onto that tag, verifies the fork package, reports the local
+candidate branch, and keeps pushes off.
 
 ## 4. Push only after review
 
@@ -69,5 +71,6 @@ CODEX_FLOW_PUSH=1 bun run harness:flow <event-file>
 ```
 
 That pushes the rebased fork branch to the configured `origin` and `jojo`
-remotes with `--force-with-lease`. Public npm publishing remains a separate
-trusted-publishing release path.
+remotes with `--force-with-lease` and reports those pushed branch refs as
+candidate refs. Public npm publishing remains a separate trusted-publishing
+release path.

@@ -11,6 +11,7 @@ The default behavior is local and reviewable:
 - switch to the maintained fork branch
 - rebase onto the release tag when the tag is not already an ancestor
 - run the configured package checks
+- emit candidate branch refs in the `FLOW_RESULT` artifacts
 - leave pushes disabled unless `CODEX_FLOW_PUSH=1` is set
 
 Useful overrides:
@@ -22,4 +23,4 @@ CODEX_FLOW_PUSH=1 bun run harness:flow
 
 The fixture event is `fixtures/upstream-release-v0.1.3.json`. It should be a
 no-op rebase against the current harness fork while still verifying the package
-surface.
+surface and reporting the local maintained branch as the candidate ref.

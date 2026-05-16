@@ -52,6 +52,13 @@ Each retry or replay writes a maintenance attempt record:
 curl http://127.0.0.1:3000/maintenance-attempts?eventId=<event-id>
 ```
 
+After the workspace run finishes, sync the attempt to record the final
+maintenance outcome and any candidate refs reported by the flow:
+
+```bash
+curl -X POST http://127.0.0.1:3000/maintenance-attempts/<attempt-id>/sync
+```
+
 Use workspace inspection endpoints to read backend-owned run state:
 
 ```bash

@@ -27,6 +27,8 @@ GET  /flow-events/:id
 POST /flow-events/:id/retry
 POST /flow-events/:id/replay
 GET  /maintenance-attempts
+GET  /maintenance-attempts/:id
+POST /maintenance-attempts/:id/sync
 GET  /workspace-dispatches
 GET  /workspace-events
 GET  /workspace-runs
@@ -68,9 +70,9 @@ poll primes `DATA_DIR/feed-state.json`; later polls append upstream activity to
 work to `DATA_DIR/feed-jobs.jsonl`. Targets using `mode: "workspace_flow"`
 append generic flow events to `DATA_DIR/flow-events.jsonl`, send them to the
 configured workspace backend or local adapter, and record dispatch outcomes in
-`DATA_DIR/workspace-dispatches.jsonl`. Each dispatch also creates a
+`DATA_DIR/workspace-dispatches.jsonl`. Each dispatch also creates or updates a
 patch.moi-owned `DATA_DIR/maintenance-attempts.jsonl` entry that links the
-upstream update to workspace run ids and future candidate refs.
+upstream update to workspace run ids, final flow outcome, and candidate refs.
 
 ## Documentation
 

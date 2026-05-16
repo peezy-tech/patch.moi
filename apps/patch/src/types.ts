@@ -97,19 +97,42 @@ export type FlowDispatchRecord = {
 
 export type WorkspaceDispatchRecord = FlowDispatchRecord;
 
+export type CandidateRefRecord = {
+  kind: string;
+  ref: string;
+  repo?: string;
+  remote?: string;
+  sha?: string;
+  url?: string;
+  pushed?: boolean;
+};
+
+export type MaintenanceAttemptStatus =
+  | "started"
+  | "completed"
+  | "changed"
+  | "needs_intervention"
+  | "blocked"
+  | "failed"
+  | "skipped";
+
 export type MaintenanceAttemptRecord = {
   id: string;
   eventId: string;
   eventType: string;
   operation: "dispatch" | "replay";
-  status: "started" | "failed" | "skipped";
+  status: MaintenanceAttemptStatus;
   upstreamRepo?: string;
   upstreamRef?: string;
   upstreamSha?: string;
   upstreamTag?: string;
   workspaceBackendUrl?: string;
   workspaceRunIds: string[];
-  candidateRefs: string[];
+  workspaceRunStatuses?: Record<string, string>;
+  candidateRefs: CandidateRefRecord[];
+  message?: string;
   error?: string;
   createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
 };

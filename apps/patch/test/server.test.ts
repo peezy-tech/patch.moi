@@ -203,4 +203,101 @@ describe("server", () => {
       }
     }
   });
+
+  test("syncs maintenance attempt outcomes from workspace run results", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalWorkspaceUrl = process.env.PATCH_WORKSPACE_BACKEND_URL;
+    const dataDir = await mkdtemp(join(tmpdir(), "patch-"));
+    const store = new EventStore(dataDir);
+    const attempt = {
+      id: "patch:source:entry:upstream.release:dispatch:2026-05-13T00:00:01.000Z",
+      eventId: "patch:source:entry:upstream.release",
+      eventType: "upstream.release",
+      operation: "dispatch" as const,
+      status: "started" as const,
+      upstreamRepo: "openai/codex",
+      upstreamTag: "v1.2.3",
+      workspaceBackendUrl: "http://127.0.0.1:3586",
+      workspaceRunIds: ["run-1"],
+      candidateRefs: [],
+      createdAt: "2026-05-13T00:00:01.000Z",
+      updatedAt: "2026-05-13T00:00:01.000Z",
+    };
+    await store.appendMaintenanceAttempt(attempt);
+
+    process.env.PATCH_WORKSPACE_BACKEND_URL = "http://127.0.0.1:3586";
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      if (String(url).includes("/runs/run-1")) {
+        return Response.json({
+          run: {
+            id: "run-1",
+            eventId: attempt.eventId,
+            status: "completed",
+            completedAt: "2026-05-13T00:00:05.000Z",
+            resultJson: JSON.stringify({
+              status: "changed",
+              message: "candidate branch ready",
+              artifacts: {
+                candidateRefs: [{
+                  kind: "branch",
+                  repo: "matamune-peezy/patch-moi-harness",
+                  remote: "origin",
+                  ref: "refs/heads/main",
+                  sha: "abc123",
+                  pushed: true,
+                }],
+              },
+            }),
+          },
+        });
+      }
+      return Response.json({ error: "not found" }, { status: 404 });
+    }) as unknown as typeof fetch;
+
+    try {
+      const handler = createHandler({
+        dataDir,
+        adminToken: "admin",
+      });
+      const sync = await handler(new Request(
+        `http://localhost/maintenance-attempts/${encodeURIComponent(attempt.id)}/sync`,
+        {
+          method: "POST",
+          headers: { authorization: "Bearer admin" },
+        },
+      ));
+      expect(sync.status).toBe(202);
+      expect(await sync.json()).toMatchObject({
+        attempt: {
+          id: attempt.id,
+          status: "changed",
+          message: "candidate branch ready",
+          workspaceRunStatuses: { "run-1": "changed" },
+          candidateRefs: [{
+            kind: "branch",
+            repo: "matamune-peezy/patch-moi-harness",
+            remote: "origin",
+            ref: "refs/heads/main",
+            sha: "abc123",
+            pushed: true,
+          }],
+        },
+      });
+
+      const changed = await handler(new Request("http://localhost/maintenance-attempts?status=changed", {
+        headers: { authorization: "Bearer admin" },
+      }));
+      expect(changed.status).toBe(200);
+      expect(await changed.json()).toMatchObject({
+        attempts: [{ id: attempt.id, status: "changed" }],
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalWorkspaceUrl === undefined) {
+        delete process.env.PATCH_WORKSPACE_BACKEND_URL;
+      } else {
+        process.env.PATCH_WORKSPACE_BACKEND_URL = originalWorkspaceUrl;
+      }
+    }
+  });
 });
