@@ -1,0 +1,8 @@
+[submodule "harness/upstream"]
+	path = harness/upstream
+	url = https://github.com/peezy-tech/patch-moi-harness.git
+	branch = main
+[submodule "harness/fork"]
+	path = harness/fork
+	url = https://github.com/matamune-peezy/patch-moi-harness.git
+	branch = main
