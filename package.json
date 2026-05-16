@@ -37,10 +37,11 @@
     "test": "bun run --filter @peezy.tech/patch test",
     "workspace:doctor": "codex-flows workspace doctor --workspace-root .",
     "workspace:run:harness": "codex-flows workspace run harness-maintenance-fixture --workspace-root . --mode local",
+    "workspace:run:harness-flow": "codex-flows workspace run harness-maintenance-flow-smoke --workspace-root . --mode local",
     "workspace:tick": "codex-flows workspace tick --workspace-root . --mode local"
   },
   "devDependencies": {
-    "@peezy.tech/codex-flows": "^0.3.3",
+    "@peezy.tech/codex-flows": "^0.3.4",
     "@peezy.tech/flow-runtime": "^0.4.0"
   }
 }

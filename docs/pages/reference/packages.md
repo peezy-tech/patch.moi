@@ -50,7 +50,7 @@ These published packages define the current patch.moi integration baseline:
 
 | Package | Published version | patch.moi use |
 | --- | --- | --- |
-| `@peezy.tech/codex-flows` | `0.3.3` | repo-native workspace commands and CLI automation |
+| `@peezy.tech/codex-flows` | `0.3.4` | repo-native workspace commands and CLI automation |
 | `@peezy.tech/flow-runtime` | `0.4.0` | local flow discovery, matching, execution, and Bun flow helpers |
 | `@peezy.tech/flow-backend-convex` | `0.4.0` | optional generic durable flow backend for future service experiments |
 

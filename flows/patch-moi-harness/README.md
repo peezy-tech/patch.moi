@@ -24,3 +24,19 @@ CODEX_FLOW_PUSH=1 bun run harness:flow
 The fixture event is `fixtures/upstream-release-v0.1.3.json`. It should be a
 no-op rebase against the current harness fork while still verifying the package
 surface and reporting the local maintained branch as the candidate ref.
+
+The repo also exposes an experimental workspace-owned flow smoke task:
+
+```bash
+cd ../codex-flows
+bun run workspace:backend --cwd /home/peezy/meta-workspace/patch.moi
+```
+
+```bash
+CODEX_WORKSPACE_BACKEND_WS_URL=ws://127.0.0.1:3586 \
+CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 \
+bun run workspace:run:harness-flow
+```
+
+That task requires a running Codex workspace backend and writes backend
+event/run state, not patch.moi `DATA_DIR` maintenance-attempt state.

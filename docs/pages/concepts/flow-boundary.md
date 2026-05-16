@@ -58,16 +58,19 @@ the first task is a manual command task that runs the existing harness fixture:
 bun run workspace:run:harness
 ```
 
-That task is deliberately `kind = "command"`, not an implicit workspace
-`kind = "flow"` task. Released workspace flow fallback behavior must not be
-treated as a source of patch.moi's deterministic `id`, `occurredAt`, or
-`receivedAt`; a future flow task must supply a complete explicit event.
+That task remains deliberately `kind = "command"`, because it is the no-backend
+local harness path. The repository also includes an explicit manual
+`kind = "flow"` smoke task for operator experiments:
 
-The sibling `../codex-flows` workspace currently has an unreleased fix that
-synthesizes those event fields for workspace-owned flow tasks. patch.moi should
-not rely on that behavior until it is available in a published
-`@peezy.tech/codex-flows` release, and it should not use workspace-generated
-event ids for feed-owned maintenance attempts.
+```bash
+bun run workspace:run:harness-flow
+```
+
+That flow task requires a running workspace backend URL. In
+`@peezy.tech/codex-flows@0.3.4`, workspace-owned flow tasks synthesize unique
+`id`, `occurredAt`, and `receivedAt` fields for every run. Those ids are useful
+for workspace automation, but patch.moi must not use workspace-generated ids
+for feed-owned maintenance attempts.
 
 The generated local state under `.codex/workspace/local/` is run history for
 the operator automation surface. It does not replace `DATA_DIR` feed events,

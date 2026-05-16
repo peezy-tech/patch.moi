@@ -74,6 +74,15 @@ bun run workspace:doctor
 CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run workspace:run:harness
 ```
 
+Run the manual workspace-owned flow smoke task only when a Codex workspace
+backend is running:
+
+```bash
+CODEX_WORKSPACE_BACKEND_WS_URL=ws://127.0.0.1:3586 \
+CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 \
+bun run workspace:run:harness-flow
+```
+
 Start the Patch service when you want feed intake and admin state:
 
 ```bash

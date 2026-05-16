@@ -12,7 +12,7 @@ package is `flows/patch-moi-harness`.
 There are two local operator paths:
 
 - run the flow directly with `bun run harness:flow`
-- run the same flow through the repo-native `codex-flows workspace` task
+- run the same flow through the repo-native command workspace task
 
 Both paths exercise the harness. The Patch service path still starts with feed
 intake, writes `DATA_DIR` records, creates a maintenance attempt, and dispatches
@@ -61,7 +61,30 @@ operator action.
 Use `bun run workspace:doctor` to inspect the repo-native workspace config and
 generated local run state. The generated local state is ignored by Git.
 
-## 4. Rehearse a real upstream release
+## 4. Try the workspace flow smoke task
+
+The experimental workspace flow task dispatches a generated `upstream.release`
+event through a running Codex workspace backend:
+
+```bash
+cd ../codex-flows
+bun run workspace:backend --cwd /home/peezy/meta-workspace/patch.moi
+```
+
+Then, from the patch.moi repo:
+
+```bash
+CODEX_WORKSPACE_BACKEND_WS_URL=ws://127.0.0.1:3586 \
+CODEX_FLOW_FETCH=0 \
+CODEX_FLOW_PUSH=0 \
+bun run workspace:run:harness-flow
+```
+
+Use this only to exercise workspace-owned automation. It is not the product
+path for patch.moi feed intake, and it does not write patch.moi `DATA_DIR`
+maintenance-attempt records unless patch.moi itself dispatches the event.
+
+## 5. Rehearse a real upstream release
 
 Create a new upstream release in `harness/upstream`, then point the fixture or a
 feed event at the new tag:
@@ -88,7 +111,7 @@ identify the new upstream tag. The flow rebases `harness/fork` onto that tag,
 verifies the fork package, reports the local candidate branch, and keeps pushes
 off.
 
-## 5. Push only after review
+## 6. Push only after review
 
 When the local result is the maintained fork state you want:
 

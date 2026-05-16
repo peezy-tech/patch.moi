@@ -73,6 +73,23 @@ CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run workspace:run:harness
 That task writes local run state under `.codex/workspace/local/`, which is
 ignored by Git.
 
+There is also a manual workspace-owned flow smoke task:
+
+```bash
+cd ../codex-flows
+bun run workspace:backend --cwd /home/peezy/meta-workspace/patch.moi
+```
+
+```bash
+CODEX_WORKSPACE_BACKEND_WS_URL=ws://127.0.0.1:3586 \
+CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 \
+bun run workspace:run:harness-flow
+```
+
+That path requires a running Codex workspace backend. Use it to inspect backend
+event and run records; keep patch.moi feed-owned maintenance attempts on the
+Patch dispatch path.
+
 Local mode is checkout-oriented. Service mode is forge-oriented: patch.moi
 should talk to the remote forge, trigger a runner, and let that runner perform
 the disposable checkout and patch application work.
