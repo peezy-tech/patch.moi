@@ -13,7 +13,7 @@ const fixturePath = path.resolve(
   process.argv[2] ?? "flows/patch-moi-harness/fixtures/upstream-release-v0.1.3.json",
 );
 const event = JSON.parse(await readFile(fixturePath, "utf8")) as FlowEvent<Record<string, unknown>>;
-const flows = await discoverFlows({ cwd: workspaceRoot, roots: [path.join(workspaceRoot, "flows")] });
+const flows = await discoverFlows({ cwd: workspaceRoot });
 const matches = await matchingSteps(flows, event);
 const match = matches.find((entry) => entry.flow.manifest.name === "patch-moi-harness");
 

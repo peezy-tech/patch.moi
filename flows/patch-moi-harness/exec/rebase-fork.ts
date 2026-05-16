@@ -1,13 +1,10 @@
 import path from "node:path";
+import { defineBunFlow } from "@peezy.tech/flow-runtime/bun";
+import type { FlowResult, FlowResultStatus, FlowRunContext } from "@peezy.tech/flow-runtime";
 
-type FlowContext = {
-  flow: {
-    name: string;
-    root: string;
-    config?: Record<string, unknown>;
-    event: {
-      id: string;
-      type: string;
+type HarnessFlowContext = FlowRunContext & {
+  flow: FlowRunContext["flow"] & {
+    event: FlowRunContext["flow"]["event"] & {
       payload: Record<string, unknown>;
     };
   };
@@ -22,112 +19,136 @@ type CommandResult = {
   stderr: string;
 };
 
-const context = JSON.parse(await Bun.stdin.text()) as FlowContext;
-const config = context.flow.config ?? {};
-const workspaceRoot = process.cwd();
-const commands: CommandResult[] = [];
-
 const expectedRepo = "peezy-tech/patch-moi-harness";
-const payload = context.flow.event.payload ?? {};
-const releaseTag = tagFromPayload(payload);
-const repo = stringValue(payload.repo, "payload.repo");
-const forkRepo = path.resolve(workspaceRoot, stringConfig("fork_repo", "harness/fork"));
-const forkRepoFullName = stringConfig("fork_repo_full_name", "matamune-peezy/patch-moi-harness");
-const targetBranch = stringConfig("target_branch", "main");
-const upstreamRemote = stringConfig("upstream_remote", "upstream");
-const upstreamRepoUrl = stringConfig("upstream_repo_url", "https://github.com/peezy-tech/patch-moi-harness.git");
-const verifyCommands = stringArrayConfig("verify_commands", ["npm test", "npm run pack:dry-run"]);
-const pushRemotes = stringArrayConfig("push_remotes", ["origin", "jojo"]);
+let context: HarnessFlowContext;
+let config: Record<string, unknown>;
+let commands: CommandResult[];
+let releaseTag: string;
+let repo: string;
+let forkRepo: string;
+let forkRepoFullName: string;
+let targetBranch: string;
+let upstreamRemote: string;
+let upstreamRepoUrl: string;
+let verifyCommands: string[];
+let pushRemotes: string[];
 
-try {
-  if (repo !== expectedRepo) {
-    finish("skipped", `Harness flow ignores ${repo}.`, { repo, expectedRepo });
+class FlowFinished extends Error {
+  constructor(readonly result: FlowResult) {
+    super(result.message ?? result.status);
   }
-  if (!releaseTag) {
-    finish("failed", "Release payload is missing tag or refs/tags ref.");
-  }
-
-  const repoCheck = await run("verify harness fork checkout", ["git", "rev-parse", "--show-toplevel"]);
-  if (repoCheck.exitCode !== 0) {
-    finish("blocked", `Harness fork checkout is not available at ${forkRepo}.`, { forkRepo });
-  }
-
-  await ensureUpstreamRemote();
-
-  if (enabled("fetch", true)) {
-    await run("fetch upstream release refs", ["git", "fetch", upstreamRemote, "--tags", "--prune"]);
-  }
-
-  await requireNoRebaseInProgress();
-  await requireCleanWorktree("before harness fork rebase");
-
-  const branch = (await run("read current branch", ["git", "branch", "--show-current"])).stdout.trim();
-  if (branch !== targetBranch) {
-    await run("switch maintained fork branch", ["git", "switch", targetBranch]);
-  }
-
-  const beforeSha = (await run("read fork head before rebase", ["git", "rev-parse", "HEAD"])).stdout.trim();
-  const releaseSha = await resolveReleaseCommit(releaseTag);
-  const alreadyContainsRelease = (await run(
-    "check release ancestor",
-    ["git", "merge-base", "--is-ancestor", releaseSha, "HEAD"],
-    { allowFailure: true },
-  )).exitCode === 0;
-
-  if (!alreadyContainsRelease) {
-    const rebase = await run(
-      "rebase harness fork onto upstream release",
-      ["git", "rebase", releaseSha],
-      { allowFailure: true },
-    );
-    if (rebase.exitCode !== 0) {
-      const context = await collectRebaseContext(rebase, beforeSha);
-      finish("needs_intervention", `Harness fork rebase stopped on ${releaseTag}.`, context);
-    }
-  }
-
-  for (const command of verifyCommands) {
-    const result = await run(`verify: ${command}`, ["bash", "-lc", command], { allowFailure: true });
-    if (result.exitCode !== 0) {
-      finish("needs_intervention", `Harness verification failed: ${command}.`, {
-        failedCommand: command,
-      });
-    }
-  }
-
-  await requireCleanWorktree("after harness fork verification");
-
-  const afterSha = (await run("read fork head after rebase", ["git", "rev-parse", "HEAD"])).stdout.trim();
-
-  if (enabled("push", false)) {
-    for (const remote of pushRemotes) {
-      await run(`push ${remote}/${targetBranch}`, [
-        "git",
-        "push",
-        "--force-with-lease",
-        remote,
-        `HEAD:${targetBranch}`,
-      ]);
-    }
-  }
-
-  finish(beforeSha === afterSha ? "completed" : "changed", harnessMessage(beforeSha, afterSha), {
-    eventId: context.flow.event.id,
-    repo,
-    forkRepo,
-    forkRepoFullName,
-    targetBranch,
-    releaseTag,
-    releaseSha,
-    beforeSha,
-    afterSha,
-    pushed: enabled("push", false),
-    checks: verifyCommands.map((command) => ({ name: command, status: "passed" })),
-    candidateRefs: candidateRefsFor(afterSha),
-  });
-} catch (error) {
-  finish("failed", error instanceof Error ? error.message : String(error));
 }
+
+export default defineBunFlow(async (flowContext: FlowRunContext): Promise<FlowResult> => {
+  context = flowContext as HarnessFlowContext;
+  config = context.flow.config ?? {};
+  commands = [];
+
+  const workspaceRoot = process.cwd();
+  const payload = context.flow.event.payload ?? {};
+  releaseTag = tagFromPayload(payload);
+  repo = stringValue(payload.repo, "payload.repo");
+  forkRepo = path.resolve(workspaceRoot, stringConfig("fork_repo", "harness/fork"));
+  forkRepoFullName = stringConfig("fork_repo_full_name", "matamune-peezy/patch-moi-harness");
+  targetBranch = stringConfig("target_branch", "main");
+  upstreamRemote = stringConfig("upstream_remote", "upstream");
+  upstreamRepoUrl = stringConfig("upstream_repo_url", "https://github.com/peezy-tech/patch-moi-harness.git");
+  verifyCommands = stringArrayConfig("verify_commands", ["npm test", "npm run pack:dry-run"]);
+  pushRemotes = stringArrayConfig("push_remotes", ["origin", "jojo"]);
+
+  try {
+    if (repo !== expectedRepo) {
+      finish("skipped", `Harness flow ignores ${repo}.`, { repo, expectedRepo });
+    }
+    if (!releaseTag) {
+      finish("failed", "Release payload is missing tag or refs/tags ref.");
+    }
+
+    const repoCheck = await run("verify harness fork checkout", ["git", "rev-parse", "--show-toplevel"]);
+    if (repoCheck.exitCode !== 0) {
+      finish("blocked", `Harness fork checkout is not available at ${forkRepo}.`, { forkRepo });
+    }
+
+    await ensureUpstreamRemote();
+
+    if (enabled("fetch", true)) {
+      await run("fetch upstream release refs", ["git", "fetch", upstreamRemote, "--tags", "--prune"]);
+    }
+
+    await requireNoRebaseInProgress();
+    await requireCleanWorktree("before harness fork rebase");
+
+    const branch = (await run("read current branch", ["git", "branch", "--show-current"])).stdout.trim();
+    if (branch !== targetBranch) {
+      await run("switch maintained fork branch", ["git", "switch", targetBranch]);
+    }
+
+    const beforeSha = (await run("read fork head before rebase", ["git", "rev-parse", "HEAD"])).stdout.trim();
+    const releaseSha = await resolveReleaseCommit(releaseTag);
+    const alreadyContainsRelease = (await run(
+      "check release ancestor",
+      ["git", "merge-base", "--is-ancestor", releaseSha, "HEAD"],
+      { allowFailure: true },
+    )).exitCode === 0;
+
+    if (!alreadyContainsRelease) {
+      const rebase = await run(
+        "rebase harness fork onto upstream release",
+        ["git", "rebase", releaseSha],
+        { allowFailure: true },
+      );
+      if (rebase.exitCode !== 0) {
+        const context = await collectRebaseContext(rebase, beforeSha);
+        finish("needs_intervention", `Harness fork rebase stopped on ${releaseTag}.`, context);
+      }
+    }
+
+    for (const command of verifyCommands) {
+      const result = await run(`verify: ${command}`, ["bash", "-lc", command], { allowFailure: true });
+      if (result.exitCode !== 0) {
+        finish("needs_intervention", `Harness verification failed: ${command}.`, {
+          failedCommand: command,
+        });
+      }
+    }
+
+    await requireCleanWorktree("after harness fork verification");
+
+    const afterSha = (await run("read fork head after rebase", ["git", "rev-parse", "HEAD"])).stdout.trim();
+
+    if (enabled("push", false)) {
+      for (const remote of pushRemotes) {
+        await run(`push ${remote}/${targetBranch}`, [
+          "git",
+          "push",
+          "--force-with-lease",
+          remote,
+          `HEAD:${targetBranch}`,
+        ]);
+      }
+    }
+
+    finish(beforeSha === afterSha ? "completed" : "changed", harnessMessage(beforeSha, afterSha), {
+      eventId: context.flow.event.id,
+      repo,
+      forkRepo,
+      forkRepoFullName,
+      targetBranch,
+      releaseTag,
+      releaseSha,
+      beforeSha,
+      afterSha,
+      pushed: enabled("push", false),
+      checks: verifyCommands.map((command) => ({ name: command, status: "passed" })),
+      candidateRefs: candidateRefsFor(afterSha),
+    });
+  } catch (error) {
+    if (error instanceof FlowFinished) {
+      return error.result;
+    }
+    return buildResult("failed", error instanceof Error ? error.message : String(error));
+  }
+});
 
 async function ensureUpstreamRemote(): Promise<void> {
   const current = await run("read upstream remote", ["git", "remote", "get-url", upstreamRemote], {
@@ -226,21 +247,24 @@ async function run(
   return result;
 }
 
-function finish(status: string, message: string, artifacts: Record<string, unknown> = {}): never {
+function finish(status: FlowResultStatus, message: string, artifacts: Record<string, unknown> = {}): never {
+  throw new FlowFinished(buildResult(status, message, artifacts));
+}
+
+function buildResult(status: FlowResultStatus, message: string, artifacts: Record<string, unknown> = {}): FlowResult {
   const commandArtifacts = commands.map((command) => ({
     ...command,
     stdout: truncate(command.stdout),
     stderr: truncate(command.stderr),
   }));
-  console.log(`FLOW_RESULT ${JSON.stringify({
+  return {
     status,
     message,
     artifacts: {
       ...artifacts,
       commands: commandArtifacts,
     },
-  })}`);
-  process.exit(0);
+  };
 }
 
 function harnessMessage(beforeSha: string, afterSha: string): string {
