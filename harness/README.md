@@ -103,6 +103,21 @@ git push --force-with-lease jojo main
 Expected result: fork `main` is still patched, but its base is the latest
 upstream release.
 
+The same maintenance path is executable through the first patch.moi harness
+flow:
+
+```bash
+CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run harness:flow
+```
+
+That direct command is local-mode execution. In the service shape, Patch writes
+the upstream update event, creates a maintenance attempt record, and hands the
+same flow event to the configured workspace backend.
+
+The default fixture targets `v0.1.3`, which should verify the current fork
+without changing it. For a new upstream tag, run the same command with an event
+file whose `payload.tag` names that tag.
+
 ## Scenario: Fork Release
 
 Use this when the maintained fork should do its own release cycle.

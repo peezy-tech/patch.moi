@@ -32,6 +32,7 @@
     "docs:build": "bun run --filter @peezy.tech/patch-docs build",
     "docs:deploy": "bun run --filter @peezy.tech/patch-docs deploy",
     "docs:dev": "bun run --filter @peezy.tech/patch-docs dev",
+    "harness:flow": "bun run --filter @peezy.tech/patch harness:flow",
     "start": "bun run --filter @peezy.tech/patch start",
     "test": "bun run --filter @peezy.tech/patch test"
   }

@@ -13,6 +13,7 @@ export default {
       group: "Tutorials",
       pages: [
         "tutorials/watch-upstream-release",
+        "tutorials/run-harness-maintenance-flow",
         "tutorials/dispatch-codex-release-flow",
       ],
     },
