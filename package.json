@@ -1,20 +1,38 @@
 {
-  "name": "@peezy.tech/patch",
+  "name": "patch-moi",
   "version": "0.1.0",
+  "description": "Feed watching and flow dispatch service for patch.moi.",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.3.11",
+  "engines": {
+    "bun": ">=1.3.11"
+  },
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*",
+      "docs"
+    ],
+    "catalog": {
+      "@tomehq/cli": "^0.8.1",
+      "@tomehq/theme": "^0.8.1",
+      "@types/bun": "latest",
+      "@types/node": "^22.10.10",
+      "react": "^19.2.4",
+      "react-dom": "^19.2.4",
+      "typescript": "^5.9.3"
+    }
+  },
   "scripts": {
-    "dev": "bun --watch src/server.ts",
-    "start": "bun src/server.ts",
-    "test": "bun test",
-    "check:types": "tsc --noEmit",
-    "check": "bun run check:types && bun test"
-  },
-  "dependencies": {
-    "@peezy.tech/flow-runtime": "^0.3.1"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "typescript": "^5.9.3"
+    "build": "bun run --filter @peezy.tech/patch build && bun run --filter @peezy.tech/patch-docs build",
+    "check": "bun run check:types && bun run test",
+    "check:types": "bun run --workspaces check:types",
+    "dev": "bun run --filter @peezy.tech/patch dev",
+    "docs:build": "bun run --filter @peezy.tech/patch-docs build",
+    "docs:deploy": "bun run --filter @peezy.tech/patch-docs deploy",
+    "docs:dev": "bun run --filter @peezy.tech/patch-docs dev",
+    "start": "bun run --filter @peezy.tech/patch start",
+    "test": "bun run --filter @peezy.tech/patch test"
   }
 }

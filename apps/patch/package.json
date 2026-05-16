@@ -1,0 +1,21 @@
+{
+  "name": "@peezy.tech/patch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "dev": "bun --watch src/server.ts",
+    "start": "bun src/server.ts",
+    "test": "bun test test/*.test.ts",
+    "check:types": "tsc --noEmit",
+    "check": "bun run check:types && bun run test"
+  },
+  "dependencies": {
+    "@peezy.tech/flow-runtime": "^0.3.1"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

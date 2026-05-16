@@ -1,3 +1,8 @@
+---
+title: Forgejo forking problem space
+description: Historical analysis for tracking and possibly forking Forgejo from Patch signals.
+---
+
 # Forgejo Forking Problem Space
 
 Date: 2026-05-12

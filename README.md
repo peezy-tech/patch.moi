@@ -1,8 +1,16 @@
-# patch
+# patch.moi
 
-Containerized Bun service for upstream feed watching and flow dispatch.
+Feed watching and flow dispatch service for upstream project events.
 
 Canonical public host: `https://patch.moi`.
+
+## Repository
+
+This is a Bun monorepo:
+
+- `apps/patch`: the Patch service, feed poller, JSONL store, Discord output,
+  and flow dispatch adapter.
+- `docs`: Tome documentation site published under `/docs`.
 
 ## Endpoints
 
@@ -20,7 +28,7 @@ GET  /flow-dispatches
 ```text
 HOST=0.0.0.0
 PORT=3000
-DATA_DIR=/app/data
+DATA_DIR=./data
 DISCORD_OUTPUT_ENABLED=false
 DISCORD_WEBHOOK_URL=
 DISCORD_NOTIFY_EVENTS=push,release
@@ -42,10 +50,22 @@ bun run check
 bun run dev
 ```
 
-Feed watcher events are configured in `feed-sources.json`. The first poll primes
-`DATA_DIR/feed-state.json`; later polls append upstream activity to
+Feed watcher events are configured in `apps/patch/feed-sources.json`. The first
+poll primes `DATA_DIR/feed-state.json`; later polls append upstream activity to
 `DATA_DIR/feed-events.jsonl`. Targets using `mode: "fork_sync"` append legacy
 work to `DATA_DIR/feed-jobs.jsonl`. Targets using `mode: "flow_dispatch"`
 append generic flow events to `DATA_DIR/flow-events.jsonl`, POST them to the
 configured dispatch URL, and record dispatch outcomes in
 `DATA_DIR/flow-dispatches.jsonl`.
+
+## Documentation
+
+The publishable docs site is a Tome project in `docs/`:
+
+```bash
+bun run docs:dev
+bun run docs:build
+```
+
+Docs source follows the Diataxis framework under `docs/pages/tutorials`,
+`docs/pages/guides`, `docs/pages/reference`, and `docs/pages/concepts`.
