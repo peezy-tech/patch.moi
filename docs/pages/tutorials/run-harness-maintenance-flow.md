@@ -7,9 +7,16 @@ description: Use the patch.moi harness repos to rehearse an upstream release and
 
 This tutorial runs the smallest real patch.moi maintenance loop. The upstream
 repo is `harness/upstream`. The maintained fork is `harness/fork`. The flow
-package is `flows/patch-moi-harness`. It is the local version of the same work
-a configured workspace backend would run after Patch accepts an upstream update
-event.
+package is `flows/patch-moi-harness`.
+
+There are two local operator paths:
+
+- run the flow directly with `bun run harness:flow`
+- run the same flow through the repo-native `codex-flows workspace` task
+
+Both paths exercise the harness. The Patch service path still starts with feed
+intake, writes `DATA_DIR` records, creates a maintenance attempt, and dispatches
+the same kind of event through the workspace backend adapter.
 
 ## 1. Check out the harness repos
 
@@ -52,7 +59,7 @@ workspace:tick` is safe by default and explicit `workspace run` remains the
 operator action.
 
 Use `bun run workspace:doctor` to inspect the repo-native workspace config and
-generated local run state.
+generated local run state. The generated local state is ignored by Git.
 
 ## 4. Rehearse a real upstream release
 
@@ -76,9 +83,10 @@ Run the harness flow again without disabling fetch:
 bun run harness:flow <event-file>
 ```
 
-Use an event file whose `payload.tag` is the new upstream tag. The flow rebases
-`harness/fork` onto that tag, verifies the fork package, reports the local
-candidate branch, and keeps pushes off.
+Use an event file whose `id`, `occurredAt`, `receivedAt`, and `payload.tag`
+identify the new upstream tag. The flow rebases `harness/fork` onto that tag,
+verifies the fork package, reports the local candidate branch, and keeps pushes
+off.
 
 ## 5. Push only after review
 

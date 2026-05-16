@@ -1,100 +1,105 @@
 ---
 title: Architecture
-description: How upstream intake, Git state, forge service mode, workspaces, and release channels fit together.
+description: How intake, Git state, workspaces, service mode, and release channels fit together.
 ---
 
 # Architecture
+
+patch.moi is a maintenance control plane, not a replacement for the maintained
+repository. Its architecture follows one rule: Git and the forge hold patch
+truth; patch.moi holds operational truth.
+
+## Product Loop
 
 patch.moi has three product responsibilities:
 
 1. Notice upstream movement.
 2. Start or resume the right maintenance workflow.
-3. Keep enough durable state to inspect, retry, and review what happened.
-
-The Git repository remains the source of truth for the maintained project.
-patch.moi does not replace remotes, branches, tags, commits, or release refs
-with a separate project file. It reads those facts and records operational state
-around them.
-
-## Runtime Pieces
-
-The current service has these runtime pieces:
-
-- The HTTP server exposes health and admin flow endpoints.
-- The feed poller reads configured upstream feeds on an interval.
-- The JSONL store keeps feed signals, flow events, maintenance attempts, and
-  workspace dispatch records under `DATA_DIR`.
-- The workspace backend adapter can execute locally or call a configured Codex
-  workspace backend, such as `codex-workspace-backend-local`.
-- The optional repo-native `.codex/workspace.toml` exposes operator automation
-  tasks through `codex-flows workspace doctor|tick|run`.
-
-Those pieces are the intake layer. The patch-stack layer can run in local mode
-against a checkout, or in service mode through a remote forge workflow and
-runner.
-
-The first concrete repo to model against is `../codex`. Its maintained branch is
-`code-mode-exec-hooks` in the Peezy fork, and the branch carries Code Mode and
-Peezy npm release patches ahead of `origin/main`.
-
-## Maintenance Loop
+3. Keep durable state for inspection, retry, replay, and review.
 
 ```mermaid
 flowchart TD
-  A["upstream release, tag, or branch update"] --> B["Patch FeedSignal"]
-  B --> C["durable update event"]
-  C --> D{"mode"}
-  D -- local --> E["local Codex workspace"]
-  D -- service --> R["remote forge workflow"]
-  R --> S["runner checkout"]
-  E --> F["rebase or replay patch commits"]
-  S --> F
-  F --> G{"conflicts or failing checks?"}
-  G -- yes --> H["PR, issue, or paused intervention"]
-  G -- no --> I["candidate branch or tag"]
-  I --> J["internal build channel"]
-  I --> K["public release channel"]
+  A["upstream release, tag, branch update, or advisory"] --> B["Patch FeedSignal"]
+  B --> C["durable FlowEvent"]
+  C --> D["maintenance attempt"]
+  D --> E{"execution surface"}
+  E -- local --> F["local workspace"]
+  E -- service --> G["forge runner"]
+  F --> H["rebase, merge, or replay patches"]
+  G --> H
+  H --> I{"blocked?"}
+  I -- yes --> J["intervention, PR, issue, or failed run"]
+  I -- no --> K["candidate branch, tag, check, or artifact"]
+  K --> L["internal build channel"]
+  K --> M["public release channel"]
 ```
+
+## Runtime Pieces
+
+The current service has these pieces:
+
+| Piece | Role |
+| --- | --- |
+| HTTP server | health, admin listing, retry, replay, sync, and workspace inspection endpoints |
+| feed poller | reads configured upstream feeds and emits normalized signals |
+| JSONL store | writes feed events, flow events, workspace dispatches, and maintenance attempts under `DATA_DIR` |
+| workspace backend adapter | dispatches locally when no backend URL is set, or calls a configured Codex workspace backend |
+| harness flow | exercises real fork maintenance through `flows/patch-moi-harness` |
+| repo workspace config | exposes manual operator tasks through `codex-flows workspace doctor|tick|run` |
+
+Those pieces are intentionally narrow. The service coordinates and records; the
+workspace or runner performs the patch application work.
+
+## State Boundaries
+
+patch.moi-owned state lives under `DATA_DIR`:
+
+- feed cursors and feed events
+- deterministic flow events
+- workspace dispatch, retry, and replay records
+- maintenance attempts, outcomes, candidate refs, and intervention state
+
+Codex workspace state lives under `.codex/workspace/<mode>` and describes the
+operator automation surface. Local workspace state is ignored. Actions state is
+reserved for future CI or service use where committing selected state may be
+intentional.
+
+Neither store contains the patch stack. Patch commits, branches, tags, and
+candidate refs remain in Git and the forge.
 
 ## Local Mode
 
-In local mode, patch.moi can run inside or next to the maintained repository.
-The repository itself describes the project:
+Local mode is checkout-oriented. The operator has a real repository nearby,
+with remotes and branches that describe the project:
 
-- `upstream` or another configured remote points at the source project.
-- `origin` or another fork remote points at the maintained fork.
-- branch names identify the maintained patch stack and candidate refs.
-- tags identify upstream release points and downstream release candidates.
+- `upstream` or another configured remote points at the source project
+- `origin` or another fork remote points at the maintained fork
+- branch names identify the patch stack and candidate refs
+- tags identify upstream release points and downstream release candidates
 
-No `.patchmoi` file is required for that topology.
+No `.patchmoi` project file is required. Repo-native files such as
+`package.json`, `flow.toml`, CI workflows, and `.codex/workspace.toml` can
+describe automation, but Git still describes the patch stack.
 
 ## Service Mode
 
-In service mode, the forge is the coordination surface. For Codex maintenance,
-patch.moi should interact with the remote fork host:
+Service mode is forge-oriented. patch.moi should interact with the remote fork
+host:
 
-- create or update remote maintenance branches
+- create or update maintenance branches
 - trigger forge workflows or runners
-- open or update pull requests, issues, comments, checks, and artifacts
-- record workflow run ids, branch names, and review links
+- open or update pull requests, issues, checks, comments, and artifacts
+- record workflow run ids, branch names, outcomes, and review links
 
-The runner checkout is disposable. The durable project state is the remote fork,
-its refs, and the forge records around the maintenance attempt.
+Runner checkouts are disposable. Durable project state is the remote fork, its
+refs, and forge records around the maintenance attempt.
 
-For the Codex fork, service mode should be able to target a remote fork, fetch
-OpenAI upstream refs in a runner, rebase `code-mode-exec-hooks`, and push a
-candidate branch or `rust-v*` tag when policy allows.
+See [Forge service mode](forge-service-mode) for the service shape.
 
-See [Forge service mode](forge-service-mode).
+## Boundary Rule
 
-## Boundaries
+Use flow events for portable automation triggers. Use patch.moi state for the
+product lifecycle around those triggers: feed history, dispatch attempts,
+workspace run ids, candidate refs, review status, and intervention state.
 
-patch.moi owns update intake and maintenance orchestration. Local workspaces or
-forge runners own the actual patch application work. Release channels own
-deployment and publishing decisions.
-
-The repo-native Codex workspace config is an operator convenience for running
-known maintenance commands from the repository. Its generated state under
-`.codex/workspace/<mode>` is run history for that automation surface; it does
-not replace `DATA_DIR` feed events, workspace dispatches, or maintenance
-attempt records.
+See [Flow boundary](flow-boundary) for the layer-by-layer contract.

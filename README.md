@@ -61,6 +61,7 @@ comma-separated allow list and defaults to `push,release`.
 ```bash
 bun install
 bun run check
+bun run workspace:doctor
 bun run dev
 ```
 
@@ -73,6 +74,15 @@ configured workspace backend or local adapter, and record dispatch outcomes in
 `DATA_DIR/workspace-dispatches.jsonl`. Each dispatch also creates or updates a
 patch.moi-owned `DATA_DIR/maintenance-attempts.jsonl` entry that links the
 upstream update to workspace run ids, final flow outcome, and candidate refs.
+
+The harness can also be run through the repo-native workspace task:
+
+```bash
+CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run workspace:run:harness
+```
+
+That task writes local operator run state under `.codex/workspace/local/`,
+which is ignored by Git. Patch service state remains under `DATA_DIR`.
 
 ## Documentation
 

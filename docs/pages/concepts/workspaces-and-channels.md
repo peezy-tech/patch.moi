@@ -22,8 +22,8 @@ does not decide how to deploy or publish the maintained fork.
 
 A patch application workspace is the disposable place where a specific upstream
 point is carried forward into the maintained patch stack. In local mode, that
-can be a Codex workspace near the checkout. In service mode, it should usually
-be a forge runner checkout.
+can be a checkout run directly or through Codex workspace tooling. In service
+mode, it should usually be a forge runner checkout.
 
 Typical work:
 
@@ -35,7 +35,8 @@ Typical work:
 - produce a candidate branch or tag
 
 The workspace may be local or runner-managed. The patch stack itself still lives
-in Git.
+in Git. Repo-native `codex-flows workspace` tasks are operator automation for
+running known commands; they are not a separate patch-stack database.
 
 In the current Codex fork, this means carrying the commits on
 `code-mode-exec-hooks` ahead of `origin/main` onto a canonical upstream release
@@ -108,3 +109,6 @@ flowchart LR
 
 patch.moi should record the relationship between those outcomes without forcing
 one channel to depend on another.
+
+See [Flow boundary](flow-boundary) for how feed events, workspace runs, and
+maintenance attempts stay separate.

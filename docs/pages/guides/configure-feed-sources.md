@@ -9,7 +9,8 @@ Feed sources live in a JSON file referenced by `FEED_SOURCES_PATH`. The bundled
 file is `apps/patch/feed-sources.json`.
 
 Feed sources describe intake. They should not duplicate the maintained patch
-stack. The patch stack lives in Git as remotes, branches, tags, and commits.
+stack. The patch stack lives in Git as remotes, branches, tags, and commits;
+patch.moi records the operational state around feed events and dispatches.
 
 ## Choose an event
 
@@ -47,6 +48,10 @@ backend adapter:
 For patch-stack maintenance, prefer `workspace_flow` to create an
 `upstream.release` or `upstream.update` trigger. Let the receiving workspace read
 Git to discover the maintained patch branch and candidate refs.
+
+Use explicit payload fields for patch.moi-dispatched events. Do not rely on
+implicit workspace flow defaults for maintenance events, because patch.moi uses
+deterministic ids and timestamps for dispatch and replay.
 
 Set `primeOnly: false` only when old feed entries should be emitted on the first
 poll.

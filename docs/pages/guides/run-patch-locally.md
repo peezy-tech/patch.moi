@@ -46,6 +46,7 @@ Root scripts delegate into the workspace:
 bun run check
 bun run test
 bun run docs:dev
+bun run workspace:doctor
 ```
 
 Use explicit paths when you run the app package directly:
@@ -61,6 +62,16 @@ Local workspace execution runs from the process working directory when no
 workspace backend URL is set. That makes local mode useful for testing a patch
 application workspace before sending the same event to a configured workspace
 backend or service runner.
+
+The repo-native workspace task runs the harness fixture through the same direct
+flow command:
+
+```bash
+CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run workspace:run:harness
+```
+
+That task writes local run state under `.codex/workspace/local/`, which is
+ignored by Git.
 
 Local mode is checkout-oriented. Service mode is forge-oriented: patch.moi
 should talk to the remote forge, trigger a runner, and let that runner perform

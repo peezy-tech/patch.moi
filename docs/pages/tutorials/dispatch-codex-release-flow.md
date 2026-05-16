@@ -5,9 +5,10 @@ description: Connect the OpenAI Codex release feed to a Codex patch-stack mainte
 
 # Dispatch a Codex release flow
 
-This tutorial connects upstream OpenAI Codex releases to the Codex fork
-maintenance flow. The flow rebases a maintained patch stack onto an upstream
-release tag and verifies the candidate.
+This tutorial connects upstream OpenAI Codex releases to Codex fork
+maintenance. Patch records the upstream release and dispatches a deterministic
+event. The receiving workspace or runner rebases the maintained patch stack
+onto the upstream release tag and verifies the candidate.
 
 ## 1. Use the release source
 
@@ -48,6 +49,9 @@ or its `/events` endpoint. Patch normalizes either HTTP form before calling the
 workspace flow capability. `PATCH_FLOW_BACKEND_URL` and
 `PATCH_FLOW_DISPATCH_URL` remain accepted for older feed targets.
 
+Leave `PATCH_WORKSPACE_BACKEND_URL` unset only when you intentionally want local
+flow execution from the Patch process working directory.
+
 ## 3. Inspect the stored event
 
 ```bash
@@ -57,7 +61,7 @@ curl http://127.0.0.1:3000/flow-events
 When `PATCH_ADMIN_TOKEN` is set, include either `Authorization: Bearer <token>`
 or `X-Patch-Admin-Token: <token>`.
 
-## 4. Keep completion app-owned
+## 4. Keep completion workspace-owned, state app-owned
 
 Patch dispatches the generic event. The installed Codex release flow or
 workspace owns the work that happens next:
@@ -68,6 +72,10 @@ workspace owns the work that happens next:
 - collect conflict context when the rebase stops
 - run the configured checks
 - optionally push a candidate ref
+
+Patch remains responsible for maintenance-attempt state: it stores the dispatch,
+can retry or replay the event, and can sync workspace run results back into the
+attempt record.
 
 That candidate can be used for an internal build/link workflow before a public
 release exists: build the local native binary, place it in the npm wrapper's

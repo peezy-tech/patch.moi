@@ -1,63 +1,74 @@
 ---
 title: Flow boundary
-description: What patch.moi owns, what codex-flow owns, and where workspace backend orchestration belongs.
+description: What patch.moi, codex-flows, workspace backends, runners, and release channels own.
 ---
 
-# Flow boundary
+# Flow Boundary
 
-patch.moi owns upstream observation and patch-stack orchestration. It knows
-about feed sources, update signals, maintained repositories, remote branches,
-workflow runs, dispatch attempts, and operator-visible state.
+patch.moi uses flow events to start portable work, but a flow event is not the
+whole product model. The event says "this upstream thing happened." patch.moi
+must still know which attempt handled it, which workspace runs were created,
+which candidate refs appeared, and whether review or intervention is required.
 
-codex-flow owns portable event execution. Flow packages match `FlowEvent.type`
-and payload schema, run Bun or Code Mode steps, and emit `FLOW_RESULT`.
-
-The Codex workspace backend owns workspace control surfaces: app-server
-pass-through, delegation, flow execution transport, workbench state, and the
-HTTP/WebSocket protocol around those capabilities. patch.moi should use that
-surface instead of redefining it.
-
-The boundary should stay narrow:
+## Layer Contract
 
 | Layer | Owns |
 | --- | --- |
-| patch.moi intake | feeds, source ids, feed state, update records |
-| patch.moi orchestration | maintained repo selection, remote branch policy, workflow triggers, retry and review state |
-| codex-flow | generic event matching, step execution, run state, `FLOW_RESULT` |
-| codex workspace backend | workspace transport, app-server bridge, delegation, flow HTTP routes |
-| local workspace or forge runner | git operations, conflict resolution, checks, candidate refs |
-| release channel | deploy, publish, trusted publishing, rollback policy |
+| patch.moi intake | feed sources, feed cursors, normalized update signals |
+| patch.moi orchestration | deterministic events, dispatch/retry/replay records, maintenance attempts, candidate refs, review state |
+| codex-flows and flow-runtime | event matching, payload schema checks, step execution, `FLOW_RESULT` |
+| Codex workspace backend | app-server bridge, delegation, flow transport, backend run inspection |
+| local workspace or forge runner | Git operations, conflict resolution, verification, candidate ref creation |
+| release channel | internal artifacts, public publishing, rollout, rollback, trusted publishing policy |
 
-## Flow Events Are Triggers
+Keeping these layers separate lets patch.moi retry or replay a trigger without
+pretending that the trigger itself contains the maintained fork lifecycle.
 
-A generic `upstream.release` event is a good trigger. It should not become the
-whole product model.
+## Event Contract
 
-patch.moi should be able to say: this upstream release produced this workflow
-run, which produced this candidate branch, which was used by this internal build
-or public release. A single flow event cannot hold that lifecycle cleanly.
+For patch.moi-dispatched maintenance, `event.id` is the idempotency key. Feed
+targets create deterministic ids such as:
 
-## Service State
+```text
+patch:<sourceId>:<entryId>:<eventType>
+```
 
-A patch.moi service backend is useful when patch.moi needs to coordinate a
-remote forge, human intervention, and operator surfaces. That backend can own
-patch.moi-specific service state while still dispatching generic flow events to
-the Codex workspace backend where it fits.
+The event should include enough payload for a flow package or backend workspace
+to identify the upstream update. The receiving workspace still reads Git and
+forge state to discover the maintained branch, patch commits, candidate refs,
+and current checks.
 
-The rule is simple: use flow events for portable automation triggers, and use a
-patch.moi service for patch-stack product state: remote refs, workflow runs,
-pull requests, issues, checks, artifacts, and review status.
+## Workspace Backends
+
+When `PATCH_WORKSPACE_BACKEND_URL` is unset, patch.moi uses local flow
+execution from the process working directory. When it is set to an HTTP or
+WebSocket URL, patch.moi dispatches to that Codex workspace backend. In both
+cases patch.moi writes its own dispatch and maintenance-attempt records under
+`DATA_DIR`.
+
+Workspace backend run state is useful for inspection and sync. It is not the
+authoritative patch.moi product state.
 
 ## Repo-Native Workspace Automation
 
 `.codex/workspace.toml` is optional repo automation for operators. In this repo,
-the first task is a manual command task that runs the existing harness fixture.
-It does not change the patch.moi service path: feed intake still creates
-deterministic `FlowEvent` records, dispatch and replay still go through the
-patch.moi workspace backend adapter, and maintenance outcomes still sync into
-patch.moi-owned attempt records.
+the first task is a manual command task that runs the existing harness fixture:
 
-Avoid implicit workspace `kind = "flow"` tasks for patch.moi maintenance unless
-the task supplies a complete explicit event. The default workspace flow fallback
-does not carry patch.moi's deterministic `id` and `receivedAt`, which are part
-of the dispatch and audit contract.
+```bash
+bun run workspace:run:harness
+```
+
+That task is deliberately `kind = "command"`, not an implicit workspace
+`kind = "flow"` task. Released workspace flow fallback behavior must not be
+treated as a source of patch.moi's deterministic `id`, `occurredAt`, or
+`receivedAt`; a future flow task must supply a complete explicit event.
+
+The sibling `../codex-flows` workspace currently has an unreleased fix that
+synthesizes those event fields for workspace-owned flow tasks. patch.moi should
+not rely on that behavior until it is available in a published
+`@peezy.tech/codex-flows` release, and it should not use workspace-generated
+event ids for feed-owned maintenance attempts.
+
+The generated local state under `.codex/workspace/local/` is run history for
+the operator automation surface. It does not replace `DATA_DIR` feed events,
+workspace dispatches, or maintenance attempts.

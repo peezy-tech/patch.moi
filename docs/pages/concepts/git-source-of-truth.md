@@ -6,13 +6,15 @@ description: Why patch.moi uses remotes, branches, tags, and commits as the proj
 # Git Source Of Truth
 
 patch.moi should not invent a second project format for patch stacks. The
-maintained repository is already the best source of truth:
+maintained repository and its forge records are already the best source of
+truth:
 
 - remotes say where upstream and the maintained fork live
 - branches say which patch stack is being maintained
 - tags say which upstream or downstream release point is being targeted
 - commits are the patch inventory
-- worktrees, checkouts, and runner workspaces are disposable execution surfaces
+- worktrees, local workspaces, and runner checkouts are disposable execution
+  surfaces
 
 This matters because patch.moi is meant to maintain open source forks, not hide
 them behind an application database.
@@ -44,13 +46,15 @@ patch.moi stores operational state:
 - retry and replay history
 - operator-facing notes or intervention state
 
-That state explains what happened. It is not the patch stack itself.
+That state explains what happened. It is not the patch stack itself, and it
+does not replace workspace backend run state or forge records.
 
 ## Local Mode
 
 When patch.moi runs locally, the current checkout can be the project model. The
-CLI or service process should inspect remotes and branches, then add missing
-remotes only when the operator confirms or supplied enough information.
+service, harness flow, or repo-native workspace command should inspect remotes
+and branches, then add missing remotes only when the operator confirms or
+supplied enough information.
 
 The default happy path is:
 
@@ -103,5 +107,6 @@ Some policy cannot be inferred from refs alone:
 - whether public release uses GitHub trusted publishing
 
 That policy can live in service configuration, environment, codex-flow config,
-or existing repo-native files such as `package.json`, CI workflows, `Makefile`,
-or release docs. It should not obscure where the patch stack actually lives.
+or existing repo-native files such as `package.json`, `.codex/workspace.toml`,
+CI workflows, `Makefile`, or release docs. It should not obscure where the
+patch stack actually lives.

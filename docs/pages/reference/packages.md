@@ -29,3 +29,32 @@ The Tome documentation package in `docs`. Build it with:
 ```bash
 bun run docs:build
 ```
+
+## Root Workspace
+
+The repository root owns shared scripts and dev dependencies. It installs
+`@peezy.tech/codex-flows` so repo-native workspace commands are available:
+
+```bash
+bun run workspace:doctor
+bun run workspace:tick
+bun run workspace:run:harness
+```
+
+Those commands are operator automation around the repo. They do not replace the
+Patch service package or its `DATA_DIR` state.
+
+## Related Runtime Packages
+
+These published packages define the current patch.moi integration baseline:
+
+| Package | Published version | patch.moi use |
+| --- | --- | --- |
+| `@peezy.tech/codex-flows` | `0.3.3` | repo-native workspace commands and CLI automation |
+| `@peezy.tech/flow-runtime` | `0.4.0` | local flow discovery, matching, execution, and Bun flow helpers |
+| `@peezy.tech/flow-backend-convex` | `0.4.0` | optional generic durable flow backend for future service experiments |
+
+patch.moi product state still belongs in the Patch service JSONL store by
+default. `flow-backend-convex` should be considered only when patch.moi needs a
+generic durable flow event/run backend; it is not the default home for feed
+signals, workspace dispatch records, or maintenance attempts.

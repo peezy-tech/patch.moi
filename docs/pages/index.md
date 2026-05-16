@@ -1,60 +1,100 @@
 ---
 title: patch.moi
-description: Hands-off maintenance for custom patches on top of upstream open source software.
+description: Git-first maintenance for custom patches on top of upstream open source software.
 ---
 
 # patch.moi
 
-patch.moi keeps custom features alive on top of upstream open source projects.
-It watches upstream movement, records durable update signals, and hands the
-actual patch work to local workspaces or remote forge runners that operate on
-normal Git repositories.
+patch.moi watches upstream projects and keeps the operational record for
+maintained forks. It does not replace Git, CI, or release tooling. It records
+what upstream did, starts or resumes the right maintenance work, and preserves
+enough state to inspect, retry, replay, and review the result.
 
-The product boundary is Git-first:
+The patch stack remains ordinary Git:
 
-- Upstream projects stay upstream remotes, tags, branches, and release feeds.
-- Maintained forks stay fork remotes and patch branches.
-- Patch stacks are commits, branches, and tags, not a second Patch-specific
-  project file.
-- patch.moi records observations, maintenance attempts, workspace run ids, and
-  review state around those Git facts.
-- Local Codex workspaces or forge runners do the maintenance work: rebase patch
-  commits, resolve conflicts, build candidates, and leave human intervention
-  points when needed.
+- upstream movement comes from feeds, remotes, tags, branches, and commits
+- maintained forks live in fork repositories and patch branches
+- patch commits stay in the maintained repository
+- candidate outputs are branches, tags, pull requests, checks, or artifacts
+- internal build and public release channels consume candidate refs separately
 
 ```mermaid
 flowchart LR
-  Upstream["upstream repo"] --> Feed["release and branch feeds"]
-  Upstream --> Git["upstream remote"]
-  Fork["maintained fork"] --> Git
-  Feed --> Patch["patch.moi intake"]
-  Patch --> Event["durable update signal"]
-  Event --> Workspace["local workspace or forge runner"]
-  Git --> Workspace
-  Workspace --> Candidate["remote candidate branch, tag, or artifact"]
-  Candidate --> Internal["internal build channel"]
-  Candidate --> Public["public release channel"]
+  Upstream["upstream feed or ref"] --> Patch["patch.moi intake"]
+  Patch --> Event["durable update event"]
+  Event --> Attempt["maintenance attempt"]
+  Attempt --> Workspace["local workspace or forge runner"]
+  Git["upstream and fork Git refs"] --> Workspace
+  Workspace --> Candidate["candidate ref or artifact"]
+  Candidate --> Internal["internal channel"]
+  Candidate --> Public["public release"]
 ```
 
-## Start here
+## Ownership
 
-- New service setup: [Watch an upstream release](tutorials/watch-upstream-release).
-- Codex patch-stack automation: [Dispatch a Codex release flow](tutorials/dispatch-codex-release-flow).
-- Running the service: [Run Patch locally](guides/run-patch-locally).
-- Git model: [Git source of truth](concepts/git-source-of-truth).
-- Concrete Codex model: [Codex fork model](concepts/codex-fork-model).
-- Service mode: [Forge service mode](concepts/forge-service-mode).
-- Release channels: [Workspaces and channels](concepts/workspaces-and-channels).
-- Exact feed shape: [Feed sources](reference/feed-sources).
-- Admin operations: [HTTP API](reference/http-api).
+patch.moi owns product state around the patch stack:
 
-## What is in this repo
+- feed cursors and normalized update signals
+- deterministic flow events
+- workspace dispatch, retry, and replay records
+- maintenance attempts, candidate refs, outcomes, and intervention state
+- admin inspection APIs for that state
 
-- `apps/patch`: the Patch Bun service, feed poller, JSONL store, and workspace
-  backend adapter.
-- `docs`: this Tome documentation site, organized with the Diataxis framework.
-- `Dockerfile`: container image for the Patch service app.
+Execution surfaces own the work itself:
 
-The current service implements upstream intake and dispatch. Patch-stack
-maintenance is performed by the local workspace, forge runner, or codex-flow
-package that receives the event.
+- codex-flow packages match events and run portable Bun or Code Mode steps
+- Codex workspace backends provide app-server, delegation, and flow transport
+- local workspaces and forge runners fetch, rebase, verify, and push candidates
+- release channels publish or deploy after review and policy gates
+
+`.codex/workspace.toml` is repo-native operator automation. In this repo it
+exposes the harness fixture through `codex-flows workspace doctor|tick|run`.
+That state lives under `.codex/workspace/<mode>` and does not replace
+patch.moi-owned `DATA_DIR` records.
+
+## Fastest Path
+
+Install and run the checks:
+
+```bash
+bun install
+bun run check
+```
+
+Run the harness directly:
+
+```bash
+CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run harness:flow
+```
+
+Run the same harness through repo-native workspace autonomy:
+
+```bash
+bun run workspace:doctor
+CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run workspace:run:harness
+```
+
+Start the Patch service when you want feed intake and admin state:
+
+```bash
+DATA_DIR=./data FEED_SOURCES_PATH=./feed-sources.json bun run --filter @peezy.tech/patch dev
+```
+
+## Read Next
+
+- First harness run: [Run the harness maintenance flow](tutorials/run-harness-maintenance-flow).
+- Feed intake: [Watch an upstream release](tutorials/watch-upstream-release).
+- System model: [Architecture](concepts/architecture).
+- Durable state: [JSONL state](reference/jsonl-state).
+- Retry and replay: [Flow event retry and replay](reference/dispatch-and-replay-flow-events).
+- Codex-specific model: [Codex fork model](concepts/codex-fork-model).
+- Service runner shape: [Forge service mode](concepts/forge-service-mode).
+
+## Repository Layout
+
+- `apps/patch`: Patch service, feed poller, JSONL store, admin API, Discord
+  output, and workspace backend adapter.
+- `flows/patch-moi-harness`: executable maintenance flow for the harness repos.
+- `harness`: upstream and maintained fork repositories used for rehearsal.
+- `.codex/workspace.toml`: optional repo-native workspace automation config.
+- `docs`: this Tome documentation site.

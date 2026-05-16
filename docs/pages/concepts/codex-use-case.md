@@ -5,9 +5,9 @@ description: How patch.moi applies to Codex fork maintenance.
 
 # Codex Use Case
 
-patch.moi watches GitHub OpenAI Codex branch and release feeds. Branch activity
-can notify operators. Release activity can emit a generic `upstream.release`
-flow event for codex-flow automation.
+patch.moi watches OpenAI Codex branch and release feeds. Branch activity can
+notify operators. Release activity can emit a deterministic `upstream.release`
+flow event that starts Codex fork maintenance.
 
 The concrete local model is the neighboring `../codex` checkout:
 
@@ -23,8 +23,8 @@ should add or confirm `https://github.com/openai/codex.git` before a release
 rebase.
 
 The Codex maintenance flow rebases the Peezy Codex fork patch stack onto a
-canonical upstream release tag. That is a patch application workspace, not a
-public release by itself.
+canonical upstream release tag. That is a patch application workspace job, not
+a public release by itself.
 
 Internal Codex use can track a fast-moving branch for local work. Public npm
 release can follow upstream release tags and trusted publishing. Those channels
@@ -35,4 +35,6 @@ In service mode, the same Codex maintenance work can run through a forge runner:
 patch.moi creates or updates the remote maintenance branch, triggers the runner,
 and records the resulting branch, artifact, check, or PR.
 
-See [Codex fork model](codex-fork-model) for the exact repo-derived model.
+See [Codex fork model](codex-fork-model) for the exact repo-derived model and
+[Workspaces and channels](workspaces-and-channels) for why maintenance,
+internal use, and public release stay separate.

@@ -5,9 +5,10 @@ description: Configure a release feed and turn an upstream release into patch ma
 
 # Watch an upstream release
 
-This tutorial creates the smallest useful patch.moi intake: one upstream release
-feed that becomes a stored update signal. That signal can later start a Codex
-workspace that rebases a patch stack.
+This tutorial creates the smallest useful patch.moi service path: one upstream
+release feed becomes a stored update signal, a deterministic flow event, a
+workspace dispatch, and a maintenance attempt record. The patch application work
+still happens in a local workspace, workspace backend, or forge runner.
 
 Before configuring the feed, make sure the maintained repository has a Git
 source of truth:
@@ -52,8 +53,9 @@ Create or edit `apps/patch/feed-sources.json`:
 }
 ```
 
-The target emits a generic `upstream.release` event. The event is a trigger for
-patch work; the patch commits still live in the maintained Git repository.
+The target emits a generic `upstream.release` event with a patch.moi-generated
+id. The event is a trigger for patch work; the patch commits still live in the
+maintained Git repository.
 
 ## 2. Start patch.moi
 
@@ -94,3 +96,7 @@ A matching codex-flow package or backend workspace can consume the
 
 Internal builds and public release jobs can then consume the candidate ref
 independently.
+
+For a local rehearsal before wiring feed intake, use the harness tutorial. It
+shows both the direct `bun run harness:flow` path and the repo-native
+`bun run workspace:run:harness` path.
