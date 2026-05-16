@@ -45,6 +45,7 @@ Root scripts delegate into the workspace:
 ```bash
 bun run check
 bun run test
+bun run patch.moi -- status
 bun run docs:dev
 bun run workspace:doctor
 ```
@@ -62,6 +63,14 @@ Local workspace execution runs from the process working directory when no
 workspace backend URL is set. That makes local mode useful for testing a patch
 application workspace before sending the same event to a configured workspace
 backend or service runner.
+
+The CLI uses the same dispatch and state path as the service. To record a local
+harness maintenance attempt:
+
+```bash
+CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run patch.moi -- run harness
+bun run patch.moi -- attempts
+```
 
 The repo-native workspace task runs the harness fixture through the same direct
 flow command:

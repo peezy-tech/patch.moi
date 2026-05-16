@@ -59,6 +59,12 @@ selects both installed Codex release steps, and that the Code Mode step still
 requires `CODEX_FLOWS_ENABLE_CODE_MODE=1`. Do not fabricate a full
 `openai/codex` release lifecycle just to exercise the flow.
 
+You can run the same safe match check through the CLI:
+
+```bash
+bun run patch.moi -- run codex-release --tag rust-v0.130.0 --dry-run
+```
+
 ## 3. Point Patch at a workspace backend
 
 ```bash

@@ -7,12 +7,11 @@ import {
   listWorkspaceEvents,
   listWorkspaceRuns,
   maintenanceAttemptForWorkspaceDispatch,
-  maintenanceAttemptWithWorkspaceRuns,
   replayWorkspaceEventDetailed,
 } from "./flow";
 import { jsonResponse, methodNotAllowed, textResponse } from "./http";
+import { syncMaintenanceAttempt } from "./maintenance";
 import { EventStore } from "./queue";
-import type { MaintenanceAttemptRecord } from "./types";
 
 export type ServerConfig = {
   dataDir: string;
@@ -145,43 +144,6 @@ async function handleMaintenanceAttempts(request: Request, config: ServerConfig,
     return jsonResponse({ attempt: next }, { status: 202 });
   }
   return methodNotAllowed();
-}
-
-async function syncMaintenanceAttempt(
-  store: EventStore,
-  attempt: MaintenanceAttemptRecord,
-): Promise<MaintenanceAttemptRecord> {
-  const runs = attempt.workspaceRunIds.length > 0
-    ? await Promise.all(attempt.workspaceRunIds.map((runId) => getWorkspaceRun(runId, { env: process.env })))
-    : (await listWorkspaceRuns({ env: process.env }, { eventId: attempt.eventId })).runs;
-  const next = maintenanceAttemptWithWorkspaceRuns(attempt, runs);
-  if (maintenanceAttemptChanged(attempt, next)) {
-    await store.appendMaintenanceAttempt(next);
-  }
-  return next;
-}
-
-function maintenanceAttemptChanged(
-  before: MaintenanceAttemptRecord,
-  after: MaintenanceAttemptRecord,
-): boolean {
-  return JSON.stringify({
-    status: before.status,
-    workspaceRunIds: before.workspaceRunIds,
-    workspaceRunStatuses: before.workspaceRunStatuses,
-    candidateRefs: before.candidateRefs,
-    message: before.message,
-    error: before.error,
-    completedAt: before.completedAt,
-  }) !== JSON.stringify({
-    status: after.status,
-    workspaceRunIds: after.workspaceRunIds,
-    workspaceRunStatuses: after.workspaceRunStatuses,
-    candidateRefs: after.candidateRefs,
-    message: after.message,
-    error: after.error,
-    completedAt: after.completedAt,
-  });
 }
 
 async function handleWorkspaceRuns(request: Request, config: ServerConfig): Promise<Response> {

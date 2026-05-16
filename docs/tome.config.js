@@ -27,6 +27,7 @@ export default {
     {
       group: "Reference",
       pages: [
+        "reference/cli",
         "reference/environment",
         "reference/feed-sources",
         "reference/http-api",

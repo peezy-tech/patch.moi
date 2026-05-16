@@ -67,6 +67,13 @@ Run the harness directly:
 CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run harness:flow
 ```
 
+Run the same harness through the patch.moi CLI and record `DATA_DIR` state:
+
+```bash
+CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run patch.moi -- run harness
+bun run patch.moi -- status
+```
+
 Run the same harness through repo-native workspace autonomy:
 
 ```bash
@@ -93,6 +100,7 @@ DATA_DIR=./data FEED_SOURCES_PATH=./feed-sources.json bun run --filter @peezy.te
 
 - First harness run: [Run the harness maintenance flow](tutorials/run-harness-maintenance-flow).
 - Feed intake: [Watch an upstream release](tutorials/watch-upstream-release).
+- CLI operations: [CLI](reference/cli).
 - System model: [Architecture](concepts/architecture).
 - Durable state: [JSONL state](reference/jsonl-state).
 - Retry and replay: [Flow event retry and replay](reference/dispatch-and-replay-flow-events).

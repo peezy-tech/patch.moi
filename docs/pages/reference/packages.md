@@ -8,7 +8,8 @@ description: Workspace packages in the patch.moi monorepo.
 ## `@peezy.tech/patch`
 
 The Bun service in `apps/patch`. It exports no public package API; its runtime
-entry point is `src/server.ts`.
+entry points are `src/server.ts` for the service and `src/cli.ts` for local
+operator commands.
 
 Responsibilities:
 
@@ -17,6 +18,8 @@ Responsibilities:
 - Store JSONL state.
 - Submit generic `FlowEvent` triggers through the patch.moi workspace backend
   adapter.
+- Provide the `patch.moi` CLI for setup, local maintenance runs, status,
+  retry, replay, and sync.
 - Serve admin inspection, retry, and replay endpoints.
 
 The service package does not store patch contents. Maintained patch stacks live

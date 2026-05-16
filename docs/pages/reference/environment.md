@@ -17,6 +17,8 @@ description: Runtime environment variables used by patch.moi.
 | `PATCH_FLOW_BACKEND_URL` | unset | Legacy workspace flow HTTP surface URL fallback. |
 | `PATCH_FLOW_DISPATCH_URL` | unset | Legacy or explicit flow dispatch URL fallback. |
 | `PATCH_FLOW_DISPATCH_SECRET` | unset | Legacy HMAC secret fallback. |
+| `PEEZY_CODEX_REPO` | `../codex` | Optional Codex checkout path for `patch.moi setup codex`. |
+| `CODEX_FLOWS_ENABLE_CODE_MODE` | unset | Required by Code Mode flow steps before local Code Mode execution. |
 | `CODEX_APP_SERVER_CODEX_COMMAND` | unset | Passed to local code-mode flow execution. |
 | `CODEX_HOME` | unset | Passed to local code-mode flow execution. |
 

@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "patch.moi": "./src/cli.ts"
+  },
   "scripts": {
     "build": "tsc --noEmit",
     "dev": "bun --watch src/server.ts",
     "harness:flow": "bun src/run-harness-flow.ts",
+    "patch.moi": "bun src/cli.ts",
     "start": "bun src/server.ts",
     "test": "bun test test/*.test.ts",
     "check:types": "tsc --noEmit",
