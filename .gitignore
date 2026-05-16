@@ -3,6 +3,7 @@ dist
 coverage
 *.log
 .env
+/.codex/workspace/local/
 data/
 apps/*/data/
 docs/out/

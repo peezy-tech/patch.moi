@@ -47,3 +47,17 @@ the Codex workspace backend where it fits.
 The rule is simple: use flow events for portable automation triggers, and use a
 patch.moi service for patch-stack product state: remote refs, workflow runs,
 pull requests, issues, checks, artifacts, and review status.
+
+## Repo-Native Workspace Automation
+
+`.codex/workspace.toml` is optional repo automation for operators. In this repo,
+the first task is a manual command task that runs the existing harness fixture.
+It does not change the patch.moi service path: feed intake still creates
+deterministic `FlowEvent` records, dispatch and replay still go through the
+patch.moi workspace backend adapter, and maintenance outcomes still sync into
+patch.moi-owned attempt records.
+
+Avoid implicit workspace `kind = "flow"` tasks for patch.moi maintenance unless
+the task supplies a complete explicit event. The default workspace flow fallback
+does not carry patch.moi's deterministic `id` and `receivedAt`, which are part
+of the dispatch and audit contract.

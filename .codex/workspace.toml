@@ -1,0 +1,7 @@
+[workspace]
+name = "patch.moi"
+
+[[workspace.tasks]]
+id = "harness-maintenance-fixture"
+kind = "command"
+command = ["bun", "run", "harness:flow"]

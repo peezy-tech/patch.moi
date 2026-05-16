@@ -110,9 +110,17 @@ flow:
 CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run harness:flow
 ```
 
-That direct command is local-mode execution. In the service shape, Patch writes
-the upstream update event, creates a maintenance attempt record, and hands the
-same flow event to the configured workspace backend.
+That direct command is local-mode execution. The repo-native workspace autonomy
+surface runs the same harness through a manual command task:
+
+```bash
+CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run workspace:run:harness
+```
+
+The workspace task is unscheduled, so `bun run workspace:tick` should not run
+the harness until a schedule is added. In the service shape, Patch writes the
+upstream update event, creates a maintenance attempt record, and hands the same
+flow event to the configured workspace backend.
 
 The default fixture targets `v0.1.3`, which should verify the current fork
 without changing it and report `candidateRefs` for the maintained fork branch.

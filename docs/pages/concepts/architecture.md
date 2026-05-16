@@ -26,6 +26,8 @@ The current service has these runtime pieces:
   workspace dispatch records under `DATA_DIR`.
 - The workspace backend adapter can execute locally or call a configured Codex
   workspace backend, such as `codex-workspace-backend-local`.
+- The optional repo-native `.codex/workspace.toml` exposes operator automation
+  tasks through `codex-flows workspace doctor|tick|run`.
 
 Those pieces are the intake layer. The patch-stack layer can run in local mode
 against a checkout, or in service mode through a remote forge workflow and
@@ -90,3 +92,9 @@ See [Forge service mode](forge-service-mode).
 patch.moi owns update intake and maintenance orchestration. Local workspaces or
 forge runners own the actual patch application work. Release channels own
 deployment and publishing decisions.
+
+The repo-native Codex workspace config is an operator convenience for running
+known maintenance commands from the repository. Its generated state under
+`.codex/workspace/<mode>` is run history for that automation surface; it does
+not replace `DATA_DIR` feed events, workspace dispatches, or maintenance
+attempt records.

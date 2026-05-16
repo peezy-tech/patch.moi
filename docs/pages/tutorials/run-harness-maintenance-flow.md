@@ -23,7 +23,7 @@ The fork should have `origin`, `upstream`, and `jojo` remotes. The flow can add
 the configured upstream remote when it is missing, but it will not invent the
 fork or service remotes.
 
-## 2. Run the fixture event
+## 2. Run the fixture event directly
 
 ```bash
 CODEX_FLOW_FETCH=0 \
@@ -36,7 +36,25 @@ flow should skip rebase work, run `npm test` and `npm run pack:dry-run` in the
 fork, report `candidateRefs` for the maintained fork branch, and leave the fork
 checkout unchanged.
 
-## 3. Rehearse a real upstream release
+## 3. Run the fixture through workspace autonomy
+
+The repo also exposes the same fixture as a manual codex-flows workspace task:
+
+```bash
+CODEX_FLOW_FETCH=0 \
+CODEX_FLOW_PUSH=0 \
+bun run workspace:run:harness
+```
+
+That task is defined in `.codex/workspace.toml` as a command task that runs
+`bun run harness:flow`. It is intentionally unscheduled, so `bun run
+workspace:tick` is safe by default and explicit `workspace run` remains the
+operator action.
+
+Use `bun run workspace:doctor` to inspect the repo-native workspace config and
+generated local run state.
+
+## 4. Rehearse a real upstream release
 
 Create a new upstream release in `harness/upstream`, then point the fixture or a
 feed event at the new tag:
@@ -62,7 +80,7 @@ Use an event file whose `payload.tag` is the new upstream tag. The flow rebases
 `harness/fork` onto that tag, verifies the fork package, reports the local
 candidate branch, and keeps pushes off.
 
-## 4. Push only after review
+## 5. Push only after review
 
 When the local result is the maintained fork state you want:
 

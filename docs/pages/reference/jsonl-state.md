@@ -27,3 +27,11 @@ If a runner checkout is lost, patch.moi should be able to recreate the
 maintenance context from remote Git refs and forge records. JSONL state explains
 feed, attempt, and dispatch history; Git and the forge remain the source of
 truth for patch contents and review state.
+
+## Codex Workspace State
+
+`codex-flows workspace` commands write operator run state under
+`.codex/workspace/<mode>`. Local state under `.codex/workspace/local/` is
+ignored by Git. Actions state under `.codex/workspace/actions/` is reserved for
+future CI or service use, where committing selected workspace state may be
+intentional.
