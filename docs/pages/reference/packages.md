@@ -71,7 +71,7 @@ patch.moi uses the consolidated codex-flows package surface:
 
 | Package | Published version | patch.moi use |
 | --- | --- | --- |
-| `@peezy.tech/codex-flows` | `^0.3.5` | flow runtime, Bun flow helpers, workspace backend protocol/client, Actions/local flow state, CLI automation, and backend bins |
+| `@peezy.tech/codex-flows` | `^0.4.0` | flow runtime, Bun flow helpers, workspace backend protocol/client, Actions/local flow state, CLI automation, and backend bins |
 
 patch.moi product state still belongs in the Patch service JSONL store by
 default. Generic flow backend state is execution/run state. It is useful for

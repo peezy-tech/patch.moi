@@ -33,6 +33,43 @@ The setup command reports the current branch, `origin`, `upstream`, worktree
 cleanliness, and whether the checkout is ready for an automated maintenance
 run. It does not clean local changes.
 
+## Patch Branches
+
+Patch branch commands operate on a local fork workspace. They do not push.
+
+Inspect whether a workspace has the expected `main`, `upstream`, and
+`patch/*` branches:
+
+```bash
+bun run patch.moi -- patch doctor --repo ../codex --json
+```
+
+List ordered local patch branches:
+
+```bash
+bun run patch.moi -- patch list --repo ../codex
+```
+
+Capture a feature branch as a single patch branch commit:
+
+```bash
+bun run patch.moi -- patch capture patch/010-packaging-build \
+  --repo ../codex \
+  --from packaging-work \
+  --base main \
+  --message "patch: packaging and release build"
+```
+
+Rebuild the maintained `main` branch from `upstream` plus all ordered
+`patch/*` branch tips:
+
+```bash
+bun run patch.moi -- patch rebuild --repo ../codex --base upstream --to main
+```
+
+If a cherry-pick conflicts, rebuild stops with `needs_intervention` and leaves
+the checkout in the conflicted state for the operator or a Code Mode turn.
+
 ## Run Maintenance
 
 Dispatch the harness release fixture through the patch.moi state path:

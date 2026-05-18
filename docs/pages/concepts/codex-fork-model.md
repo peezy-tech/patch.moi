@@ -11,27 +11,27 @@ truth and keep Patch state focused on orchestration.
 
 ## Observed Repository
 
-Observed on 2026-05-16:
+Observed on 2026-05-18:
 
 | Fact | Value |
 | --- | --- |
 | Checkout | `../codex` |
 | Current branch | `code-mode-exec-hooks` |
 | Fork remote | `origin` -> `https://github.com/peezy-tech/codex` |
+| Upstream remote | `upstream` -> `https://github.com/openai/codex.git` |
 | Branch tracking | `origin/code-mode-exec-hooks` |
 | Comparison branch | `origin/main` |
 | Patch branch head | `f8594cf39` |
 | Candidate tag at head | `rust-v0.130.0` |
-| Local working tree | untracked `codex-rs/code-mode/TYPECHECK_PLAN.md` |
+| Local working tree | clean |
 
-There is no `upstream` remote configured in this checkout. That is an important
-setup case for patch.moi: the CLI or service should detect it and offer to add
-`https://github.com/openai/codex.git` as the upstream remote before running a
-release maintenance workflow.
+This checkout has the canonical upstream remote now, but it has not yet been
+converted to the desired fork workspace shape. The current `code-mode-exec-hooks`
+branch is the legacy maintained output branch.
 
 ## Patch Stack
 
-The maintained patch stack is the commits on `code-mode-exec-hooks` ahead of
+The current patch stack is the commits on `code-mode-exec-hooks` ahead of
 `origin/main`:
 
 ```text
@@ -43,9 +43,18 @@ bc03f1afa Use fork-friendly Peezy npm release workflow
 f8594cf39 Use peezy.tech npm scope
 ```
 
-Those commits are the patch inventory. patch.moi should not duplicate them in a
-project file. It should read them from Git and record the runs that attempted to
-carry them forward.
+Those commits should become the initial patch inventory. The target shape is:
+
+```text
+main                         rebuildable maintained Codex fork output
+upstream                     local mirror of upstream/main
+patch/010-packaging-build    one logical packaging/release-build patch
+patch/020-code-mode-hooks    one logical Code Mode hooks/exec patch
+```
+
+patch.moi should not duplicate patch contents in a project file. It should read
+patch branch tips from Git and record the runs that attempted to carry them
+forward.
 
 ## What This Teaches patch.moi
 

@@ -12,6 +12,12 @@ import {
   type WorkspaceDispatchConfig,
 } from "./flow";
 import { syncMaintenanceAttempt } from "./maintenance";
+import {
+  capturePatchBranch,
+  inspectPatchWorkspace,
+  listPatchBranches,
+  rebuildPatchMain,
+} from "./patch-workspace";
 import { EventStore } from "./queue";
 import type { FlowDispatchRecord, FlowEvent, MaintenanceAttemptRecord } from "./types";
 import type { WorkspaceBackendFetch } from "./workspace-backend";
@@ -48,6 +54,10 @@ Usage:
   patch.moi run harness [--event FILE] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--json]
   patch.moi run codex-release --tag TAG [--repo openai/codex] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run event --file FILE [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--json]
+  patch.moi patch doctor [--repo DIR] [--main BRANCH] [--upstream BRANCH] [--json]
+  patch.moi patch list [--repo DIR] [--prefix patch/] [--json]
+  patch.moi patch capture patch/NAME --from BRANCH [--base BRANCH] [--repo DIR] [--message MSG] [--force] [--json]
+  patch.moi patch rebuild [--base BRANCH] [--to BRANCH] [--repo DIR] [--prefix patch/] [--json]
   patch.moi retry EVENT_ID [--workspace-root DIR] [--data-dir DIR] [--json]
   patch.moi replay EVENT_ID [--workspace-root DIR] [--data-dir DIR] [--json]
   patch.moi sync ATTEMPT_ID [--workspace-root DIR] [--data-dir DIR] [--json]
@@ -80,6 +90,8 @@ export async function runCli(args = Bun.argv.slice(2), options: CliOptions = {})
         return await handleAttempts(context);
       case "run":
         return await handleRun(parsed.positionals.slice(1), context);
+      case "patch":
+        return await handlePatch(parsed.positionals.slice(1), context);
       case "retry":
         return await handleDispatchOperation("retry", parsed.positionals[1], context);
       case "replay":
@@ -248,6 +260,93 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
     return await runEvent(await readFlowEvent(eventFile, context.workspaceRoot), context);
   }
   throw new UsageError(`unknown run target: ${target}`);
+}
+
+async function handlePatch(positionals: string[], context: CliContext): Promise<number> {
+  const action = positionals[0];
+  if (!action) {
+    throw new UsageError("patch requires doctor, list, capture, or rebuild");
+  }
+  const repoPath = patchRepoPath(context);
+  if (action === "doctor") {
+    const report = await inspectPatchWorkspace(repoPath, {
+      mainBranch: flagValue(context.parsed, "main") ?? "main",
+      upstreamBranch: flagValue(context.parsed, "upstream") ?? "upstream",
+      patchPrefix: flagValue(context.parsed, "prefix") ?? "patch/",
+    });
+    if (context.json) {
+      writeJson(context, report);
+    } else {
+      writeLine(context, `repo: ${report.path}`);
+      writeLine(context, `branch: ${report.currentBranch ?? "detached"}`);
+      writeLine(context, `main: ${report.mainExists ? report.mainBranch : "missing"}`);
+      writeLine(context, `upstream: ${report.upstreamExists ? report.upstreamBranch : "missing"}`);
+      writeLine(context, `patches: ${report.patchBranches.length}`);
+      writeLine(context, `worktree: ${report.clean ? "clean" : "dirty"}`);
+      writeLine(context, `ready: ${report.ready ? "yes" : "no"}`);
+      for (const issue of report.issues) {
+        writeLine(context, `- ${issue}`);
+      }
+    }
+    return report.ready ? 0 : 1;
+  }
+  if (action === "list") {
+    const branches = await listPatchBranches(repoPath, flagValue(context.parsed, "prefix") ?? "patch/");
+    if (context.json) {
+      writeJson(context, { repo: repoPath, patchBranches: branches });
+    } else {
+      for (const branch of branches) {
+        writeLine(context, `${branch.name} ${branch.sha.slice(0, 12)} ${branch.subject}`);
+      }
+    }
+    return 0;
+  }
+  if (action === "capture") {
+    const patchBranch = positionals[1];
+    const from = flagValue(context.parsed, "from");
+    if (!patchBranch) {
+      throw new UsageError("patch capture requires patch/NAME");
+    }
+    if (!from) {
+      throw new UsageError("patch capture requires --from");
+    }
+    const result = await capturePatchBranch(repoPath, {
+      patchBranch,
+      from,
+      base: flagValue(context.parsed, "base") ?? "main",
+      message: flagValue(context.parsed, "message"),
+      force: flagBool(context.parsed, "force"),
+    });
+    if (context.json) {
+      writeJson(context, result);
+    } else {
+      writeLine(context, `${result.status}: ${result.patchBranch}${result.sha ? ` ${result.sha}` : ""}`);
+    }
+    return 0;
+  }
+  if (action === "rebuild") {
+    const result = await rebuildPatchMain(repoPath, {
+      base: flagValue(context.parsed, "base") ?? "upstream",
+      targetBranch: flagValue(context.parsed, "to") ?? "main",
+      patchPrefix: flagValue(context.parsed, "prefix") ?? "patch/",
+    });
+    if (context.json) {
+      writeJson(context, result);
+    } else {
+      writeLine(context, `${result.status}: ${result.targetBranch}${result.afterSha ? ` ${result.afterSha}` : ""}`);
+      for (const patch of result.applied) {
+        writeLine(context, `- ${patch.name} ${patch.sha.slice(0, 12)}`);
+      }
+      if (result.failedPatch) {
+        writeLine(context, `failed: ${result.failedPatch.name}`);
+        if (result.error) {
+          writeLine(context, result.error);
+        }
+      }
+    }
+    return result.status === "needs_intervention" ? 1 : 0;
+  }
+  throw new UsageError(`unknown patch action: ${action}`);
 }
 
 async function runEvent(event: FlowEvent, context: CliContext): Promise<number> {
@@ -492,6 +591,10 @@ function workspaceConfig(context: CliContext): WorkspaceDispatchConfig {
     cwd: context.workspaceRoot,
     ...(context.fetchImpl ? { fetchImpl: context.fetchImpl } : {}),
   };
+}
+
+function patchRepoPath(context: CliContext): string {
+  return resolvePath(context.workspaceRoot, flagValue(context.parsed, "repo") ?? context.env.PATCH_MOI_PATCH_REPO ?? context.env.PEEZY_CODEX_REPO ?? "../codex");
 }
 
 function writeOutput(context: CliContext, payload: {

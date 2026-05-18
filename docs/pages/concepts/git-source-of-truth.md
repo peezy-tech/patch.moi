@@ -28,8 +28,10 @@ A maintained project needs these facts to be discoverable from Git:
 | Upstream project | `upstream` remote |
 | Maintained fork | `origin` remote |
 | Upstream release point | upstream tag or branch |
-| Patch stack | commits on a maintained branch ahead of upstream |
-| Candidate output | downstream branch or tag |
+| Maintained output | local or remote `main` branch |
+| Upstream branch mirror | local or remote `upstream` branch |
+| Patch inventory | ordered `patch/*` branch tips |
+| Candidate output | downstream branch, tag, check, or artifact |
 
 Names can be configured by the operator or service, but the facts should still
 resolve to Git refs.
@@ -74,10 +76,16 @@ That is a valid initial shape. patch.moi can use provider metadata to discover
 the parent repository, then materialize that discovery into Git by adding an
 `upstream` remote and fetching tags.
 
-The neighboring Codex fork demonstrates this exact case. `../codex` has
-`origin` set to `https://github.com/peezy-tech/codex` and a maintained
-`code-mode-exec-hooks` branch, but no `upstream` remote. patch.moi should infer
-the patch stack from Git and treat the missing upstream remote as setup work.
+The neighboring Codex fork used to demonstrate this initial setup case. It now
+has `origin` set to `https://github.com/peezy-tech/codex` and `upstream` set to
+`https://github.com/openai/codex.git`, but it still needs to move from the old
+single maintained branch into the `main`, `upstream`, and `patch/*` workspace
+shape.
+
+In that shape, `main` is rebuildable maintained output, `upstream` follows the
+canonical upstream branch, and each `patch/*` branch tip is one logical patch.
+Rebuilding `main` means checking out the upstream point and cherry-picking the
+ordered patch branch tips onto it.
 
 See [Codex fork model](codex-fork-model) for the concrete topology.
 

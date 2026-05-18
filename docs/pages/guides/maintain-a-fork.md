@@ -72,6 +72,21 @@ already has the release tag and upstream refs.
 
 ## 4. Verify matching before dispatch
 
+Before dispatching automation, inspect the fork workspace branch shape:
+
+```bash
+bun run patch.moi -- patch doctor --repo ../codex
+bun run patch.moi -- patch list --repo ../codex
+```
+
+For the Git-native patch model, `main` is the rebuildable maintained fork,
+`upstream` follows the canonical upstream branch, and ordered `patch/*` branches
+hold the logical patch commits. To rebuild the maintained branch locally:
+
+```bash
+bun run patch.moi -- patch rebuild --repo ../codex --base upstream --to main
+```
+
 Dry-run the release event. This records nothing and runs no maintenance work:
 
 ```bash
