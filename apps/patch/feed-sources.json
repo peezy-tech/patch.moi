@@ -88,6 +88,54 @@
         }
       },
       "pollIntervalSeconds": 300
+    },
+    {
+      "id": "npm-peezy-codex-releases",
+      "provider": "npm",
+      "url": "https://registry.npmjs.org/@peezy.tech%2Fcodex",
+      "event": "release",
+      "repo": {
+        "owner": "@peezy.tech",
+        "name": "codex",
+        "fullName": "@peezy.tech/codex",
+        "webUrl": "https://www.npmjs.com/package/@peezy.tech/codex"
+      },
+      "target": {
+        "mode": "workspace_flow",
+        "eventType": "downstream.release",
+        "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",
+        "workspaceSecretEnv": "PATCH_WORKSPACE_BACKEND_SECRET",
+        "payload": {
+          "provider": "npm",
+          "packageName": "@peezy.tech/codex",
+          "repo": "peezy-tech/codex"
+        }
+      },
+      "pollIntervalSeconds": 300
+    },
+    {
+      "id": "npm-peezy-codex-flows-releases",
+      "provider": "npm",
+      "url": "https://registry.npmjs.org/@peezy.tech%2Fcodex-flows",
+      "event": "release",
+      "repo": {
+        "owner": "@peezy.tech",
+        "name": "codex-flows",
+        "fullName": "@peezy.tech/codex-flows",
+        "webUrl": "https://www.npmjs.com/package/@peezy.tech/codex-flows"
+      },
+      "target": {
+        "mode": "workspace_flow",
+        "eventType": "downstream.release",
+        "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",
+        "workspaceSecretEnv": "PATCH_WORKSPACE_BACKEND_SECRET",
+        "payload": {
+          "provider": "npm",
+          "packageName": "@peezy.tech/codex-flows",
+          "repo": "peezy-tech/codex-flows"
+        }
+      },
+      "pollIntervalSeconds": 300
     }
   ]
 }

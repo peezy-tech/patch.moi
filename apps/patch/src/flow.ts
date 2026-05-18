@@ -54,6 +54,7 @@ function tagFromSignal(signal: FeedSignal): string | undefined {
 }
 
 function flowPayloadFromSignal(signal: FeedSignal): Record<string, unknown> {
+  const tag = tagFromSignal(signal);
   return {
     provider: signal.provider,
     event: signal.event,
@@ -68,7 +69,8 @@ function flowPayloadFromSignal(signal: FeedSignal): Record<string, unknown> {
     repoName: signal.repo.name,
     ref: signal.ref,
     sha: signal.sha,
-    tag: tagFromSignal(signal),
+    tag,
+    ...(signal.provider === "npm" && tag ? { packageName: signal.repo.fullName, version: tag } : {}),
     raw: signal.raw,
   };
 }
@@ -126,6 +128,26 @@ export function patchUpstreamBranchUpdateEvent(input: {
       repo: input.repo,
       ref: input.ref,
       ...(input.sha ? { sha: input.sha } : {}),
+    },
+  };
+}
+
+export function patchDownstreamReleaseEvent(input: {
+  packageName: string;
+  version: string;
+  repo?: string;
+  receivedAt?: string;
+}): FlowEvent<Record<string, unknown>> {
+  return {
+    id: `${serviceSource}:downstream.release:${input.packageName}:${input.version}`,
+    type: "downstream.release",
+    source: serviceSource,
+    receivedAt: input.receivedAt ?? new Date().toISOString(),
+    payload: {
+      packageName: input.packageName,
+      version: input.version,
+      tag: input.version,
+      ...(input.repo ? { repo: input.repo } : {}),
     },
   };
 }

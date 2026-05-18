@@ -50,12 +50,13 @@ The Codex release maintenance capabilities are installed from the neighboring
 codex-flows pack add ../codex-flows \
   --include openai-codex-bindings \
   --include peezy-codex-fork \
+  --include peezy-codex-flows-fork \
   --apply
 codex-flows pack doctor --json
 ```
 
-The current local install pins `openai-codex-bindings` and `peezy-codex-fork`
-in `.codex/pack-lock.json`. The codex-flows runtime discovers installed
+The current local install pins `openai-codex-bindings`, `peezy-codex-fork`, and
+`peezy-codex-flows-fork` in `.codex/pack-lock.json`. The codex-flows runtime discovers installed
 `.codex/flows/*` before source-owned `flows/*`, so the installed Codex
 capabilities are visible to patch.moi while the harness remains a source-owned
 repo flow.

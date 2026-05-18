@@ -96,6 +96,38 @@ export function parseFeedEntries(xml: string): FeedEntry[] {
   }).filter((entry) => entry.id);
 }
 
+export function parseNpmPackageEntries(text: string): FeedEntry[] {
+  const parsed = JSON.parse(text) as {
+    name?: string;
+    time?: Record<string, string>;
+    "dist-tags"?: Record<string, string>;
+  };
+  const packageName = parsed.name ?? "unknown-package";
+  const time = parsed.time ?? {};
+  return Object.entries(time)
+    .filter(([version]) => version !== "created" && version !== "modified")
+    .map(([version, publishedAt]) => ({
+      id: `npm:${packageName}:${version}`,
+      title: version,
+      url: `https://www.npmjs.com/package/${encodeURIComponent(packageName)}/v/${encodeURIComponent(version)}`,
+      author: "npm",
+      publishedAt,
+      raw: JSON.stringify({
+        packageName,
+        version,
+        distTags: distTagsForVersion(parsed["dist-tags"] ?? {}, version),
+      }),
+    }))
+    .sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
+}
+
+function distTagsForVersion(distTags: Record<string, string>, version: string): string[] {
+  return Object.entries(distTags)
+    .filter(([, tagVersion]) => tagVersion === version)
+    .map(([tag]) => tag)
+    .sort();
+}
+
 function shaFromEntry(entry: FeedEntry): string | undefined {
   const value = entry.url ?? entry.id;
   return value.match(/[0-9a-f]{40}/i)?.[0];
@@ -174,13 +206,14 @@ export async function pollFeedSource(input: {
   fetchImpl?: FetchLike;
 }): Promise<{ signals: FeedSignal[]; jobs: number; flowDispatches: number; primed: boolean }> {
   const response = await (input.fetchImpl ?? fetch)(input.source.url, {
-    headers: { accept: "application/atom+xml, application/rss+xml, application/xml, text/xml;q=0.9" },
+    headers: { accept: "application/json, application/atom+xml, application/rss+xml, application/xml, text/xml;q=0.9" },
   });
   if (!response.ok) {
     throw new Error(`Feed ${input.source.id} returned ${response.status}`);
   }
 
-  const entries = parseFeedEntries(await response.text());
+  const body = await response.text();
+  const entries = input.source.provider === "npm" ? parseNpmPackageEntries(body) : parseFeedEntries(body);
   const newestId = entries[0]?.id;
   const previous = input.state[input.source.id];
   const primed = !previous?.lastSeenId;

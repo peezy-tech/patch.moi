@@ -7,6 +7,7 @@ import { discoverFlows, matchingSteps, type FlowEvent as RuntimeFlowEvent } from
 import {
   dispatchWorkspaceEventDetailed,
   maintenanceAttemptForWorkspaceDispatch,
+  patchDownstreamReleaseEvent,
   patchUpstreamBranchUpdateEvent,
   patchUpstreamReleaseEvent,
   replayWorkspaceEventDetailed,
@@ -55,6 +56,7 @@ Usage:
   patch.moi run harness [--event FILE] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--json]
   patch.moi run codex-release --tag TAG [--repo openai/codex] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run codex-main [--sha SHA] [--repo openai/codex] [--ref refs/heads/main] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
+  patch.moi run downstream-release --package PACKAGE --version VERSION [--repo OWNER/NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run event --file FILE [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--json]
   patch.moi patch doctor [--repo DIR] [--main BRANCH] [--upstream BRANCH] [--json]
   patch.moi patch list [--repo DIR] [--prefix patch/] [--json]
@@ -234,7 +236,7 @@ async function handleAttempts(context: CliContext): Promise<number> {
 async function handleRun(positionals: string[], context: CliContext): Promise<number> {
   const target = positionals[0];
   if (!target) {
-    throw new UsageError("run requires harness, codex-release, or event");
+    throw new UsageError("run requires harness, codex-release, codex-main, downstream-release, or event");
   }
   if (target === "harness") {
     const eventFile = flagValue(context.parsed, "event") ??
@@ -264,6 +266,25 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
     });
     if (!flagBool(context.parsed, "dry-run") && !flagBool(context.parsed, "record-only")) {
       assertCodexDispatchAllowed(context, "codex-main");
+    }
+    return await runEvent(event, context);
+  }
+  if (target === "downstream-release") {
+    const packageName = flagValue(context.parsed, "package") ?? flagValue(context.parsed, "package-name");
+    const version = flagValue(context.parsed, "version") ?? flagValue(context.parsed, "tag");
+    if (!packageName) {
+      throw new UsageError("run downstream-release requires --package");
+    }
+    if (!version) {
+      throw new UsageError("run downstream-release requires --version");
+    }
+    const event = patchDownstreamReleaseEvent({
+      packageName,
+      version,
+      repo: flagValue(context.parsed, "repo"),
+    });
+    if (!flagBool(context.parsed, "dry-run") && !flagBool(context.parsed, "record-only")) {
+      assertCodexDispatchAllowed(context, "downstream-release");
     }
     return await runEvent(event, context);
   }

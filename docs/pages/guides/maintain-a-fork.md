@@ -100,6 +100,20 @@ The output should show the flow steps that will receive the event. For the
 current Codex release package, the expected fanout is the bindings update flow
 and the Codex fork release-cycle flow.
 
+When a Peezy downstream package release needs to refresh the codex-flows fork
+release candidate, dry-run the downstream release event:
+
+```bash
+bun run patch.moi -- run downstream-release \
+  --package @peezy.tech/codex \
+  --version 0.130.0 \
+  --repo peezy-tech/codex \
+  --dry-run
+```
+
+That event should match the `peezy-codex-flows-fork/release-fork` Bun step. The
+same flow also accepts `@peezy.tech/codex-flows` releases.
+
 Dry-run the upstream main branch update path separately:
 
 ```bash

@@ -98,6 +98,16 @@ bun run patch.moi -- run codex-main \
   --dry-run
 ```
 
+Verify a downstream Peezy package release without executing fork packaging:
+
+```bash
+bun run patch.moi -- run downstream-release \
+  --package @peezy.tech/codex-flows \
+  --version 0.4.0 \
+  --repo peezy-tech/codex-flows \
+  --dry-run
+```
+
 Dispatching the Codex release task requires an explicit execution surface. Use
 Actions/local mode when no workspace backend is running:
 
@@ -124,6 +134,7 @@ Read patch.moi-owned state:
 ```bash
 bun run patch.moi -- status
 bun run patch.moi -- events --type upstream.release
+bun run patch.moi -- events --type downstream.release
 bun run patch.moi -- dispatches --status failed
 bun run patch.moi -- attempts --status needs_intervention
 ```

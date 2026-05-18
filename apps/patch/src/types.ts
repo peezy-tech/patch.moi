@@ -1,4 +1,4 @@
-export type FeedProvider = "codeberg" | "github" | "jojo";
+export type FeedProvider = "codeberg" | "github" | "jojo" | "npm";
 
 export type FeedEventName = "push" | "release";
 

@@ -116,6 +116,38 @@ describe("patch.moi CLI", () => {
     });
   });
 
+  test("dry-runs downstream release matching for codex-flows fork releases", async () => {
+    const dryRun = await invoke([
+      "run",
+      "downstream-release",
+      "--package",
+      "@peezy.tech/codex-flows",
+      "--version",
+      "0.4.0",
+      "--repo",
+      "peezy-tech/codex-flows",
+      "--workspace-root",
+      workspaceRoot,
+      "--dry-run",
+      "--json",
+    ]);
+
+    expect(dryRun.code).toBe(0);
+    expect(JSON.parse(dryRun.stdout)).toMatchObject({
+      event: {
+        type: "downstream.release",
+        payload: {
+          packageName: "@peezy.tech/codex-flows",
+          version: "0.4.0",
+          repo: "peezy-tech/codex-flows",
+        },
+      },
+      matches: [
+        { flow: "peezy-codex-flows-fork", step: "release-fork", runner: "bun" },
+      ],
+    });
+  });
+
   test("syncs a maintenance attempt from workspace run state", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "patch-cli-"));
     const store = new EventStore(dataDir);

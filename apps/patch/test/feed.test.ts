@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
-import { loadSources, parseFeedEntries, pollFeedsOnce, signalFromEntry } from "../src/feed";
-import { dispatchWorkspaceEvent, patchUpstreamReleaseEvent } from "../src/flow";
+import { loadSources, parseFeedEntries, parseNpmPackageEntries, pollFeedsOnce, signalFromEntry } from "../src/feed";
+import { dispatchWorkspaceEvent, patchDownstreamReleaseEvent, patchUpstreamReleaseEvent } from "../src/flow";
 import type { FeedSourceConfig } from "../src/types";
 
 const atom = `<?xml version="1.0"?>
@@ -34,6 +34,19 @@ const rss = `<?xml version="1.0"?>
     <pubDate>Tue, 12 May 2026 10:00:00 +0000</pubDate>
   </item>
 </channel></rss>`;
+
+const npmPackage = JSON.stringify({
+  name: "@peezy.tech/codex-flows",
+  "dist-tags": {
+    latest: "0.4.0",
+  },
+  time: {
+    created: "2026-05-10T00:00:00.000Z",
+    modified: "2026-05-17T00:00:00.000Z",
+    "0.3.6": "2026-05-15T00:00:00.000Z",
+    "0.4.0": "2026-05-17T00:00:00.000Z",
+  },
+});
 
 const source: FeedSourceConfig = {
   id: "github-openai-codex-main",
@@ -69,6 +82,15 @@ describe("feed watcher", () => {
     });
   });
 
+  test("parses npm package releases newest first", () => {
+    expect(parseNpmPackageEntries(npmPackage).map((entry) => entry.title)).toEqual(["0.4.0", "0.3.6"]);
+    expect(parseNpmPackageEntries(npmPackage)[0]).toMatchObject({
+      id: "npm:@peezy.tech/codex-flows:0.4.0",
+      author: "npm",
+      publishedAt: "2026-05-17T00:00:00.000Z",
+    });
+  });
+
   test("normalizes commit feed entries into push signals", () => {
     const signal = signalFromEntry(source, parseFeedEntries(atom)[0]);
     expect(signal).toMatchObject({
@@ -88,6 +110,8 @@ describe("feed watcher", () => {
       "codeberg-forgejo-releases",
       "github-openai-codex-main",
       "github-openai-codex-releases",
+      "npm-peezy-codex-releases",
+      "npm-peezy-codex-flows-releases",
     ]);
     expect(sources.find((item) => item.id === "github-openai-codex-main")?.target).toMatchObject({
       mode: "workspace_flow",
@@ -272,6 +296,67 @@ describe("feed watcher", () => {
       upstreamRef: "refs/heads/main",
       upstreamSha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     });
+  });
+
+  test("later npm release polls dispatch downstream release events", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "patch-feed-"));
+    const sourcesPath = join(dataDir, "sources.json");
+    const releaseSource: FeedSourceConfig = {
+      id: "npm-peezy-codex-flows-releases",
+      provider: "npm",
+      url: "https://registry.npmjs.org/@peezy.tech%2Fcodex-flows",
+      event: "release",
+      repo: {
+        owner: "@peezy.tech",
+        name: "codex-flows",
+        fullName: "@peezy.tech/codex-flows",
+        webUrl: "https://www.npmjs.com/package/@peezy.tech/codex-flows",
+      },
+      target: {
+        mode: "workspace_flow",
+        eventType: "downstream.release",
+        workspaceUrlEnv: "WORKSPACE_URL",
+        payload: {
+          packageName: "@peezy.tech/codex-flows",
+          repo: "peezy-tech/codex-flows",
+        },
+      },
+    };
+    await writeFile(sourcesPath, JSON.stringify({ sources: [releaseSource] }), "utf8");
+    await writeFile(join(dataDir, "feed-state.json"), JSON.stringify({
+      "npm-peezy-codex-flows-releases": {
+        lastSeenId: "npm:@peezy.tech/codex-flows:0.3.6",
+        lastCheckedAt: "2026-05-15T00:00:00.000Z",
+      },
+    }), "utf8");
+
+    let dispatchedBody = "";
+    await pollFeedsOnce({
+      dataDir,
+      sourcesPath,
+      discord: { enabled: false, notifyEvents: new Set(["release"]) },
+      flowDispatch: {
+        env: {
+          WORKSPACE_URL: "https://workspace.example/events",
+        },
+        fetchImpl: async (_url, init) => {
+          dispatchedBody = String(init.body);
+          const eventId = JSON.parse(String(init.body ?? "{}")).id;
+          return Response.json({ status: "accepted", eventId, runIds: [], matched: 1 }, { status: 202 });
+        },
+      },
+    }, async () => {
+      return new Response(npmPackage, { status: 200 });
+    });
+
+    const flowEventText = await readFile(join(dataDir, "flow-events.jsonl"), "utf8");
+    const flowEvent = JSON.parse(flowEventText.trim()) as Record<string, any>;
+    expect(flowEvent.type).toBe("downstream.release");
+    expect(flowEvent.payload.packageName).toBe("@peezy.tech/codex-flows");
+    expect(flowEvent.payload.version).toBe("0.4.0");
+    expect(flowEvent.payload.tag).toBe("0.4.0");
+    expect(flowEvent.payload.repo).toBe("peezy-tech/codex-flows");
+    expect(JSON.parse(dispatchedBody).id).toBe(flowEvent.id);
   });
 
   test("workspace dispatch uses default workspace backend env names", async () => {
@@ -516,6 +601,26 @@ describe("feed watcher", () => {
       payload: {
         repo: "openai/codex",
         tag: "rust-v1.2.3",
+      },
+    });
+  });
+
+  test("Patch downstream release helper creates deterministic product events", () => {
+    expect(patchDownstreamReleaseEvent({
+      packageName: "@peezy.tech/codex-flows",
+      version: "0.4.0",
+      repo: "peezy-tech/codex-flows",
+      receivedAt: "2026-05-17T00:00:00.000Z",
+    })).toEqual({
+      id: "patch:downstream.release:@peezy.tech/codex-flows:0.4.0",
+      type: "downstream.release",
+      source: "patch",
+      receivedAt: "2026-05-17T00:00:00.000Z",
+      payload: {
+        packageName: "@peezy.tech/codex-flows",
+        version: "0.4.0",
+        tag: "0.4.0",
+        repo: "peezy-tech/codex-flows",
       },
     });
   });
