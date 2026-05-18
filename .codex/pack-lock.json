@@ -7,12 +7,12 @@
       "source": {
         "input": "../codex-flows",
         "type": "local",
-        "commit": "58c91cfa12706213a072c6c67ae3910b6b95f120"
+        "commit": "d509daac3ac1682dd608a80c1fa7366661abf1d8"
       },
       "sourcePath": "flows/openai-codex-bindings",
       "destinationPath": ".codex/flows/openai-codex-bindings",
       "contentHash": "sha256:6bfd8118be031c145813dcacbf47f6939b2460aeeb0d8959075e6018297d0403",
-      "installedAt": "2026-05-18T19:29:51.103Z"
+      "installedAt": "2026-05-18T19:37:00.080Z"
     },
     {
       "name": "peezy-codex-flows-fork",
@@ -20,12 +20,12 @@
       "source": {
         "input": "../codex-flows",
         "type": "local",
-        "commit": "58c91cfa12706213a072c6c67ae3910b6b95f120"
+        "commit": "d509daac3ac1682dd608a80c1fa7366661abf1d8"
       },
       "sourcePath": "flows/peezy-codex-flows-fork",
       "destinationPath": ".codex/flows/peezy-codex-flows-fork",
-      "contentHash": "sha256:149c21269fe4de463f9bdf8e8086f8aae9601c8f319d62c08749c8f65db4a465",
-      "installedAt": "2026-05-18T19:29:51.103Z"
+      "contentHash": "sha256:6702957e389eeb36d07fe20f3e25a8823d20d57602b5b6d8afb43e0a46aa6755",
+      "installedAt": "2026-05-18T19:37:00.080Z"
     },
     {
       "name": "peezy-codex-fork",
@@ -33,12 +33,12 @@
       "source": {
         "input": "../codex-flows",
         "type": "local",
-        "commit": "58c91cfa12706213a072c6c67ae3910b6b95f120"
+        "commit": "d509daac3ac1682dd608a80c1fa7366661abf1d8"
       },
       "sourcePath": "flows/peezy-codex-fork",
       "destinationPath": ".codex/flows/peezy-codex-fork",
       "contentHash": "sha256:613f0733ebea22b191ed6e706ad09e05a2dc97aad16cdbe14db01065a1b06582",
-      "installedAt": "2026-05-18T19:29:51.103Z"
+      "installedAt": "2026-05-18T19:37:00.080Z"
     }
   ]
 }

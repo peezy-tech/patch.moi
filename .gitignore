@@ -5,6 +5,7 @@ coverage
 .env
 /.codex/workspace/local/
 /.codex/workspace/actions/
+/.codex/pack-backups/
 data/
 apps/*/data/
 docs/out/
