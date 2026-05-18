@@ -12,6 +12,10 @@ jobs:
     runs-on: bun
     steps:
       - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y git docker.io
       - name: Install
         run: bun install --frozen-lockfile
       - name: Typecheck
@@ -23,7 +27,4 @@ jobs:
       - name: Build docs
         run: bun run docs:build
       - name: Build container
-        run: |
-          apt-get update
-          apt-get install -y docker.io
-          docker build -t patch:ci .
+        run: docker build -t patch:ci .
