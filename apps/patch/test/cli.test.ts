@@ -67,7 +67,7 @@ describe("patch.moi CLI", () => {
       "rust-v0.130.0",
       "--workspace-root",
       workspaceRoot,
-    ]);
+    ], { env: {} });
     expect(blocked.code).toBe(2);
     expect(blocked.stderr).toContain("requires PATCH_WORKSPACE_BACKEND_URL, CODEX_WORKSPACE_MODE=actions, or --allow-local");
 
