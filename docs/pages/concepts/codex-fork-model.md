@@ -16,18 +16,19 @@ Observed on 2026-05-18:
 | Fact | Value |
 | --- | --- |
 | Checkout | `../codex` |
-| Current branch | `code-mode-exec-hooks` |
+| Current branch | `main` |
 | Fork remote | `origin` -> `https://github.com/peezy-tech/codex` |
 | Upstream remote | `upstream` -> `https://github.com/openai/codex.git` |
-| Branch tracking | `origin/code-mode-exec-hooks` |
-| Comparison branch | `origin/main` |
-| Patch branch head | `f8594cf39` |
-| Candidate tag at head | `rust-v0.130.0` |
+| Maintained output | `main` -> `c9e10c80c` |
+| Upstream branch mirror | `upstream` -> `upstream/main` |
+| Legacy branch | `code-mode-exec-hooks` -> `f8594cf39` |
+| Candidate tag at legacy head | `rust-v0.130.0` |
 | Local working tree | clean |
 
-This checkout has the canonical upstream remote now, but it has not yet been
-converted to the desired fork workspace shape. The current `code-mode-exec-hooks`
-branch is the legacy maintained output branch.
+This checkout has the canonical upstream remote and has been converted to the
+local fork workspace shape. The current `main` branch is rebuilt from
+`origin/main` plus the two patch branches below; its tree matches the legacy
+`code-mode-exec-hooks` branch.
 
 ## Patch Stack
 
@@ -43,7 +44,7 @@ bc03f1afa Use fork-friendly Peezy npm release workflow
 f8594cf39 Use peezy.tech npm scope
 ```
 
-Those commits should become the initial patch inventory. The target shape is:
+Those commits are now represented by the local patch inventory:
 
 ```text
 main                         rebuildable maintained Codex fork output
@@ -55,6 +56,11 @@ patch/020-code-mode-hooks    one logical Code Mode hooks/exec patch
 patch.moi should not duplicate patch contents in a project file. It should read
 patch branch tips from Git and record the runs that attempted to carry them
 forward.
+
+Rebuilding `main` from the latest `upstream` branch currently stops on
+`patch/010-packaging-build` conflicts in the release workflow and Cargo lockfile.
+That is the next place where the Code Mode conflict-repair loop should take
+over.
 
 ## What This Teaches patch.moi
 

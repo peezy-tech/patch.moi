@@ -77,10 +77,9 @@ the parent repository, then materialize that discovery into Git by adding an
 `upstream` remote and fetching tags.
 
 The neighboring Codex fork used to demonstrate this initial setup case. It now
-has `origin` set to `https://github.com/peezy-tech/codex` and `upstream` set to
-`https://github.com/openai/codex.git`, but it still needs to move from the old
-single maintained branch into the `main`, `upstream`, and `patch/*` workspace
-shape.
+has `origin` set to `https://github.com/peezy-tech/codex`, `upstream` set to
+`https://github.com/openai/codex.git`, local `main` and `upstream` branches, and
+two ordered `patch/*` branches for the current fork changes.
 
 In that shape, `main` is rebuildable maintained output, `upstream` follows the
 canonical upstream branch, and each `patch/*` branch tip is one logical patch.
