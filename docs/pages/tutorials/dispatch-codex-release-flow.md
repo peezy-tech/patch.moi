@@ -7,8 +7,9 @@ description: Connect the OpenAI Codex release feed to a Codex patch-stack mainte
 
 This tutorial connects upstream OpenAI Codex releases to Codex fork
 maintenance. Patch records the upstream release and dispatches a deterministic
-event. The receiving workspace or runner rebases the maintained patch stack
-onto the upstream release tag and verifies the candidate.
+event. The receiving workspace or runner rebuilds the maintained `main` branch
+from the upstream release tag plus the ordered `patch/*` branches, then
+verifies the candidate.
 
 ## 1. Use the release source
 
@@ -18,7 +19,13 @@ the upstream repository and release tag in the payload.
 
 The maintained Codex fork should still be modeled in Git. In the neighboring
 `../codex` checkout, `origin` is `https://github.com/peezy-tech/codex` and
-`code-mode-exec-hooks` is the maintained patch branch.
+the local branch shape is:
+
+```text
+main        rebuildable maintained fork output
+upstream    local mirror of upstream/main
+patch/*     ordered one-commit logical patches
+```
 
 Before running release maintenance, make sure the checkout has a canonical
 upstream remote:
@@ -26,13 +33,13 @@ upstream remote:
 ```bash
 cd ../codex
 git remote get-url upstream || git remote add upstream https://github.com/openai/codex.git
-git fetch upstream --tags --prune
+git fetch upstream --tags --prune main
 git fetch origin --prune
 git status --short --branch
 ```
 
 If `git status` shows local changes or untracked files, resolve them before an
-automated rebase.
+automated rebuild.
 
 ## 2. Install the Codex release capabilities
 
@@ -55,8 +62,8 @@ repo flow.
 
 Safe local verification stops at event matching and runner gating. The test
 suite confirms that a stored `upstream.release` event for `openai/codex`
-selects both installed Codex release steps, and that the Code Mode step still
-requires `CODEX_FLOWS_MODE=code-mode`. Do not fabricate a full
+selects both installed release steps, and that the Code Mode step still requires
+`CODEX_FLOWS_MODE=code-mode`. Do not fabricate a full
 `openai/codex` release lifecycle just to exercise the flow.
 
 You can run the same safe match check through the CLI:
@@ -113,10 +120,10 @@ or `X-Patch-Admin-Token: <token>`.
 Patch dispatches the generic event. The installed Codex release flow or
 workspace owns the work that happens next:
 
-- fetch upstream tags
+- fetch upstream main and tags
 - resolve the release tag
-- rebase the maintained patch branch
-- collect conflict context when the rebase stops
+- rebuild `main` from the release tag plus ordered `patch/*` branches
+- collect conflict context when a cherry-pick stops
 - run the configured checks
 - optionally push a candidate ref
 

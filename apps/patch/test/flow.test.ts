@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { FlowRunView } from "@peezy.tech/codex-flows/flow-runtime/client";
 import {
+  patchUpstreamBranchUpdateEvent,
   maintenanceAttemptForWorkspaceDispatch,
   maintenanceAttemptWithWorkspaceRuns,
   patchUpstreamReleaseEvent,
@@ -87,6 +88,25 @@ describe("maintenance attempt sync", () => {
     expect(attempt.candidateRefs).toMatchObject([
       { ref: "refs/heads/codex-candidate", sha: "def" },
     ]);
+  });
+
+  test("Patch upstream branch helper creates deterministic product events", () => {
+    expect(patchUpstreamBranchUpdateEvent({
+      repo: "openai/codex",
+      ref: "refs/heads/main",
+      sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      receivedAt: "2026-05-16T00:00:00.000Z",
+    })).toEqual({
+      id: "patch:upstream.branch_update:openai/codex:refs/heads/main:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      type: "upstream.branch_update",
+      source: "patch",
+      receivedAt: "2026-05-16T00:00:00.000Z",
+      payload: {
+        repo: "openai/codex",
+        ref: "refs/heads/main",
+        sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      },
+    });
   });
 });
 

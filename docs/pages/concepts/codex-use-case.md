@@ -5,26 +5,27 @@ description: How patch.moi applies to Codex fork maintenance.
 
 # Codex Use Case
 
-patch.moi watches OpenAI Codex branch and release feeds. Branch activity can
-notify operators. Release activity can emit a deterministic `upstream.release`
-flow event that starts Codex fork maintenance.
+patch.moi watches OpenAI Codex branch and release feeds. Branch activity emits
+deterministic `upstream.branch_update` events for main-branch maintenance.
+Release activity emits deterministic `upstream.release` events for release-cycle
+maintenance.
 
 The concrete local model is the neighboring `../codex` checkout:
 
 - `origin` points at `https://github.com/peezy-tech/codex`.
-- `code-mode-exec-hooks` is the maintained patch branch.
-- `origin/main` is the current comparison branch.
-- `rust-v0.130.0` is a downstream tag on the maintained branch head.
-- the patch stack contains Code Mode exec/replay work and Peezy npm release
-  changes.
+- `main` is the rebuildable maintained fork output.
+- `upstream` mirrors `upstream/main`.
+- ordered `patch/*` branches hold the logical patch commits.
+- `rust-v0.130.0` is a downstream tag on the legacy maintained branch head.
+- the current patch inventory contains Code Mode exec/replay work and Peezy npm
+  release changes.
 
-That checkout currently lacks an `upstream` remote, so a patch.moi setup flow
-should add or confirm `https://github.com/openai/codex.git` before a release
-rebase.
+That checkout has the canonical `upstream` remote, so maintenance can fetch
+OpenAI Codex main and release tags before rebuilding the fork output branch.
 
-The Codex maintenance flow rebases the Peezy Codex fork patch stack onto a
-canonical upstream release tag. That is a patch application workspace job, not
-a public release by itself.
+The Codex maintenance flow rebuilds the Peezy Codex fork from a canonical
+upstream base plus ordered patch branches. That is a patch application workspace
+job, not a public release by itself.
 
 Internal Codex use can track a fast-moving branch for local work. Public npm
 release can follow upstream release tags and trusted publishing. Those channels

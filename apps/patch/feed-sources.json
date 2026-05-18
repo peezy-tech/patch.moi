@@ -53,10 +53,15 @@
         "defaultBranch": "main"
       },
       "target": {
-        "provider": "github",
-        "repoFullName": "peezy-tech/codex",
-        "branch": "main",
-        "mode": "notify_only"
+        "mode": "workspace_flow",
+        "eventType": "upstream.branch_update",
+        "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",
+        "workspaceSecretEnv": "PATCH_WORKSPACE_BACKEND_SECRET",
+        "payload": {
+          "provider": "github",
+          "repo": "openai/codex",
+          "ref": "refs/heads/main"
+        }
       },
       "pollIntervalSeconds": 300
     },

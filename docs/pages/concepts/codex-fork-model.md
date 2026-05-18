@@ -68,8 +68,8 @@ The Codex fork makes the desired model concrete:
 
 - `origin/main` is a useful local comparison baseline, but a real upstream
   remote is still needed for canonical release tags.
-- `code-mode-exec-hooks` is the maintained patch branch, but internal use is
-  not simply "run from this branch."
+- `main` is the maintained output branch; `code-mode-exec-hooks` remains only a
+  legacy reference for the initial conversion.
 - `rust-v0.130.0` at the branch head is a downstream candidate or release tag.
 - the npm package rename to `@peezy.tech/*` is part of the patch stack, not a
   Patch service setting.
@@ -91,12 +91,16 @@ git remote get-url origin
 git remote get-url upstream || git remote add upstream https://github.com/openai/codex.git
 git fetch upstream --tags --prune
 git fetch origin --prune
-git rev-list --oneline origin/main..code-mode-exec-hooks
+git branch --list 'patch/*'
+git status --short --branch
 ```
 
 For an upstream release event, the workspace can resolve the upstream tag,
-rebase `code-mode-exec-hooks`, run Codex-specific checks, and push a candidate
-branch or tag when policy allows.
+rebuild `main` from that tag plus ordered `patch/*` branches, run Codex-specific
+checks, and push a candidate branch or tag when policy allows. For an upstream
+main commit event, the workspace updates the local `upstream` branch from
+`upstream/main` and rebuilds `main` from that branch plus the same patch
+inventory.
 
 In service mode, that work should be triggered through the remote fork host. For
 example, patch.moi can create or update a maintenance branch on GitHub, trigger
@@ -109,7 +113,7 @@ service's durable execution surface.
 Feature development should happen in a separate workspace or branch. A new
 custom feature starts from the current maintained branch, produces commits, and
 only becomes part of the maintained patch stack after it is intentionally merged
-or rebased into `code-mode-exec-hooks`.
+or captured into a single logical `patch/*` branch.
 
 ## Channel Split
 

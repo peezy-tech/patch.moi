@@ -38,9 +38,9 @@ The workspace may be local or runner-managed. The patch stack itself still lives
 in Git. Repo-native `codex-flows workspace` tasks are operator automation for
 running known commands; they are not a separate patch-stack database.
 
-In the current Codex fork, this means carrying the commits on
-`code-mode-exec-hooks` ahead of `origin/main` onto a canonical upstream release
-tag from `openai/codex`.
+In the current Codex fork, this means rebuilding `main` from a canonical
+OpenAI Codex release tag or `upstream/main` plus the ordered local `patch/*`
+branches.
 
 ## Feature Development Workspace
 

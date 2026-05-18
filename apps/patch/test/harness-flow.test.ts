@@ -66,7 +66,7 @@ describe("patch.moi harness flow", () => {
 
     expect(matches.map(({ flow, step }) => `${flow.manifest.name}/${step.name}`)).toEqual([
       "openai-codex-bindings/regenerate-bindings",
-      "peezy-codex-fork/rebase-patch-stack",
+      "peezy-codex-fork/release-cycle",
     ]);
 
     const codeModeMatch = matches.find((entry) => entry.flow.manifest.name === "peezy-codex-fork");

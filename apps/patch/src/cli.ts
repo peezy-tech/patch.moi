@@ -7,6 +7,7 @@ import { discoverFlows, matchingSteps, type FlowEvent as RuntimeFlowEvent } from
 import {
   dispatchWorkspaceEventDetailed,
   maintenanceAttemptForWorkspaceDispatch,
+  patchUpstreamBranchUpdateEvent,
   patchUpstreamReleaseEvent,
   replayWorkspaceEventDetailed,
   type WorkspaceDispatchConfig,
@@ -53,6 +54,7 @@ Usage:
   patch.moi attempts [--event-id ID] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
   patch.moi run harness [--event FILE] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--json]
   patch.moi run codex-release --tag TAG [--repo openai/codex] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
+  patch.moi run codex-main [--sha SHA] [--repo openai/codex] [--ref refs/heads/main] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run event --file FILE [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--json]
   patch.moi patch doctor [--repo DIR] [--main BRANCH] [--upstream BRANCH] [--json]
   patch.moi patch list [--repo DIR] [--prefix patch/] [--json]
@@ -252,6 +254,19 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
     }
     return await runEvent(event, context);
   }
+  if (target === "codex-main") {
+    const repo = flagValue(context.parsed, "repo") ?? "openai/codex";
+    const ref = flagValue(context.parsed, "ref") ?? "refs/heads/main";
+    const event = patchUpstreamBranchUpdateEvent({
+      repo,
+      ref,
+      sha: flagValue(context.parsed, "sha"),
+    });
+    if (!flagBool(context.parsed, "dry-run") && !flagBool(context.parsed, "record-only")) {
+      assertCodexDispatchAllowed(context, "codex-main");
+    }
+    return await runEvent(event, context);
+  }
   if (target === "event") {
     const eventFile = flagValue(context.parsed, "file");
     if (!eventFile) {
@@ -431,7 +446,7 @@ async function handleSetup(positionals: string[], context: CliContext): Promise<
   const repoPath = resolvePath(context.workspaceRoot, flagValue(context.parsed, "repo") ?? context.env.PEEZY_CODEX_REPO ?? "../codex");
   const upstreamRemote = flagValue(context.parsed, "upstream-remote") ?? "upstream";
   const upstreamUrl = flagValue(context.parsed, "upstream-url") ?? "https://github.com/openai/codex.git";
-  const targetBranch = flagValue(context.parsed, "target-branch") ?? "code-mode-exec-hooks";
+  const targetBranch = flagValue(context.parsed, "target-branch") ?? "main";
   const apply = flagBool(context.parsed, "apply");
   const repo = await inspectGitRepo(repoPath, {
     upstreamRemote,
@@ -560,7 +575,7 @@ async function appendFlowEventIfMissing(store: EventStore, event: FlowEvent): Pr
   return true;
 }
 
-function assertCodexDispatchAllowed(context: CliContext): void {
+function assertCodexDispatchAllowed(context: CliContext, command = "codex-release"): void {
   if (
     flagBool(context.parsed, "allow-local") ||
     workspaceBackendConfigured(context.env) ||
@@ -569,7 +584,7 @@ function assertCodexDispatchAllowed(context: CliContext): void {
     return;
   }
   throw new UsageError(
-    "codex-release dispatch requires PATCH_WORKSPACE_BACKEND_URL, CODEX_WORKSPACE_MODE=actions, or --allow-local; use --dry-run to verify matching without executing release work",
+    `${command} dispatch requires PATCH_WORKSPACE_BACKEND_URL, CODEX_WORKSPACE_MODE=actions, or --allow-local; use --dry-run to verify matching without executing maintenance work`,
   );
 }
 

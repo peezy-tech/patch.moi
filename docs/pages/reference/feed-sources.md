@@ -51,6 +51,7 @@ adapter. The flow payload includes provider, event, source id, entry id, title,
 URL, author, published time, repository fields, ref, SHA, tag, and raw feed
 metadata. Values from `target.payload` are merged last.
 
-For release maintenance, use a stable event type such as `upstream.release` and
-include only routing hints in `payload`. Avoid copying branch topology into the
-feed source when it can be read from the repository.
+For release maintenance, use a stable event type such as `upstream.release`.
+For upstream main movement, use `upstream.branch_update`. Include only routing
+hints in `payload`; avoid copying branch topology into the feed source when it
+can be read from the repository.

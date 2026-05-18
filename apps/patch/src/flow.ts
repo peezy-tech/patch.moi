@@ -111,6 +111,25 @@ export function patchUpstreamReleaseEvent(input: {
   };
 }
 
+export function patchUpstreamBranchUpdateEvent(input: {
+  repo: string;
+  ref: string;
+  sha?: string;
+  receivedAt?: string;
+}): FlowEvent<Record<string, unknown>> {
+  return {
+    id: `${serviceSource}:upstream.branch_update:${input.repo}:${input.ref}${input.sha ? `:${input.sha}` : ""}`,
+    type: "upstream.branch_update",
+    source: serviceSource,
+    receivedAt: input.receivedAt ?? new Date().toISOString(),
+    payload: {
+      repo: input.repo,
+      ref: input.ref,
+      ...(input.sha ? { sha: input.sha } : {}),
+    },
+  };
+}
+
 export async function dispatchFlowEvent(
   event: FlowEvent,
   target: Partial<FeedWorkspaceFlowTarget> = {},

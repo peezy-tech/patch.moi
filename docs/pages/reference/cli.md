@@ -90,6 +90,14 @@ Verify Codex release flow matching without executing release work:
 bun run patch.moi -- run codex-release --tag rust-v0.130.0 --dry-run
 ```
 
+Verify Codex upstream main update matching without executing branch maintenance:
+
+```bash
+bun run patch.moi -- run codex-main \
+  --sha '<upstream-main-sha>' \
+  --dry-run
+```
+
 Dispatching the Codex release task requires an explicit execution surface. Use
 Actions/local mode when no workspace backend is running:
 

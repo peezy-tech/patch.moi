@@ -60,10 +60,11 @@ maintenance flows from the sibling `../codex-flows` repository:
 codex-flows pack doctor --json
 ```
 
-`openai-codex-bindings` and `peezy-codex-fork` both match
-`upstream.release` events for `openai/codex`. They are installed capabilities,
-not patch.moi product state. patch.moi still records feed-owned flow events,
-workspace dispatches, and maintenance attempts under `DATA_DIR`.
+`openai-codex-bindings` matches `upstream.release` events for `openai/codex`.
+`peezy-codex-fork` matches both `upstream.release` and
+`upstream.branch_update` events. They are installed capabilities, not patch.moi
+product state. patch.moi still records feed-owned flow events, workspace
+dispatches, and maintenance attempts under `DATA_DIR`.
 
 ## Related Runtime Package
 

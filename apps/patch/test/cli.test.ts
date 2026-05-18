@@ -84,8 +84,36 @@ describe("patch.moi CLI", () => {
     expect(dryRun.code).toBe(0);
     expect(JSON.parse(dryRun.stdout).matches).toEqual([
       { flow: "openai-codex-bindings", step: "regenerate-bindings", runner: "bun" },
-      { flow: "peezy-codex-fork", step: "rebase-patch-stack", runner: "code-mode" },
+      { flow: "peezy-codex-fork", step: "release-cycle", runner: "code-mode" },
     ]);
+  });
+
+  test("dry-runs Codex main branch update matching", async () => {
+    const dryRun = await invoke([
+      "run",
+      "codex-main",
+      "--sha",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "--workspace-root",
+      workspaceRoot,
+      "--dry-run",
+      "--json",
+    ]);
+
+    expect(dryRun.code).toBe(0);
+    expect(JSON.parse(dryRun.stdout)).toMatchObject({
+      event: {
+        type: "upstream.branch_update",
+        payload: {
+          repo: "openai/codex",
+          ref: "refs/heads/main",
+          sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        },
+      },
+      matches: [
+        { flow: "peezy-codex-fork", step: "main-branch-update", runner: "code-mode" },
+      ],
+    });
   });
 
   test("syncs a maintenance attempt from workspace run state", async () => {
@@ -155,7 +183,7 @@ describe("patch.moi CLI", () => {
   test("sets up the Codex upstream remote when explicitly applied", async () => {
     const repo = await mkdtemp(join(tmpdir(), "patch-cli-codex-"));
     await mkdir(repo, { recursive: true });
-    await git(repo, ["init", "-b", "code-mode-exec-hooks"]);
+    await git(repo, ["init", "-b", "main"]);
     await git(repo, ["remote", "add", "origin", "https://github.com/peezy-tech/codex"]);
 
     const result = await invoke([
@@ -170,7 +198,7 @@ describe("patch.moi CLI", () => {
     expect(result.code).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({
       path: repo,
-      branch: "code-mode-exec-hooks",
+      branch: "main",
       upstream: "https://github.com/openai/codex.git",
       addedUpstream: true,
       clean: true,

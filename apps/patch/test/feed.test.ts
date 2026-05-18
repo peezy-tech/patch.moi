@@ -89,6 +89,10 @@ describe("feed watcher", () => {
       "github-openai-codex-main",
       "github-openai-codex-releases",
     ]);
+    expect(sources.find((item) => item.id === "github-openai-codex-main")?.target).toMatchObject({
+      mode: "workspace_flow",
+      eventType: "upstream.branch_update",
+    });
   });
 
   test("first poll primes state without emitting old entries", async () => {
@@ -207,6 +211,66 @@ describe("feed watcher", () => {
       workspaceBackendUrl: "https://workspace.example",
       workspaceRunIds: [],
       candidateRefs: [],
+    });
+  });
+
+  test("later main commit polls dispatch upstream branch update events", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "patch-feed-"));
+    const sourcesPath = join(dataDir, "sources.json");
+    const branchSource: FeedSourceConfig = {
+      ...source,
+      target: {
+        mode: "workspace_flow",
+        eventType: "upstream.branch_update",
+        workspaceUrlEnv: "WORKSPACE_URL",
+        payload: {
+          repo: "openai/codex",
+          provider: "github",
+          ref: "refs/heads/main",
+        },
+      },
+    };
+    await writeFile(sourcesPath, JSON.stringify({ sources: [branchSource] }), "utf8");
+    await writeFile(join(dataDir, "feed-state.json"), JSON.stringify({
+      "github-openai-codex-main": {
+        lastSeenId: "tag:github.com,2008:Grit::Commit/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        lastCheckedAt: "2026-05-12T09:00:00.000Z",
+      },
+    }), "utf8");
+
+    let dispatchedBody = "";
+    await pollFeedsOnce({
+      dataDir,
+      sourcesPath,
+      discord: { enabled: false, notifyEvents: new Set(["push"]) },
+      flowDispatch: {
+        env: {
+          WORKSPACE_URL: "https://workspace.example/events",
+        },
+        fetchImpl: async (_url, init) => {
+          dispatchedBody = String(init.body);
+          const eventId = JSON.parse(String(init.body ?? "{}")).id;
+          return Response.json({ status: "accepted", eventId, runIds: [], matched: 1 }, { status: 202 });
+        },
+      },
+    }, async () => {
+      return new Response(atom, { status: 200 });
+    });
+
+    const flowEventText = await readFile(join(dataDir, "flow-events.jsonl"), "utf8");
+    const flowEvent = JSON.parse(flowEventText.trim()) as Record<string, any>;
+    expect(flowEvent.type).toBe("upstream.branch_update");
+    expect(flowEvent.payload.repo).toBe("openai/codex");
+    expect(flowEvent.payload.ref).toBe("refs/heads/main");
+    expect(flowEvent.payload.sha).toBe("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    expect(JSON.parse(dispatchedBody).id).toBe(flowEvent.id);
+    const attempt = JSON.parse((await readFile(join(dataDir, "maintenance-attempts.jsonl"), "utf8")).trim());
+    expect(attempt).toMatchObject({
+      eventType: "upstream.branch_update",
+      status: "started",
+      upstreamRepo: "openai/codex",
+      upstreamRef: "refs/heads/main",
+      upstreamSha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     });
   });
 

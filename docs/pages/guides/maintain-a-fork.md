@@ -98,7 +98,18 @@ bun run patch.moi -- run codex-release \
 
 The output should show the flow steps that will receive the event. For the
 current Codex release package, the expected fanout is the bindings update flow
-and the fork rebase flow.
+and the Codex fork release-cycle flow.
+
+Dry-run the upstream main branch update path separately:
+
+```bash
+bun run patch.moi -- run codex-main \
+  --sha '<upstream-main-sha>' \
+  --dry-run \
+  --json
+```
+
+That event should match the Codex fork `main-branch-update` Code Mode step.
 
 ## 5. Dispatch the maintenance attempt
 
@@ -195,7 +206,8 @@ bun run patch.moi -- replay '<event-id>' --json
 
 Flow packages decide exactly what `CODEX_FLOW_PUSH=1` means. The harness flow
 pushes configured branch refs with `--force-with-lease`. The Codex fork flow
-pushes the maintained branch and, when configured to publish, release tags.
+pushes the maintained `main` branch and, when configured to publish, release
+tags.
 
 Keep `CODEX_FLOW_PUBLISH=0` unless you are intentionally entering the public
 release channel.

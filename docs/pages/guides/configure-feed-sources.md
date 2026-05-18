@@ -46,8 +46,9 @@ backend adapter:
 ```
 
 For patch-stack maintenance, prefer `workspace_flow` to create an
-`upstream.release` or `upstream.update` trigger. Let the receiving workspace read
-Git to discover the maintained patch branch and candidate refs.
+`upstream.release` or `upstream.branch_update` trigger. Let the receiving
+workspace read Git to discover the maintained branch, patch inventory, and
+candidate refs.
 
 Use explicit payload fields for patch.moi-dispatched events. Do not rely on
 implicit workspace flow defaults for maintenance events, because patch.moi uses
