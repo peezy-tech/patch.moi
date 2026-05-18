@@ -3,7 +3,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { discoverFlows, matchingSteps, type FlowEvent as RuntimeFlowEvent } from "@peezy.tech/flow-runtime";
+import { discoverFlows, matchingSteps, type FlowEvent as RuntimeFlowEvent } from "@peezy.tech/codex-flows/flow-runtime";
 import {
   dispatchWorkspaceEventDetailed,
   maintenanceAttemptForWorkspaceDispatch,
@@ -462,11 +462,15 @@ async function appendFlowEventIfMissing(store: EventStore, event: FlowEvent): Pr
 }
 
 function assertCodexDispatchAllowed(context: CliContext): void {
-  if (flagBool(context.parsed, "allow-local") || workspaceBackendConfigured(context.env)) {
+  if (
+    flagBool(context.parsed, "allow-local") ||
+    workspaceBackendConfigured(context.env) ||
+    actionsLocalConfigured(context.env)
+  ) {
     return;
   }
   throw new UsageError(
-    "codex-release dispatch requires PATCH_WORKSPACE_BACKEND_URL or --allow-local; use --dry-run to verify matching without executing release work",
+    "codex-release dispatch requires PATCH_WORKSPACE_BACKEND_URL, CODEX_WORKSPACE_MODE=actions, or --allow-local; use --dry-run to verify matching without executing release work",
   );
 }
 
@@ -476,6 +480,10 @@ function workspaceBackendConfigured(env: Record<string, string | undefined>): bo
     env.PATCH_FLOW_BACKEND_URL?.trim() ||
     env.PATCH_FLOW_DISPATCH_URL?.trim(),
   );
+}
+
+function actionsLocalConfigured(env: Record<string, string | undefined>): boolean {
+  return env.CODEX_WORKSPACE_MODE === "actions" || env.GITHUB_ACTIONS === "true";
 }
 
 function workspaceConfig(context: CliContext): WorkspaceDispatchConfig {

@@ -38,13 +38,25 @@ to identify the upstream update. The receiving workspace still reads Git and
 forge state to discover the maintained branch, patch commits, candidate refs,
 and current checks.
 
-## Workspace Backends
+## Flow Execution Surfaces
 
-When `PATCH_WORKSPACE_BACKEND_URL` is unset, patch.moi uses local flow
-execution from the process working directory. When it is set to an HTTP or
-WebSocket URL, patch.moi dispatches to that Codex workspace backend. In both
-cases patch.moi writes its own dispatch and maintenance-attempt records under
-`DATA_DIR`.
+patch.moi supports the codex-flows flow surfaces without requiring any one of
+them to be running on this checkout:
+
+| Surface | How patch.moi selects it | Run state |
+| --- | --- | --- |
+| synchronous local | no backend URL and no Actions mode | in-process local client state |
+| Actions/local | `CODEX_WORKSPACE_MODE=actions` or `GITHUB_ACTIONS=true` and no backend URL | `.codex/workspace/actions/flow-client` |
+| workspace HTTP | `PATCH_WORKSPACE_BACKEND_URL`, `PATCH_FLOW_BACKEND_URL`, or `PATCH_FLOW_DISPATCH_URL` is an HTTP URL | backend-owned |
+| workspace WebSocket | configured workspace URL starts with `ws://` or `wss://` | backend-owned |
+
+The Actions/local surface is the no-running-backend path for semi-autonomous
+fork maintenance in CI. A persistent workspace backend remains optional: use it
+when a host, service, or gateway needs durable run inspection, app-server
+pass-through, or remote dispatch/replay control.
+
+In every case patch.moi writes its own dispatch and maintenance-attempt records
+under `DATA_DIR`.
 
 Workspace backend run state is useful for inspection and sync. It is not the
 authoritative patch.moi product state.
@@ -66,8 +78,8 @@ local harness path. The repository also includes an explicit manual
 bun run workspace:run:harness-flow
 ```
 
-That flow task requires a running workspace backend URL. In
-`@peezy.tech/codex-flows@0.3.4`, workspace-owned flow tasks synthesize unique
+That flow task requires a running workspace backend URL for the repo-native
+workspace automation command. In codex-flows, workspace-owned flow tasks synthesize unique
 `id`, `occurredAt`, and `receivedAt` fields for every run. Those ids are useful
 for workspace automation, but patch.moi must not use workspace-generated ids
 for feed-owned maintenance attempts.

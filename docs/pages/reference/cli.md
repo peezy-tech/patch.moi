@@ -53,8 +53,15 @@ Verify Codex release flow matching without executing release work:
 bun run patch.moi -- run codex-release --tag rust-v0.130.0 --dry-run
 ```
 
-Dispatching the Codex release task requires a configured workspace backend by
-default:
+Dispatching the Codex release task requires an explicit execution surface. Use
+Actions/local mode when no workspace backend is running:
+
+```bash
+CODEX_WORKSPACE_MODE=actions \
+bun run patch.moi -- run codex-release --tag rust-v0.130.0
+```
+
+Or point at a workspace backend:
 
 ```bash
 PATCH_WORKSPACE_BACKEND_URL=ws://127.0.0.1:3586 \
@@ -63,7 +70,7 @@ bun run patch.moi -- run codex-release --tag rust-v0.130.0
 
 Use `--allow-local` only when you intentionally want the local Patch process to
 execute matching Codex release flows. The Code Mode step still requires its own
-`CODEX_FLOWS_ENABLE_CODE_MODE=1` gate.
+`CODEX_FLOWS_MODE=code-mode` gate.
 
 ## Status
 

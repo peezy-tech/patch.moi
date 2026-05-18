@@ -48,15 +48,15 @@ codex-flows pack doctor --json
 ```
 
 The current local install pins `openai-codex-bindings` and `peezy-codex-fork`
-in `.codex/pack-lock.json`. `@peezy.tech/flow-runtime@0.4.0` discovers
-installed `.codex/flows/*` before source-owned `flows/*`, so the installed
-Codex capabilities are visible to patch.moi while the harness remains a
-source-owned repo flow.
+in `.codex/pack-lock.json`. The codex-flows runtime discovers installed
+`.codex/flows/*` before source-owned `flows/*`, so the installed Codex
+capabilities are visible to patch.moi while the harness remains a source-owned
+repo flow.
 
 Safe local verification stops at event matching and runner gating. The test
 suite confirms that a stored `upstream.release` event for `openai/codex`
 selects both installed Codex release steps, and that the Code Mode step still
-requires `CODEX_FLOWS_ENABLE_CODE_MODE=1`. Do not fabricate a full
+requires `CODEX_FLOWS_MODE=code-mode`. Do not fabricate a full
 `openai/codex` release lifecycle just to exercise the flow.
 
 You can run the same safe match check through the CLI:
@@ -65,7 +65,23 @@ You can run the same safe match check through the CLI:
 bun run patch.moi -- run codex-release --tag rust-v0.130.0 --dry-run
 ```
 
-## 3. Point Patch at a workspace backend
+## 3. Pick an execution surface
+
+Patch does not require a Codex workspace backend to be running in this checkout.
+For CI-style no-backend maintenance, select the codex-flows Actions/local
+surface:
+
+```bash
+CODEX_WORKSPACE_MODE=actions \
+DATA_DIR=./data \
+bun run patch.moi -- run codex-release --tag rust-v0.130.0
+```
+
+That writes flow run state under `.codex/workspace/actions/flow-client` and
+patch.moi product state under `DATA_DIR`.
+
+For a service or host-owned execution surface, point Patch at a workspace
+backend:
 
 ```bash
 PATCH_WORKSPACE_BACKEND_URL=http://127.0.0.1:3586 \
@@ -81,7 +97,7 @@ workspace flow capability. `PATCH_FLOW_BACKEND_URL` and
 `PATCH_FLOW_DISPATCH_URL` remain accepted for older feed targets.
 
 Leave `PATCH_WORKSPACE_BACKEND_URL` unset only when you intentionally want local
-flow execution from the Patch process working directory.
+or Actions/local flow execution from the Patch process working directory.
 
 ## 4. Inspect the stored event
 

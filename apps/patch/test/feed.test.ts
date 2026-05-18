@@ -404,6 +404,41 @@ describe("feed watcher", () => {
     });
   });
 
+  test("workspace dispatch uses actions-local mode without a running backend", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "patch-flow-actions-"));
+    await writeDemoFlow(dataDir);
+
+    const record = await dispatchWorkspaceEvent({
+      id: "patch:actions:demo",
+      type: "demo.event",
+      source: "patch",
+      receivedAt: "2026-05-15T00:00:00.000Z",
+      payload: { name: "Grace" },
+    }, {}, {
+      cwd: dataDir,
+      env: {
+        CODEX_WORKSPACE_MODE: "actions",
+      },
+    });
+
+    expect(record).toMatchObject({
+      eventId: "patch:actions:demo",
+      eventType: "demo.event",
+      status: "dispatched",
+      target: "local",
+      transport: "actions-local",
+    });
+    expect(JSON.parse(await readFile(join(dataDir, "local-flow-output.json"), "utf8"))).toEqual({
+      name: "Grace",
+    });
+
+    const state = JSON.parse(
+      await readFile(join(dataDir, ".codex/workspace/actions/flow-client/state.json"), "utf8"),
+    ) as { events: Array<{ event: { id: string } }>; runs: Array<{ id: string }> };
+    expect(state.events.map((entry) => entry.event.id)).toContain("patch:actions:demo");
+    expect(state.runs.map((entry) => entry.id)).toEqual(record.runIds ?? []);
+  });
+
   test("Patch upstream release helper creates deterministic product events", () => {
     expect(patchUpstreamReleaseEvent({
       repo: "openai/codex",

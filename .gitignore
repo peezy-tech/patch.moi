@@ -4,6 +4,7 @@ coverage
 *.log
 .env
 /.codex/workspace/local/
+/.codex/workspace/actions/
 data/
 apps/*/data/
 docs/out/

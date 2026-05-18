@@ -18,7 +18,10 @@ description: Runtime environment variables used by patch.moi.
 | `PATCH_FLOW_DISPATCH_URL` | unset | Legacy or explicit flow dispatch URL fallback. |
 | `PATCH_FLOW_DISPATCH_SECRET` | unset | Legacy HMAC secret fallback. |
 | `PEEZY_CODEX_REPO` | `../codex` | Optional Codex checkout path for `patch.moi setup codex`. |
-| `CODEX_FLOWS_ENABLE_CODE_MODE` | unset | Required by Code Mode flow steps before local Code Mode execution. |
+| `CODEX_WORKSPACE_MODE` | unset | Set to `actions` to use codex-flows Actions/local flow state when no workspace backend URL is configured. |
+| `GITHUB_ACTIONS` | unset | When `true`, also selects the Actions/local no-backend flow surface. |
+| `CODEX_FLOWS_MODE` | unset | Set to `code-mode` when Code Mode flow steps should run. |
+| `CODEX_FLOWS_ENABLE_CODE_MODE` | unset | Legacy narrow gate accepted by Code Mode flow steps. |
 | `CODEX_APP_SERVER_CODEX_COMMAND` | unset | Passed to local code-mode flow execution. |
 | `CODEX_HOME` | unset | Passed to local code-mode flow execution. |
 
@@ -30,4 +33,4 @@ Git topology is intentionally not represented here. Local mode should read
 upstream, fork, branch, and tag state from Git. Service mode should read remote
 repository, branch, workflow, and review state from the forge. Environment
 variables should stay limited to runtime concerns such as workspace backend
-URLs, data directories, and Codex execution settings.
+URLs, data directories, workspace mode, and Codex execution settings.

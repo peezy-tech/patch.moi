@@ -2,7 +2,7 @@ import type {
   FlowDispatchResult,
   FlowReplayResult,
   FlowRunView,
-} from "@peezy.tech/flow-runtime/client";
+} from "@peezy.tech/codex-flows/flow-runtime/client";
 import type {
   CandidateRefRecord,
   FeedWorkspaceFlowTarget,
@@ -143,7 +143,7 @@ export async function dispatchWorkspaceEventDetailed(
         eventId: event.id,
         eventType: event.type,
         operation: "dispatch",
-        target: backend.mode === "local" ? "local" : "workspace-backend",
+        target: localTransport(backend.mode) ? "local" : "workspace-backend",
         transport: backend.mode,
         workspaceBackendUrl: backend.url,
         url: backend.eventsUrl,
@@ -161,7 +161,7 @@ export async function dispatchWorkspaceEventDetailed(
         eventId: event.id,
         eventType: event.type,
         operation: "dispatch",
-        target: backend.mode === "local" ? "local" : "workspace-backend",
+        target: localTransport(backend.mode) ? "local" : "workspace-backend",
         transport: backend.mode,
         workspaceBackendUrl: backend.url,
         url: backend.eventsUrl,
@@ -210,7 +210,7 @@ export async function replayWorkspaceEventDetailed(
         eventId: event.id,
         eventType: event.type,
         operation: "replay",
-        target: backend.mode === "local" ? "local" : "workspace-backend",
+        target: localTransport(backend.mode) ? "local" : "workspace-backend",
         transport: backend.mode,
         workspaceBackendUrl: backend.url,
         url: backend.eventsUrl ? `${backend.eventsUrl}/${encodeURIComponent(event.id)}/replay` : undefined,
@@ -228,7 +228,7 @@ export async function replayWorkspaceEventDetailed(
         eventId: event.id,
         eventType: event.type,
         operation: "replay",
-        target: backend.mode === "local" ? "local" : "workspace-backend",
+        target: localTransport(backend.mode) ? "local" : "workspace-backend",
         transport: backend.mode,
         workspaceBackendUrl: backend.url,
         url: backend.eventsUrl,
@@ -370,6 +370,10 @@ function httpStatusFromError(error: unknown): number | undefined {
   const message = error instanceof Error ? error.message : String(error);
   const match = message.match(/\bfailed with (\d{3})\b/);
   return match?.[1] ? Number(match[1]) : undefined;
+}
+
+function localTransport(value: string): boolean {
+  return value === "local" || value === "actions-local";
 }
 
 function stringValue(value: unknown): string | undefined {

@@ -83,7 +83,7 @@ export type FlowDispatchRecord = {
   eventType: string;
   operation?: "dispatch" | "replay";
   target?: "local" | "workspace-backend";
-  transport?: "local" | "workspace-http" | "workspace-ws";
+  transport?: "local" | "actions-local" | "workspace-http" | "workspace-ws";
   workspaceBackendUrl?: string;
   url?: string;
   status: "dispatched" | "failed" | "skipped";

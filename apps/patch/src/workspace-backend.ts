@@ -11,14 +11,16 @@ import {
   type FlowReplayResult,
   type FlowRunList,
   type FlowRunView,
-} from "@peezy.tech/flow-runtime/client";
+} from "@peezy.tech/codex-flows/flow-runtime/client";
+import { createActionsLocalFlowClient } from "@peezy.tech/codex-flows/actions";
+import { CodexWorkspaceBackendClient } from "@peezy.tech/codex-flows/workspace-backend";
 import {
   normalizeDispatchResult,
   normalizeEvent,
   normalizeEventList,
   normalizeRun,
   normalizeRunList,
-} from "@peezy.tech/flow-runtime/backend-client";
+} from "@peezy.tech/codex-flows/flow-runtime/backend-client";
 import type { FeedWorkspaceFlowTarget, FlowEvent } from "./types";
 
 export type WorkspaceBackendFetch = (url: string, init: RequestInit) => Promise<Response>;
@@ -30,21 +32,10 @@ export type WorkspaceBackendConfig = {
 };
 
 export type PatchWorkspaceBackend = {
-  mode: "local" | "workspace-http" | "workspace-ws";
+  mode: "local" | "actions-local" | "workspace-http" | "workspace-ws";
   url?: string;
   eventsUrl?: string;
   client: FlowClient;
-};
-
-type WorkspaceJsonRpcResponse = {
-  jsonrpc: "2.0";
-  id: string | number | null;
-  result?: unknown;
-  error?: {
-    code?: number;
-    message?: string;
-    data?: unknown;
-  };
 };
 
 export function createPatchWorkspaceBackend(
@@ -74,11 +65,21 @@ export function createPatchWorkspaceBackend(
       }),
     };
   }
+  const cwd = config.cwd ?? process.cwd();
+  if (actionsLocalRequested(env)) {
+    return {
+      mode: "actions-local",
+      client: createActionsLocalFlowClient({
+        workspaceRoot: cwd,
+        env,
+      }) as unknown as FlowClient,
+    };
+  }
   return {
     mode: "local",
     client: createFlowClient({
       mode: "local",
-      cwd: config.cwd ?? process.cwd(),
+      cwd,
       env,
       codex: {
         command: env.CODEX_APP_SERVER_CODEX_COMMAND,
@@ -136,6 +137,10 @@ function isWebSocketUrl(url: string): boolean {
   return url.startsWith("ws://") || url.startsWith("wss://");
 }
 
+function actionsLocalRequested(env: Record<string, string | undefined>): boolean {
+  return env.CODEX_WORKSPACE_MODE === "actions" || env.GITHUB_ACTIONS === "true";
+}
+
 function patchFetch(fetchImpl: WorkspaceBackendFetch) {
   return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     return fetchImpl(String(input), init ?? {});
@@ -190,102 +195,22 @@ class WorkspaceBackendWebSocketFlowClient implements FlowClient {
   }
 
   async #request(method: string, params?: unknown): Promise<unknown> {
-    return workspaceBackendWebSocketRequest(this.#url, method, params);
+    const client = new CodexWorkspaceBackendClient({
+      clientName: "patch-moi",
+      clientTitle: "patch.moi",
+      clientVersion: "0.1.0",
+      webSocketTransportOptions: {
+        url: this.#url,
+        requestTimeoutMs: 90_000,
+      },
+    });
+    try {
+      await client.connect();
+      return await client.workspaceRequest(method, params);
+    } finally {
+      client.close();
+    }
   }
-}
-
-function workspaceBackendWebSocketRequest(url: string, method: string, params?: unknown): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const socket = new WebSocket(url);
-    let nextId = 1;
-    let initId = 0;
-    let callId = 0;
-    let settled = false;
-    const timer = setTimeout(() => fail(new Error(`Workspace backend ${method} timed out`)), 90_000);
-
-    function requestId(): number {
-      const id = nextId;
-      nextId += 1;
-      return id;
-    }
-
-    function sendRequest(requestMethod: string, requestParams?: unknown): number {
-      const id = requestId();
-      socket.send(JSON.stringify({
-        jsonrpc: "2.0",
-        id,
-        method: requestMethod,
-        params: requestParams,
-      }));
-      return id;
-    }
-
-    function finish(value: unknown): void {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      socket.close();
-      resolve(value);
-    }
-
-    function fail(error: unknown): void {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      socket.close();
-      reject(error);
-    }
-
-    socket.addEventListener("open", () => {
-      initId = sendRequest("workspace.initialize", {
-        clientInfo: {
-          name: "patch-moi",
-          title: "patch.moi",
-          version: "0.1.0",
-        },
-        capabilities: {
-          appServerPassThrough: true,
-        },
-      });
-    });
-
-    socket.addEventListener("message", (event) => {
-      let response: WorkspaceJsonRpcResponse;
-      try {
-        response = JSON.parse(String(event.data)) as WorkspaceJsonRpcResponse;
-      } catch {
-        fail(new Error("Workspace backend returned invalid JSON-RPC"));
-        return;
-      }
-      if (response.id === undefined || response.id === null) {
-        return;
-      }
-      if (response.error) {
-        fail(new Error(response.error.message ?? `Workspace backend ${method} failed`));
-        return;
-      }
-      if (response.id === initId) {
-        callId = sendRequest(method, params);
-        return;
-      }
-      if (response.id === callId) {
-        finish(response.result);
-      }
-    });
-
-    socket.addEventListener("error", () => {
-      fail(new Error(`Workspace backend WebSocket request failed: ${method}`));
-    });
-    socket.addEventListener("close", () => {
-      if (!settled) {
-        fail(new Error(`Workspace backend WebSocket closed before ${method} completed`));
-      }
-    });
-  });
 }
 
 function record(value: unknown): Record<string, unknown> {

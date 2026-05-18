@@ -5,15 +5,17 @@
     "": {
       "name": "@peezy.tech/patch",
       "devDependencies": {
-        "@peezy.tech/codex-flows": "^0.3.4",
-        "@peezy.tech/flow-runtime": "^0.4.0",
+        "@peezy.tech/codex-flows": "^0.3.5",
       },
     },
     "apps/patch": {
       "name": "@peezy.tech/patch",
       "version": "0.1.0",
+      "bin": {
+        "patch.moi": "./src/cli.ts",
+      },
       "dependencies": {
-        "@peezy.tech/flow-runtime": "^0.4.0",
+        "@peezy.tech/codex-flows": "^0.3.5",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -91,9 +93,7 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.130.0", "", {}, "sha512-ibD2usx9JRu7f5pu2tMKMI4cpA4NgXJQoYRP4pQ7Pxmn1l6k/53qWtQWZayhYy3X4QZkt90Ot+mJEaeXouio6Q=="],
 
-    "@peezy.tech/codex-flows": ["@peezy.tech/codex-flows@0.3.4", "", { "bin": { "codex-flows": "dist/cli/index.js" } }, "sha512-ScggyelL6q9EKxqjrJhvyF7o6A7+naK4GkkB44aF5sSs06fANn1Uw/zN2Qmv3CuCFpSDCeg5I8fL+ro8PQGTFw=="],
-
-    "@peezy.tech/flow-runtime": ["@peezy.tech/flow-runtime@0.4.0", "", { "dependencies": { "@peezy.tech/codex-flows": "^0.3.1" } }, "sha512-HJ0witZkQ2l+tzB/bONB+hV4aPmjc0jOOoUu01gPHo2NFJ/qfJ8bMbUe7jdCvfvDCqStr6RZooS2FiF/OLGs6A=="],
+    "@peezy.tech/codex-flows": ["@peezy.tech/codex-flows@0.3.5", "", { "bin": { "codex-flows": "dist/cli/index.js", "codex-app": "dist/bin/codex-app.js", "codex-flow-runner": "dist/bin/codex-flow-runner.js", "codex-workspace-backend-local": "dist/bin/codex-workspace-backend-local.js" } }, "sha512-axKyRFn8H7MPM2VD6YEKu1LqnVvjiX9WjNRxnZNwsAf3n8kCofSiXP5p9l0RdKCB2ASex3AgdyboROkWc6zC6g=="],
 
     "@peezy.tech/patch": ["@peezy.tech/patch@workspace:apps/patch"],
 
@@ -872,8 +872,6 @@
     "zwitch": ["zwitch@2.0.4", "", {}, "sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A=="],
 
     "@apidevtools/json-schema-ref-parser/js-yaml": ["js-yaml@4.1.1", "", { "dependencies": { "argparse": "^2.0.1" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA=="],
-
-    "@peezy.tech/flow-runtime/@peezy.tech/codex-flows": ["@peezy.tech/codex-flows@0.3.3", "", { "bin": { "codex-flows": "dist/cli/index.js" } }, "sha512-crhGJ8YsdqxKoqpulkKprIz+rCeULiQ6HmsDZIec4NJPg04AVv6PXmPJPHXlRJN8DhdDAomRZ8Codm0nuRObhQ=="],
 
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 

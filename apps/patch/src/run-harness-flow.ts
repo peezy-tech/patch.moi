@@ -5,7 +5,7 @@ import {
   matchingSteps,
   runFlowStep,
   type FlowEvent,
-} from "@peezy.tech/flow-runtime";
+} from "@peezy.tech/codex-flows/flow-runtime";
 
 const workspaceRoot = path.resolve(import.meta.dir, "../../..");
 const fixturePath = path.resolve(

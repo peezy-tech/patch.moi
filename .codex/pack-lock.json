@@ -7,12 +7,12 @@
       "source": {
         "input": "../codex-flows",
         "type": "local",
-        "commit": "5be9b571578409a31af4693caac8c949c06fe388"
+        "commit": "a96a005617d18d95d6746efdbd6a1f7bcd70ca49"
       },
       "sourcePath": "flows/openai-codex-bindings",
       "destinationPath": ".codex/flows/openai-codex-bindings",
       "contentHash": "sha256:5fcb04e9525e94c24ca319fcefc99fd05ed973e9c640a5e27629e263f13ca968",
-      "installedAt": "2026-05-16T19:56:06.687Z"
+      "installedAt": "2026-05-18T00:04:17.788Z"
     },
     {
       "name": "peezy-codex-fork",
@@ -20,12 +20,12 @@
       "source": {
         "input": "../codex-flows",
         "type": "local",
-        "commit": "5be9b571578409a31af4693caac8c949c06fe388"
+        "commit": "a96a005617d18d95d6746efdbd6a1f7bcd70ca49"
       },
       "sourcePath": "flows/peezy-codex-fork",
       "destinationPath": ".codex/flows/peezy-codex-fork",
       "contentHash": "sha256:521e7766cd1888fd54fc0c10a6d2a3a7f235d9a7c8aa2577b4f4681e3a8fdabe",
-      "installedAt": "2026-05-16T19:56:06.687Z"
+      "installedAt": "2026-05-18T00:04:17.788Z"
     }
   ]
 }

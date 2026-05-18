@@ -69,7 +69,7 @@ describe("patch.moi CLI", () => {
       workspaceRoot,
     ]);
     expect(blocked.code).toBe(2);
-    expect(blocked.stderr).toContain("requires PATCH_WORKSPACE_BACKEND_URL or --allow-local");
+    expect(blocked.stderr).toContain("requires PATCH_WORKSPACE_BACKEND_URL, CODEX_WORKSPACE_MODE=actions, or --allow-local");
 
     const dryRun = await invoke([
       "run",

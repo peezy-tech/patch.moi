@@ -50,6 +50,7 @@ PATCH_FLOW_BACKEND_URL=
 PATCH_FLOW_DISPATCH_URL=
 PATCH_FLOW_DISPATCH_SECRET=
 PATCH_ADMIN_TOKEN=
+CODEX_WORKSPACE_MODE=
 ```
 
 Discord notifications are off by default. Set `DISCORD_OUTPUT_ENABLED=true`
@@ -74,6 +75,12 @@ configured workspace backend or local adapter, and record dispatch outcomes in
 `DATA_DIR/workspace-dispatches.jsonl`. Each dispatch also creates or updates a
 patch.moi-owned `DATA_DIR/maintenance-attempts.jsonl` entry that links the
 upstream update to workspace run ids, final flow outcome, and candidate refs.
+
+Patch can dispatch through a configured workspace backend, through the
+codex-flows Actions/local surface with `CODEX_WORKSPACE_MODE=actions`, or
+through synchronous local flow execution for development. The backend does not
+need to be running in this checkout unless you are explicitly testing or
+operating that surface.
 
 The harness can also be run through the repo-native workspace task:
 

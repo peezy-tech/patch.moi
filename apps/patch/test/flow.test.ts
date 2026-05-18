@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { FlowRunView } from "@peezy.tech/flow-runtime/client";
+import type { FlowRunView } from "@peezy.tech/codex-flows/flow-runtime/client";
 import {
   maintenanceAttemptForWorkspaceDispatch,
   maintenanceAttemptWithWorkspaceRuns,
