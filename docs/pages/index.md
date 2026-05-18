@@ -100,6 +100,7 @@ DATA_DIR=./data FEED_SOURCES_PATH=./feed-sources.json bun run --filter @peezy.te
 
 - First harness run: [Run the harness maintenance flow](tutorials/run-harness-maintenance-flow).
 - Feed intake: [Watch an upstream release](tutorials/watch-upstream-release).
+- Operator runbook: [Maintain a fork](guides/maintain-a-fork).
 - CLI operations: [CLI](reference/cli).
 - System model: [Architecture](concepts/architecture).
 - Durable state: [JSONL state](reference/jsonl-state).

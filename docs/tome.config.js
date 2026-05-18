@@ -21,6 +21,7 @@ export default {
       group: "Guides",
       pages: [
         "guides/run-patch-locally",
+        "guides/maintain-a-fork",
         "guides/configure-feed-sources",
       ],
     },
