@@ -12,8 +12,6 @@ jobs:
     runs-on: bun
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - name: Install
         run: bun install --frozen-lockfile
       - name: Typecheck
@@ -21,12 +19,7 @@ jobs:
       - name: Test
         run: bun run test
       - name: Verify no-backend Actions dispatch
-        run: |
-          data_dir="$(mktemp -d)"
-          CODEX_WORKSPACE_MODE=actions \
-          CODEX_FLOW_FETCH=0 \
-          CODEX_FLOW_PUSH=0 \
-          bun run patch.moi -- run harness --workspace-root "$PWD" --data-dir "$data_dir" --json
+        run: bun test apps/patch/test/feed.test.ts -t "actions-local mode"
       - name: Build docs
         run: bun run docs:build
       - name: Build container
