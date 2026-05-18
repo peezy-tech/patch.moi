@@ -1,0 +1,11 @@
+{
+  "id": "patch:harness:v0.1.3:upstream.release",
+  "type": "upstream.release",
+  "source": "patch",
+  "receivedAt": "2026-05-16T00:00:00.000Z",
+  "payload": {
+    "repo": "peezy-tech/patch-moi-harness",
+    "tag": "v0.1.3",
+    "url": "https://github.com/peezy-tech/patch-moi-harness/releases/tag/v0.1.3"
+  }
+}

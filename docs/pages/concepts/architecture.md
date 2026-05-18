@@ -44,7 +44,7 @@ The current service has these pieces:
 | feed poller | reads configured upstream feeds and emits normalized signals |
 | JSONL store | writes feed events, flow events, workspace dispatches, and maintenance attempts under `DATA_DIR` |
 | workspace backend adapter | dispatches locally when no backend URL is set, or calls a configured Codex workspace backend |
-| harness flow | exercises real fork maintenance through `flows/patch-moi-harness` |
+| harness flows | exercise Codex-shaped fork maintenance through `flows/patch-moi-harness-*` |
 | repo workspace config | exposes manual operator tasks through `codex-flows workspace doctor|tick|run` |
 
 Those pieces are intentionally narrow. The service coordinates and records; the

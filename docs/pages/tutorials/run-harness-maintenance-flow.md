@@ -6,8 +6,14 @@ description: Use the patch.moi harness repos to rehearse an upstream release and
 # Run the harness maintenance flow
 
 This tutorial runs the smallest real patch.moi maintenance loop. The upstream
-repo is `harness/upstream`. The maintained fork is `harness/fork`. The flow
-package is `flows/patch-moi-harness`.
+repo is `harness/upstream`. The maintained fork is `harness/fork`. The source
+flow packages mirror the Codex fork structure:
+
+- `flows/patch-moi-harness-bindings` handles upstream release metadata.
+- `flows/patch-moi-harness-fork` rebuilds the maintained fork from
+  `upstream` plus ordered `patch/*` branches.
+- `flows/patch-moi-harness-flows-fork` prepares a downstream fork package
+  artifact.
 
 There are two local operator paths:
 
@@ -39,9 +45,11 @@ bun run harness:flow
 ```
 
 The fixture event is `v0.1.3`, which the current fork already contains. The
-flow should skip rebase work, run `npm test` and `npm run pack:dry-run` in the
-fork, report `candidateRefs` for the maintained fork branch, and leave the fork
-checkout unchanged.
+release event fans out to the bindings flow and the fork flow. The fork flow
+seeds the local `upstream` and `patch/*` branches when needed, verifies that
+`main` already equals `upstream + patches`, runs `npm test` and
+`npm run pack:dry-run`, reports `candidateRefs` for the maintained fork branch,
+and leaves the fork checkout unchanged.
 
 ## 3. Run the fixture through workspace autonomy
 
@@ -107,9 +115,10 @@ bun run harness:flow <event-file>
 ```
 
 Use an event file whose `id`, `occurredAt`, `receivedAt`, and `payload.tag`
-identify the new upstream tag. The flow rebases `harness/fork` onto that tag,
-verifies the fork package, reports the local candidate branch, and keeps pushes
-off.
+identify the new upstream tag. The fork flow updates the local `upstream`
+branch to that tag, rebuilds `main` by cherry-picking ordered `patch/*` branch
+tips, verifies the fork package, reports the local candidate branch, and keeps
+pushes off.
 
 ## 6. Push only after review
 
@@ -119,7 +128,7 @@ When the local result is the maintained fork state you want:
 CODEX_FLOW_PUSH=1 bun run harness:flow <event-file>
 ```
 
-That pushes the rebased fork branch to the configured `origin` and `jojo`
+That pushes the rebuilt fork branch to the configured `origin` and `jojo`
 remotes with `--force-with-lease` and reports those pushed branch refs as
 candidate refs. Public npm publishing remains a separate trusted-publishing
 release path.

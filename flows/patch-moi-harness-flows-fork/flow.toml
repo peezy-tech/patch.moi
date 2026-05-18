@@ -1,0 +1,28 @@
+name = "patch-moi-harness-flows-fork"
+version = 1
+description = "Prepare a local harness fork package artifact from downstream harness package releases."
+
+[config]
+fork_repo = "harness/fork"
+fork_repo_full_name = "matamune-peezy/patch-moi-harness"
+source_branch = "main"
+worktree_dir = ".codex/flow-artifacts/patch-moi-harness-flows-fork-worktree"
+artifact_dir = ".codex/flow-artifacts/patch-moi-harness-flows-fork-release"
+fetch = false
+push = false
+publish = false
+accepted_packages = [
+  "@peezy.tech/patch-moi-harness",
+  "@peezy.tech/patch-moi-harness-fork",
+]
+
+[[steps]]
+name = "release-fork"
+runner = "bun"
+script = "exec/release-fork.ts"
+cwd = "../.."
+timeout_ms = 600000
+
+[steps.trigger]
+type = "downstream.release"
+schema = "schemas/downstream-release.schema.json"

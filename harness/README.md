@@ -34,8 +34,13 @@ git -C harness/fork fetch jojo
 ## Branch Model
 
 - `harness/upstream` `main`: upstream package history and upstream releases.
-- `harness/fork` `upstream/main`: fetched copy of upstream `main`.
-- `harness/fork` `main`: maintained fork with patch commits applied.
+- `harness/fork` `upstream`: local branch that follows the selected upstream
+  release tag or main commit for a maintenance run.
+- `harness/fork` `main`: maintained fork rebuilt from `upstream` plus ordered
+  `patch/*` branches.
+- `harness/fork` `patch/*`: one logical fork patch per branch tip. The current
+  seeds are `patch/010-maintained-greeting`, `patch/020-shout-mode`, and
+  `patch/030-package-identity`.
 - `harness/fork` `jojo/main`: service-style maintained fork remote.
 
 The upstream npm package is `@peezy.tech/patch-moi-harness`. It publishes from
@@ -84,7 +89,7 @@ git push jojo main
 Expected result: the GitHub fork and jojo maintained branch both move ahead of
 the last upstream commit.
 
-## Scenario: Rebase Fork Onto Upstream
+## Scenario: Rebuild Fork Onto Upstream
 
 Use this when upstream has released and the maintained fork needs to carry its
 patches forward.
@@ -92,25 +97,30 @@ patches forward.
 ```bash
 cd harness/fork
 git fetch upstream
-git fetch origin
+git branch -f upstream upstream/main
+git checkout --detach upstream
+for patch in $(git for-each-ref --format='%(refname:short)' refs/heads/patch | sort); do
+  git cherry-pick "$patch"
+done
+git branch -f main HEAD
 git checkout main
-git rebase upstream/main
 npm test
 git push --force-with-lease origin main
 git push --force-with-lease jojo main
 ```
 
 Expected result: fork `main` is still patched, but its base is the latest
-upstream release.
+upstream release or main commit.
 
-The same maintenance path is executable through the first patch.moi harness
-flow:
+The same maintenance path is executable through the patch.moi harness flows:
 
 ```bash
 CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run harness:flow
 ```
 
-That direct command is local-mode execution. The repo-native workspace autonomy
+That direct command is local-mode execution. The default upstream release
+fixture fans out to `patch-moi-harness-bindings/generate-bindings` and
+`patch-moi-harness-fork/release-cycle`. The repo-native workspace autonomy
 surface runs the same harness through a manual command task:
 
 ```bash
@@ -125,7 +135,26 @@ flow event to the configured workspace backend.
 The default fixture targets `v0.1.3`, which should verify the current fork
 without changing it and report `candidateRefs` for the maintained fork branch.
 For a new upstream tag, run the same command with an event file whose
-`payload.tag` names that tag.
+`payload.tag` names that tag. For upstream main movement, use the
+`flows/patch-moi-harness-fork/fixtures/upstream-main-v0.1.3.json` event shape
+with the new main SHA.
+
+## Scenario: Downstream Release Artifact
+
+Use this when a downstream package release should prepare a local fork artifact
+without pushing or publishing:
+
+```bash
+bun run patch.moi -- run event \
+  --file flows/patch-moi-harness-flows-fork/fixtures/downstream-fork-release-v0.1.3-fork.0.json \
+  --allow-local \
+  --json
+```
+
+Expected result: `patch-moi-harness-flows-fork/release-fork` creates a
+flow-owned worktree under `.codex/flow-artifacts`, runs the fork package tests,
+and writes an npm tarball under
+`.codex/flow-artifacts/patch-moi-harness-flows-fork-release`.
 
 ## Scenario: Fork Release
 

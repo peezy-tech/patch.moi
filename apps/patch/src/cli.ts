@@ -240,7 +240,7 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
   }
   if (target === "harness") {
     const eventFile = flagValue(context.parsed, "event") ??
-      path.join(context.workspaceRoot, "flows/patch-moi-harness/fixtures/upstream-release-v0.1.3.json");
+      path.join(context.workspaceRoot, "flows/patch-moi-harness-fork/fixtures/upstream-release-v0.1.3.json");
     const event = await readFlowEvent(eventFile, context.workspaceRoot);
     return await runEvent(event, context);
   }
@@ -732,7 +732,7 @@ function findWorkspaceRoot(cwd: string): string {
   while (true) {
     if (
       existsSync(path.join(current, ".codex/workspace.toml")) ||
-      existsSync(path.join(current, "flows/patch-moi-harness/flow.toml"))
+      existsSync(path.join(current, "flows/patch-moi-harness-fork/flow.toml"))
     ) {
       return current;
     }

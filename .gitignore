@@ -6,6 +6,7 @@ coverage
 /.codex/workspace/local/
 /.codex/workspace/actions/
 /.codex/pack-backups/
+/.codex/flow-artifacts/
 data/
 apps/*/data/
 docs/out/
