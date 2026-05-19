@@ -61,18 +61,17 @@ describe("patch workspace CLI", () => {
       { name: "patch/010-feature", subject: "patch: feature" },
     ]);
 
-    await git(repo, ["switch", "upstream"]);
-    await writeFile(join(repo, "upstream.txt"), "base\nupstream movement\n", "utf8");
-    await git(repo, ["add", "upstream.txt"]);
-    await git(repo, ["commit", "-m", "upstream movement"]);
+    const upstream = `${repo}-upstream`;
+    await writeFile(join(upstream, "upstream.txt"), "base\nupstream movement\n", "utf8");
+    await git(upstream, ["add", "upstream.txt"]);
+    await git(upstream, ["commit", "-m", "upstream movement"]);
+    await git(repo, ["fetch", "upstream", "main"]);
 
     const rebuild = await invoke([
       "patch",
       "rebuild",
       "--repo",
       repo,
-      "--base",
-      "upstream",
       "--to",
       "main",
       "--json",
@@ -104,15 +103,21 @@ describe("patch workspace CLI", () => {
 });
 
 async function createPatchRepo(): Promise<string> {
-  const repo = await mkdtemp(join(tmpdir(), "patch-workspace-"));
-  await mkdir(repo, { recursive: true });
-  await git(repo, ["init", "-b", "upstream"]);
+  const root = await mkdtemp(join(tmpdir(), "patch-workspace-"));
+  const repo = join(root, "fork");
+  const upstream = `${repo}-upstream`;
+  await mkdir(upstream, { recursive: true });
+  await git(upstream, ["init", "-b", "main"]);
+  await git(upstream, ["config", "user.name", "Patch Moi Test"]);
+  await git(upstream, ["config", "user.email", "patch@example.test"]);
+  await writeFile(join(upstream, "upstream.txt"), "base\n", "utf8");
+  await git(upstream, ["add", "upstream.txt"]);
+  await git(upstream, ["commit", "-m", "upstream base"]);
+  await git(root, ["clone", upstream, repo]);
+  await git(repo, ["remote", "rename", "origin", "upstream"]);
+  await git(repo, ["remote", "add", "origin", `${root}-origin.git`]);
   await git(repo, ["config", "user.name", "Patch Moi Test"]);
   await git(repo, ["config", "user.email", "patch@example.test"]);
-  await writeFile(join(repo, "upstream.txt"), "base\n", "utf8");
-  await git(repo, ["add", "upstream.txt"]);
-  await git(repo, ["commit", "-m", "upstream base"]);
-  await git(repo, ["switch", "-c", "main"]);
   await git(repo, ["switch", "-c", "feature"]);
   await writeFile(join(repo, "feature.txt"), "feature\n", "utf8");
   await git(repo, ["add", "feature.txt"]);

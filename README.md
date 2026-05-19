@@ -18,6 +18,24 @@ and fork remotes, patch branches, tags, and commits describe the patch stack.
 Patch records update intake, dispatch attempts, and operational history around
 those Git facts.
 
+## Codex Plugin
+
+This repo is also a local Codex plugin package:
+
+- `.codex-plugin/plugin.json` declares the marketplace metadata.
+- `.mcp.json` starts the `patch-moi` MCP server with `bun run mcp`.
+- `skills/` contains `patch-moi:` operator workflows.
+
+The MCP server defaults to local mode. It inspects Git and `DATA_DIR`, uses
+`refs/remotes/<upstreamRemote>/<upstreamBranch>` as the canonical upstream base,
+and does not require a local branch named `upstream`. Dry-run tools are safe by
+default. Fetch and mutation tools fail closed unless `.patchmoi.toml` or the
+matching `PATCH_MOI_ALLOW_*` environment variable explicitly enables them.
+
+Copy `.patchmoi.example.toml` to `.patchmoi.toml` in a maintained fork only when
+the default remote, branch, patch prefix, fetch, or safety policy needs to
+change.
+
 ## Endpoints
 
 ```text

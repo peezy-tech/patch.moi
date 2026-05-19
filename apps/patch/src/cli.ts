@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { discoverFlows, matchingSteps, type FlowEvent as RuntimeFlowEvent } from "@peezy.tech/codex-flows/flow-runtime";
+import { loadPatchMoiConfig } from "./config";
 import {
   dispatchWorkspaceEventDetailed,
   maintenanceAttemptForWorkspaceDispatch,
@@ -58,7 +59,7 @@ Usage:
   patch.moi run codex-main [--sha SHA] [--repo openai/codex] [--ref refs/heads/main] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run downstream-release --package PACKAGE --version VERSION [--repo OWNER/NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run event --file FILE [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--json]
-  patch.moi patch doctor [--repo DIR] [--main BRANCH] [--upstream BRANCH] [--json]
+  patch.moi patch doctor [--repo DIR] [--main BRANCH] [--upstream-remote REMOTE] [--upstream-branch BRANCH] [--fork-remote REMOTE] [--json]
   patch.moi patch list [--repo DIR] [--prefix patch/] [--json]
   patch.moi patch capture patch/NAME --from BRANCH [--base BRANCH] [--repo DIR] [--message MSG] [--force] [--json]
   patch.moi patch rebuild [--base BRANCH] [--to BRANCH] [--repo DIR] [--prefix patch/] [--json]
@@ -304,11 +305,31 @@ async function handlePatch(positionals: string[], context: CliContext): Promise<
     throw new UsageError("patch requires doctor, list, capture, or rebuild");
   }
   const repoPath = patchRepoPath(context);
+  const config = await loadPatchMoiConfig(repoPath);
+  const mainBranch = flagValue(context.parsed, "main") ?? config.git.targetBranch;
+  const upstreamBranch = flagValue(context.parsed, "upstream-branch") ?? flagValue(context.parsed, "upstream") ?? config.git.upstreamBranch;
+  const upstreamRemote = flagValue(context.parsed, "upstream-remote") ?? config.git.upstreamRemote;
+  const forkRemote = flagValue(context.parsed, "fork-remote") ?? config.git.forkRemote;
+  const patchPrefix = flagValue(context.parsed, "prefix") ?? config.git.patchPrefix;
+  const effectiveConfig = {
+    ...config,
+    git: {
+      ...config.git,
+      targetBranch: mainBranch,
+      upstreamBranch,
+      upstreamRemote,
+      forkRemote,
+      patchPrefix,
+    },
+  };
   if (action === "doctor") {
     const report = await inspectPatchWorkspace(repoPath, {
-      mainBranch: flagValue(context.parsed, "main") ?? "main",
-      upstreamBranch: flagValue(context.parsed, "upstream") ?? "upstream",
-      patchPrefix: flagValue(context.parsed, "prefix") ?? "patch/",
+      config: effectiveConfig,
+      mainBranch,
+      upstreamBranch,
+      upstreamRemote,
+      forkRemote,
+      patchPrefix,
     });
     if (context.json) {
       writeJson(context, report);
@@ -327,7 +348,7 @@ async function handlePatch(positionals: string[], context: CliContext): Promise<
     return report.ready ? 0 : 1;
   }
   if (action === "list") {
-    const branches = await listPatchBranches(repoPath, flagValue(context.parsed, "prefix") ?? "patch/");
+    const branches = await listPatchBranches(repoPath, patchPrefix);
     if (context.json) {
       writeJson(context, { repo: repoPath, patchBranches: branches });
     } else {
@@ -349,9 +370,10 @@ async function handlePatch(positionals: string[], context: CliContext): Promise<
     const result = await capturePatchBranch(repoPath, {
       patchBranch,
       from,
-      base: flagValue(context.parsed, "base") ?? "main",
+      base: flagValue(context.parsed, "base") ?? mainBranch,
       message: flagValue(context.parsed, "message"),
       force: flagBool(context.parsed, "force"),
+      patchPrefix,
     });
     if (context.json) {
       writeJson(context, result);
@@ -362,9 +384,10 @@ async function handlePatch(positionals: string[], context: CliContext): Promise<
   }
   if (action === "rebuild") {
     const result = await rebuildPatchMain(repoPath, {
-      base: flagValue(context.parsed, "base") ?? "upstream",
-      targetBranch: flagValue(context.parsed, "to") ?? "main",
-      patchPrefix: flagValue(context.parsed, "prefix") ?? "patch/",
+      config: effectiveConfig,
+      base: flagValue(context.parsed, "base"),
+      targetBranch: flagValue(context.parsed, "to") ?? mainBranch,
+      patchPrefix,
     });
     if (context.json) {
       writeJson(context, result);

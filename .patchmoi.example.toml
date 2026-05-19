@@ -1,0 +1,18 @@
+[git]
+upstreamRemote = "upstream"
+upstreamBranch = "main"
+forkRemote = "origin"
+targetBranch = "main"
+patchPrefix = "patch/"
+
+[fetch]
+allowFetch = false
+fetchTags = true
+prune = true
+pruneTags = false
+
+[safety]
+allowDispatch = false
+allowReplay = false
+allowRebuild = false
+allowCapture = false

@@ -1,8 +1,8 @@
-export type PatchBranchSummary = {
-  name: string;
-  sha: string;
-  subject: string;
-};
+import type { PatchMoiConfig } from "./config";
+import { canonicalUpstreamRef, defaultPatchMoiConfig } from "./config";
+import { discoverPatchGitProject, type PatchBranchSummary } from "./git-discovery";
+
+export type { PatchBranchSummary };
 
 export type PatchWorkspaceReport = {
   path: string;
@@ -45,38 +45,25 @@ export async function inspectPatchWorkspace(repoPath: string, options: {
   mainBranch?: string;
   upstreamBranch?: string;
   patchPrefix?: string;
+  upstreamRemote?: string;
+  forkRemote?: string;
+  config?: PatchMoiConfig;
 } = {}): Promise<PatchWorkspaceReport> {
-  await git(repoPath, ["rev-parse", "--is-inside-work-tree"]);
-  const mainBranch = options.mainBranch ?? "main";
-  const upstreamBranch = options.upstreamBranch ?? "upstream";
-  const patchPrefix = options.patchPrefix ?? "patch/";
-  const [current, status, mainExists, upstreamExists, patchBranches] = await Promise.all([
-    currentBranch(repoPath),
-    git(repoPath, ["status", "--porcelain=v1"]),
-    branchExists(repoPath, mainBranch),
-    branchExists(repoPath, upstreamBranch),
-    listPatchBranches(repoPath, patchPrefix),
-  ]);
-  const clean = status.stdout.trim().length === 0;
-  const issues = [
-    ...(mainExists ? [] : [`missing ${mainBranch} branch`]),
-    ...(upstreamExists ? [] : [`missing ${upstreamBranch} branch`]),
-    ...(patchBranches.length > 0 ? [] : [`no ${patchPrefix} branches found`]),
-    ...(clean ? [] : ["working tree has local changes or untracked files"]),
-  ];
+  const config = patchWorkspaceConfig(options);
+  const report = await discoverPatchGitProject(repoPath, config);
 
   return {
     path: repoPath,
-    currentBranch: current,
-    mainBranch,
-    upstreamBranch,
-    patchPrefix,
-    clean,
-    mainExists,
-    upstreamExists,
-    patchBranches,
-    ready: issues.length === 0,
-    issues,
+    currentBranch: report.currentBranch,
+    mainBranch: report.targetBranch,
+    upstreamBranch: report.upstreamRef,
+    patchPrefix: report.patchPrefix,
+    clean: report.clean,
+    mainExists: report.targetExists,
+    upstreamExists: report.upstreamExists,
+    patchBranches: report.patchBranches,
+    ready: report.ready,
+    issues: report.issues,
   };
 }
 
@@ -102,9 +89,11 @@ export async function capturePatchBranch(repoPath: string, options: {
   base?: string;
   message?: string;
   force?: boolean;
+  patchPrefix?: string;
 }): Promise<PatchCaptureResult> {
-  const base = options.base ?? "main";
-  validatePatchBranch(options.patchBranch);
+  const base = options.base ?? defaultPatchMoiConfig.git.targetBranch;
+  const patchPrefix = options.patchPrefix ?? defaultPatchMoiConfig.git.patchPrefix;
+  validatePatchBranch(options.patchBranch, patchPrefix);
   await requireClean(repoPath);
   await resolveCommit(repoPath, base);
   await resolveCommit(repoPath, options.from);
@@ -142,7 +131,7 @@ export async function capturePatchBranch(repoPath: string, options: {
     throw new Error(`git diff --cached --quiet failed in ${repoPath}: ${diff.stderr.trim() || diff.stdout.trim()}`);
   }
 
-  const message = options.message ?? defaultPatchMessage(options.patchBranch);
+  const message = options.message ?? defaultPatchMessage(options.patchBranch, patchPrefix);
   await git(repoPath, ["commit", "-m", message]);
   const sha = (await git(repoPath, ["rev-parse", "HEAD"])).stdout.trim();
   return {
@@ -160,10 +149,12 @@ export async function rebuildPatchMain(repoPath: string, options: {
   base?: string;
   targetBranch?: string;
   patchPrefix?: string;
+  config?: PatchMoiConfig;
 } = {}): Promise<PatchRebuildResult> {
-  const base = options.base ?? "upstream";
-  const targetBranch = options.targetBranch ?? "main";
-  const patchPrefix = options.patchPrefix ?? "patch/";
+  const config = patchWorkspaceConfig(options);
+  const base = options.base ?? canonicalUpstreamRef(config);
+  const targetBranch = options.targetBranch ?? config.git.targetBranch;
+  const patchPrefix = options.patchPrefix ?? config.git.patchPrefix;
   await requireClean(repoPath);
   await resolveCommit(repoPath, base);
   const beforeSha = await resolveCommit(repoPath, targetBranch).catch(() => undefined);
@@ -204,14 +195,37 @@ export async function rebuildPatchMain(repoPath: string, options: {
   };
 }
 
-function validatePatchBranch(branch: string): void {
-  if (!branch.startsWith("patch/") || branch === "patch/") {
-    throw new Error("patch branch names must start with patch/");
+function validatePatchBranch(branch: string, patchPrefix: string): void {
+  if (!branch.startsWith(patchPrefix) || branch === patchPrefix) {
+    throw new Error(`patch branch names must start with ${patchPrefix}`);
   }
 }
 
-function defaultPatchMessage(branch: string): string {
-  return `patch: ${branch.slice("patch/".length).replaceAll("-", " ")}`;
+function defaultPatchMessage(branch: string, patchPrefix: string): string {
+  return `patch: ${branch.slice(patchPrefix.length).replaceAll("-", " ")}`;
+}
+
+function patchWorkspaceConfig(options: {
+  mainBranch?: string;
+  upstreamBranch?: string;
+  patchPrefix?: string;
+  upstreamRemote?: string;
+  forkRemote?: string;
+  config?: PatchMoiConfig;
+}): PatchMoiConfig {
+  const base = options.config ?? defaultPatchMoiConfig;
+  return {
+    git: {
+      ...base.git,
+      ...(options.mainBranch ? { targetBranch: options.mainBranch } : {}),
+      ...(options.upstreamBranch ? { upstreamBranch: options.upstreamBranch } : {}),
+      ...(options.patchPrefix ? { patchPrefix: options.patchPrefix } : {}),
+      ...(options.upstreamRemote ? { upstreamRemote: options.upstreamRemote } : {}),
+      ...(options.forkRemote ? { forkRemote: options.forkRemote } : {}),
+    },
+    fetch: { ...base.fetch },
+    safety: { ...base.safety },
+  };
 }
 
 async function requireClean(repoPath: string): Promise<void> {

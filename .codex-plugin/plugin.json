@@ -1,0 +1,43 @@
+{
+  "name": "patch-moi",
+  "version": "0.1.0",
+  "description": "Git-first fork maintenance for patch stacks on top of upstream projects.",
+  "author": {
+    "name": "Peezy",
+    "email": "support@peezy.tech",
+    "url": "https://peezy.tech/"
+  },
+  "homepage": "https://patch.moi/",
+  "repository": "https://github.com/peezy-tech/patch.moi",
+  "license": "MIT",
+  "keywords": [
+    "git",
+    "fork-maintenance",
+    "patch-stack",
+    "codex-flow",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "patch.moi",
+    "shortDescription": "Maintain Git patch stacks on upstream forks with safe local inspection and dry-runs.",
+    "longDescription": "patch.moi helps operators inspect upstream remotes, local patch branches, DATA_DIR state, and codex-flow matching before dispatching fork maintenance work. Local mode is read-mostly by default, with fetch and mutation tools gated by explicit policy.",
+    "developerName": "Peezy",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://patch.moi/",
+    "privacyPolicyURL": "https://peezy.tech/privacy",
+    "termsOfServiceURL": "https://peezy.tech/terms",
+    "defaultPrompt": [
+      "Inspect this fork's patch.moi readiness.",
+      "Dry-run the latest upstream release flow.",
+      "Triage a failed patch.moi maintenance attempt."
+    ],
+    "brandColor": "#2563EB"
+  }
+}
