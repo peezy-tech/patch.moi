@@ -107,6 +107,17 @@ export type CandidateRefRecord = {
   pushed?: boolean;
 };
 
+export type WorkspaceThreadRefRecord = {
+  threadId: string;
+  turnId?: string;
+  threadJsonPath?: string;
+  turnStatus?: string;
+  label?: string;
+  runId?: string;
+  flowName?: string;
+  stepName?: string;
+};
+
 export type MaintenanceAttemptStatus =
   | "started"
   | "completed"
@@ -130,6 +141,7 @@ export type MaintenanceAttemptRecord = {
   workspaceRunIds: string[];
   workspaceRunStatuses?: Record<string, string>;
   candidateRefs: CandidateRefRecord[];
+  workspaceThreadRefs?: WorkspaceThreadRefRecord[];
   message?: string;
   error?: string;
   createdAt: string;

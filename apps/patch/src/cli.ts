@@ -83,7 +83,7 @@ export async function runCli(args = Bun.argv.slice(2), options: CliOptions = {})
     }
 
     const command = parsed.positionals[0];
-    const context = cliContext(parsed, cwd, env, out, options.fetchImpl);
+    const context = cliContext(parsed, cwd, env, out, err, options.fetchImpl);
     switch (command) {
       case "status":
         return await handleStatus(context);
@@ -127,6 +127,7 @@ type CliContext = {
   store: EventStore;
   json: boolean;
   stdout: (text: string) => void;
+  stderr: (text: string) => void;
   fetchImpl?: WorkspaceBackendFetch;
 };
 
@@ -135,6 +136,7 @@ function cliContext(
   cwd: string,
   env: Record<string, string | undefined>,
   stdout: (text: string) => void,
+  stderr: (text: string) => void,
   fetchImpl?: WorkspaceBackendFetch,
 ): CliContext {
   const workspaceRoot = resolvePath(cwd, flagValue(parsed, "workspace-root") ?? findWorkspaceRoot(cwd));
@@ -148,6 +150,7 @@ function cliContext(
     store: new EventStore(dataDir),
     json: flagBool(parsed, "json"),
     stdout,
+    stderr,
     fetchImpl,
   };
 }
@@ -430,6 +433,7 @@ async function runEvent(event: FlowEvent, context: CliContext): Promise<number> 
     return 0;
   }
 
+  await writeDispatchPlan(context, event);
   const recorded = await appendFlowEventIfMissing(context.store, event);
   if (flagBool(context.parsed, "record-only")) {
     writeOutput(context, { event, recorded });
@@ -440,8 +444,9 @@ async function runEvent(event: FlowEvent, context: CliContext): Promise<number> 
   await context.store.appendWorkspaceDispatch(record);
   const attempt = maintenanceAttemptForWorkspaceDispatch(event, record, result?.runs);
   await context.store.appendMaintenanceAttempt(attempt);
+  writeAttemptProgress(context, attempt);
   writeOutput(context, { event, recorded, record, attempt });
-  return record.status === "failed" ? 1 : 0;
+  return attemptFailed(attempt) ? 1 : 0;
 }
 
 async function handleDispatchOperation(
@@ -462,8 +467,9 @@ async function handleDispatchOperation(
   await context.store.appendWorkspaceDispatch(outcome.record);
   const attempt = maintenanceAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
   await context.store.appendMaintenanceAttempt(attempt);
+  writeAttemptProgress(context, attempt);
   writeOutput(context, { event, record: outcome.record, attempt });
-  return outcome.record.status === "failed" ? 1 : 0;
+  return attemptFailed(attempt) ? 1 : 0;
 }
 
 async function handleSync(attemptId: string | undefined, context: CliContext): Promise<number> {
@@ -645,8 +651,61 @@ function workspaceConfig(context: CliContext): WorkspaceDispatchConfig {
   return {
     env: context.env,
     cwd: context.workspaceRoot,
+    progress: progressSink(context),
     ...(context.fetchImpl ? { fetchImpl: context.fetchImpl } : {}),
   };
+}
+
+async function writeDispatchPlan(context: CliContext, event: FlowEvent): Promise<void> {
+  const matches = await matchingSteps(
+    await discoverFlows({ cwd: context.workspaceRoot }),
+    event as RuntimeFlowEvent<Record<string, unknown>>,
+  );
+  writeProgress(context, `[flow] dispatch ${event.id} -> ${matches.length} step(s)\n`);
+  for (const { flow, step } of matches) {
+    writeProgress(context, `[flow] queued ${flow.manifest.name}/${step.name} (${step.runner})\n`);
+  }
+}
+
+function writeAttemptProgress(context: CliContext, attempt: MaintenanceAttemptRecord): void {
+  writeProgress(context, `[flow] attempt ${attempt.status} ${attempt.id}\n`);
+  for (const thread of attempt.workspaceThreadRefs ?? []) {
+    const owner = [thread.flowName, thread.stepName].filter(Boolean).join("/");
+    writeProgress(
+      context,
+      `[flow] thread ${owner || thread.label || "codex"} ${thread.threadId}${thread.turnId ? ` turn=${thread.turnId}` : ""}\n`,
+    );
+  }
+}
+
+function progressSink(context: CliContext): (event: unknown) => void {
+  return (event) => {
+    const record = event && typeof event === "object" ? event as Record<string, unknown> : {};
+    const kind = typeof record.kind === "string" ? record.kind : "";
+    const flow = typeof record.flowName === "string" ? record.flowName : "unknown-flow";
+    const step = typeof record.stepName === "string" ? record.stepName : "unknown-step";
+    const runId = typeof record.runId === "string" ? record.runId : "";
+    if (kind === "run_start") {
+      writeProgress(context, `[flow] start ${flow}/${step}${runId ? ` ${runId}` : ""}\n`);
+      return;
+    }
+    if (kind === "run_complete") {
+      const status = typeof record.status === "string" ? record.status : "unknown";
+      writeProgress(context, `[flow] done ${flow}/${step}${runId ? ` ${runId}` : ""} status=${status}\n`);
+      return;
+    }
+    if ((kind === "stderr" || kind === "stdout") && typeof record.text === "string") {
+      writeProgress(context, record.text);
+    }
+  };
+}
+
+function writeProgress(context: CliContext, text: string): void {
+  context.stderr(text);
+}
+
+function attemptFailed(attempt: MaintenanceAttemptRecord): boolean {
+  return ["failed", "blocked", "needs_intervention"].includes(attempt.status);
 }
 
 function patchRepoPath(context: CliContext): string {
@@ -701,6 +760,13 @@ function writeOutput(context: CliContext, payload: {
   }
   if (payload.attempt) {
     writeLine(context, `attempt: ${payload.attempt.status} ${payload.attempt.id}`);
+    for (const thread of payload.attempt.workspaceThreadRefs ?? []) {
+      const owner = [thread.flowName, thread.stepName].filter(Boolean).join("/");
+      writeLine(
+        context,
+        `thread: ${owner || thread.label || "codex"} ${thread.threadId}${thread.turnId ? ` turn=${thread.turnId}` : ""}`,
+      );
+    }
   }
 }
 

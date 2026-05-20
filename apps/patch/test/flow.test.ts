@@ -55,6 +55,33 @@ describe("maintenance attempt sync", () => {
     ]);
   });
 
+  test("records Codex thread refs from flow artifacts", () => {
+    const next = maintenanceAttemptWithWorkspaceRuns(baseAttempt(), [
+      flowRun("run-codex", "completed", [], "codex completed", {
+        candidateRefs: [],
+        interventionTurn: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          threadJsonPath: ".codex/flow-artifacts/thread.json",
+          turnStatus: "completed",
+        },
+      }),
+    ]);
+
+    expect(next.workspaceThreadRefs).toMatchObject([
+      {
+        runId: "run-codex",
+        flowName: "test-flow",
+        stepName: "run-codex",
+        label: "interventionTurn",
+        threadId: "thread-1",
+        turnId: "turn-1",
+        threadJsonPath: ".codex/flow-artifacts/thread.json",
+        turnStatus: "completed",
+      },
+    ]);
+  });
+
   test("records replay attempts with workspace run results", () => {
     const event = patchUpstreamReleaseEvent({
       repo: "openai/codex",
@@ -138,6 +165,7 @@ function flowRun(
   status: string,
   candidateRefs: CandidateRefRecord[] = [],
   message = `${id} ${status}`,
+  artifacts: Record<string, unknown> = { candidateRefs },
 ): FlowRunView {
   return {
     id,
@@ -150,7 +178,7 @@ function flowRun(
     resultPayload: {
       status,
       message,
-      artifacts: { candidateRefs },
+      artifacts,
     },
   } as FlowRunView;
 }

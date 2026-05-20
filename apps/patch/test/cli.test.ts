@@ -59,6 +59,66 @@ describe("patch.moi CLI", () => {
     ]);
   });
 
+  test("keeps JSON pipeable while reporting progress and thread refs", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "patch-cli-"));
+    const result = await invoke([
+      "run",
+      "harness",
+      "--workspace-root",
+      workspaceRoot,
+      "--data-dir",
+      dataDir,
+      "--json",
+    ], {
+      env: {
+        PATCH_WORKSPACE_BACKEND_URL: "https://workspace.example",
+      },
+      fetchImpl: async (url, init) => {
+        const eventId = JSON.parse(String(init.body ?? "{}")).id;
+        return Response.json({
+          status: "accepted",
+          eventId,
+          runIds: ["run-harness"],
+          matched: 1,
+          runs: [{
+            id: "run-harness",
+            eventId,
+            flowName: "patch-moi-harness-fork",
+            stepName: "maintain-release",
+            status: "completed",
+            resultJson: {
+              status: "completed",
+              artifacts: {
+                interventionTurn: {
+                  threadId: "thread-1",
+                  turnId: "turn-1",
+                },
+              },
+            },
+          }],
+        }, { status: 202 });
+      },
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("[flow] dispatch patch:harness:v0.1.3:upstream.release");
+    expect(result.stderr).toContain("[flow] queued patch-moi-harness-fork/release-cycle (bun)");
+    expect(result.stdout).not.toContain("[flow]");
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      attempt: {
+        status: "completed",
+        workspaceThreadRefs: [{
+          runId: "run-harness",
+          flowName: "patch-moi-harness-fork",
+          stepName: "maintain-release",
+          label: "interventionTurn",
+          threadId: "thread-1",
+          turnId: "turn-1",
+        }],
+      },
+    });
+  });
+
   test("dry-runs Codex release matching and blocks accidental local execution", async () => {
     const blocked = await invoke([
       "run",

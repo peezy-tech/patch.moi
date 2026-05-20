@@ -11,6 +11,7 @@ import type {
   FlowEvent,
   MaintenanceAttemptRecord,
   MaintenanceAttemptStatus,
+  WorkspaceThreadRefRecord,
 } from "./types";
 import {
   createPatchWorkspaceBackend,
@@ -380,6 +381,10 @@ export function maintenanceAttemptWithWorkspaceRuns(
     ...attempt.candidateRefs,
     ...resultPayloads.flatMap(candidateRefsFromFlowResult),
   ]);
+  const workspaceThreadRefs = uniqueThreadRefs([
+    ...(attempt.workspaceThreadRefs ?? []),
+    ...runs.flatMap(threadRefsFromRun),
+  ]);
   const error = newestString([
     ...runs.map((run) => run.error),
     ...resultPayloads.map((payload) => payload.message).filter((_value, index) => {
@@ -400,6 +405,7 @@ export function maintenanceAttemptWithWorkspaceRuns(
     ]),
     workspaceRunStatuses: statuses,
     candidateRefs,
+    ...(workspaceThreadRefs.length > 0 ? { workspaceThreadRefs } : {}),
     ...(message ? { message } : {}),
     ...(error ? { error } : {}),
     updatedAt,
@@ -459,6 +465,46 @@ function candidateRefsFromFlowResult(result: Record<string, unknown>): Candidate
   return candidates.flatMap(candidateRefValue);
 }
 
+function threadRefsFromRun(run: FlowRunView): WorkspaceThreadRefRecord[] {
+  const payload = flowResultPayload(run.resultPayload);
+  const artifacts = recordValue(payload?.artifacts);
+  return threadRefsFromValue(artifacts, {
+    runId: run.id,
+    ...(stringValue(run.flowName) ? { flowName: stringValue(run.flowName) } : {}),
+    ...(stringValue(run.stepName) ? { stepName: stringValue(run.stepName) } : {}),
+  });
+}
+
+function threadRefsFromValue(
+  value: unknown,
+  source: Partial<WorkspaceThreadRefRecord>,
+  label?: string,
+): WorkspaceThreadRefRecord[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => threadRefsFromValue(entry, source, label));
+  }
+  const record = recordValue(value);
+  const refs: WorkspaceThreadRefRecord[] = [];
+  const threadId = stringValue(record.threadId);
+  if (threadId) {
+    refs.push({
+      ...source,
+      threadId,
+      ...(stringValue(record.turnId) ? { turnId: stringValue(record.turnId) } : {}),
+      ...(stringValue(record.threadJsonPath) ? { threadJsonPath: stringValue(record.threadJsonPath) } : {}),
+      ...(stringValue(record.turnStatus) ? { turnStatus: stringValue(record.turnStatus) } : {}),
+      ...(stringValue(record.label) ? { label: stringValue(record.label) } : label ? { label } : {}),
+    });
+  }
+  for (const [key, entry] of Object.entries(record)) {
+    if (key === "threadId") {
+      continue;
+    }
+    refs.push(...threadRefsFromValue(entry, source, key));
+  }
+  return refs;
+}
+
 function candidateRefValue(value: unknown): CandidateRefRecord[] {
   if (typeof value === "string" && value.trim()) {
     return [{ kind: "ref", ref: value.trim() }];
@@ -484,6 +530,27 @@ function uniqueCandidateRefs(refs: CandidateRefRecord[]): CandidateRefRecord[] {
   const result: CandidateRefRecord[] = [];
   for (const ref of refs) {
     const key = `${ref.kind}:${ref.repo ?? ""}:${ref.remote ?? ""}:${ref.ref}:${ref.sha ?? ""}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(ref);
+  }
+  return result;
+}
+
+function uniqueThreadRefs(refs: WorkspaceThreadRefRecord[]): WorkspaceThreadRefRecord[] {
+  const seen = new Set<string>();
+  const result: WorkspaceThreadRefRecord[] = [];
+  for (const ref of refs) {
+    const key = [
+      ref.runId ?? "",
+      ref.flowName ?? "",
+      ref.stepName ?? "",
+      ref.label ?? "",
+      ref.threadId,
+      ref.turnId ?? "",
+    ].join("\0");
     if (seen.has(key)) {
       continue;
     }

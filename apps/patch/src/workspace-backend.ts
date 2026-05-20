@@ -29,6 +29,7 @@ export type WorkspaceBackendConfig = {
   env?: Record<string, string | undefined>;
   fetchImpl?: WorkspaceBackendFetch;
   cwd?: string;
+  progress?: (event: unknown) => void;
 };
 
 export type PatchWorkspaceBackend = {
@@ -86,7 +87,8 @@ export function createPatchWorkspaceBackend(
         codexHome: env.CODEX_HOME,
         stream: true,
       },
-    }),
+      progress: config.progress,
+    } as Parameters<typeof createFlowClient>[0]),
   };
 }
 
