@@ -170,24 +170,9 @@ describe("patch.moi harness flow", () => {
       "peezy-codex-fork/release-cycle",
     ]);
 
-    const codeModeMatch = matches.find((entry) => entry.flow.manifest.name === "peezy-codex-fork");
-    expect(codeModeMatch?.step.runner).toBe("code-mode");
-    if (!codeModeMatch) {
-      return;
-    }
-
-    await expect(runFlowStep({
-      flow: codeModeMatch.flow,
-      step: codeModeMatch.step,
-      event: {
-        id: "patch:upstream.release:openai/codex:rust-v0.130.0",
-        type: "upstream.release",
-        source: "patch",
-        receivedAt: "2026-05-16T00:00:00.000Z",
-        payload: { repo: "openai/codex", tag: "rust-v0.130.0" },
-      },
-      env: {},
-    })).rejects.toThrow("requires CODEX_FLOWS_ENABLE_CODE_MODE=1");
+    const forkMatch = matches.find((entry) => entry.flow.manifest.name === "peezy-codex-fork");
+    expect(forkMatch?.step.runner).toBe("bun");
+    expect(forkMatch?.step.script).toBe("exec/update-fork.ts");
   });
 });
 

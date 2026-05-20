@@ -133,12 +133,40 @@ function shaFromEntry(entry: FeedEntry): string | undefined {
   return value.match(/[0-9a-f]{40}/i)?.[0];
 }
 
+function releaseRefFromEntry(source: FeedSourceConfig, entry: FeedEntry): string | undefined {
+  const urlTag = releaseTagFromUrl(entry.url);
+  if (urlTag) {
+    return urlTag;
+  }
+  if (source.provider === "github") {
+    const githubIdTag = entry.id.match(/^tag:github\.com,\d{4}:Repository\/[^/]+\/(.+)$/)?.[1];
+    if (githubIdTag) {
+      return decodeURIComponent(githubIdTag);
+    }
+  }
+  return entry.title;
+}
+
+function releaseTagFromUrl(url: string | undefined): string | undefined {
+  if (!url) {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(url);
+    const tagMatch = parsed.pathname.match(/\/releases\/tag\/([^/?#]+)/);
+    return tagMatch ? decodeURIComponent(tagMatch[1]) : undefined;
+  } catch {
+    const tagMatch = url.match(/\/releases\/tag\/([^/?#]+)/);
+    return tagMatch ? decodeURIComponent(tagMatch[1]) : undefined;
+  }
+}
+
 function refFromEntry(source: FeedSourceConfig, entry: FeedEntry): string | undefined {
   if (source.event === "push" && source.repo.defaultBranch) {
     return `refs/heads/${source.repo.defaultBranch}`;
   }
   if (source.event === "release") {
-    return entry.title;
+    return releaseRefFromEntry(source, entry);
   }
   return undefined;
 }
@@ -195,6 +223,13 @@ function unseenEntries(entries: FeedEntry[], lastSeenId?: string): FeedEntry[] {
   return (index === -1 ? entries : entries.slice(0, index)).reverse();
 }
 
+function entriesForPoll(entries: FeedEntry[], lastSeenId: string | undefined, primeOnly: boolean | undefined): FeedEntry[] {
+  if (!lastSeenId) {
+    return primeOnly === false ? entries.slice().reverse() : [];
+  }
+  return unseenEntries(entries, lastSeenId);
+}
+
 export async function pollFeedSource(input: {
   source: FeedSourceConfig;
   state: FeedState;
@@ -217,7 +252,7 @@ export async function pollFeedSource(input: {
   const newestId = entries[0]?.id;
   const previous = input.state[input.source.id];
   const primed = !previous?.lastSeenId;
-  const selectedEntries = primed && input.source.primeOnly !== false ? [] : unseenEntries(entries, previous?.lastSeenId);
+  const selectedEntries = entriesForPoll(entries, previous?.lastSeenId, input.source.primeOnly);
   const signals: FeedSignal[] = [];
   let jobs = 0;
   let flowDispatches = 0;

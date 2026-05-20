@@ -32,7 +32,7 @@ describe("patch.moi MCP tools", () => {
       event: { type: "upstream.release" },
       matches: [
         { flow: "openai-codex-bindings", step: "regenerate-bindings", runner: "bun" },
-        { flow: "peezy-codex-fork", step: "release-cycle", runner: "code-mode" },
+        { flow: "peezy-codex-fork", step: "release-cycle", runner: "bun" },
       ],
     });
     expect(existsSync(dataDir)).toBe(false);

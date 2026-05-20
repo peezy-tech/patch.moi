@@ -84,8 +84,42 @@ describe("patch.moi CLI", () => {
     expect(dryRun.code).toBe(0);
     expect(JSON.parse(dryRun.stdout).matches).toEqual([
       { flow: "openai-codex-bindings", step: "regenerate-bindings", runner: "bun" },
-      { flow: "peezy-codex-fork", step: "release-cycle", runner: "code-mode" },
+      { flow: "peezy-codex-fork", step: "release-cycle", runner: "bun" },
     ]);
+  });
+
+  test("resolves the latest Codex npm release when no release tag is provided", async () => {
+    let registryUrl = "";
+    const dryRun = await invoke([
+      "run",
+      "codex-release",
+      "--workspace-root",
+      workspaceRoot,
+      "--dry-run",
+      "--json",
+    ], {
+      fetchImpl: async (url) => {
+        registryUrl = url;
+        return Response.json({
+          "dist-tags": {
+            latest: "0.131.0",
+          },
+        });
+      },
+    });
+
+    expect(dryRun.code).toBe(0);
+    expect(registryUrl).toBe("https://registry.npmjs.org/@openai%2Fcodex");
+    expect(JSON.parse(dryRun.stdout)).toMatchObject({
+      event: {
+        id: "patch:upstream.release:openai/codex:rust-v0.131.0",
+        type: "upstream.release",
+        payload: {
+          repo: "openai/codex",
+          tag: "rust-v0.131.0",
+        },
+      },
+    });
   });
 
   test("dry-runs Codex main branch update matching", async () => {
@@ -111,7 +145,7 @@ describe("patch.moi CLI", () => {
         },
       },
       matches: [
-        { flow: "peezy-codex-fork", step: "main-branch-update", runner: "code-mode" },
+        { flow: "peezy-codex-fork", step: "main-branch-update", runner: "bun" },
       ],
     });
   });

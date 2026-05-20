@@ -87,8 +87,13 @@ the configured workspace backend.
 Verify Codex release flow matching without executing release work:
 
 ```bash
-bun run patch.moi -- run codex-release --tag rust-v0.130.0 --dry-run
+bun run patch.moi -- run codex-release --dry-run
 ```
+
+When `--tag` is omitted for `openai/codex`, patch.moi resolves
+`@openai/codex`'s npm `latest` version and maps it to the upstream
+`rust-v<version>` release tag. Use `--tag` only when you need a specific
+non-latest release.
 
 Verify Codex upstream main update matching without executing branch maintenance:
 
@@ -113,19 +118,18 @@ Actions/local mode when no workspace backend is running:
 
 ```bash
 CODEX_WORKSPACE_MODE=actions \
-bun run patch.moi -- run codex-release --tag rust-v0.130.0
+bun run patch.moi -- run codex-release
 ```
 
 Or point at a workspace backend:
 
 ```bash
 PATCH_WORKSPACE_BACKEND_URL=ws://127.0.0.1:3586 \
-bun run patch.moi -- run codex-release --tag rust-v0.130.0
+bun run patch.moi -- run codex-release
 ```
 
 Use `--allow-local` only when you intentionally want the local Patch process to
-execute matching Codex release flows. The Code Mode step still requires its own
-`CODEX_FLOWS_MODE=code-mode` gate.
+execute matching Codex release flows.
 
 ## Status
 

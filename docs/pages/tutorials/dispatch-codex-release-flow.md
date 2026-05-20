@@ -63,14 +63,13 @@ repo flow.
 
 Safe local verification stops at event matching and runner gating. The test
 suite confirms that a stored `upstream.release` event for `openai/codex`
-selects both installed release steps, and that the Code Mode step still requires
-`CODEX_FLOWS_MODE=code-mode`. Do not fabricate a full
-`openai/codex` release lifecycle just to exercise the flow.
+selects both installed release steps. Do not fabricate a full `openai/codex`
+release lifecycle just to exercise the flow.
 
 You can run the same safe match check through the CLI:
 
 ```bash
-bun run patch.moi -- run codex-release --tag rust-v0.130.0 --dry-run
+bun run patch.moi -- run codex-release --dry-run
 ```
 
 ## 3. Pick an execution surface
@@ -82,7 +81,7 @@ surface:
 ```bash
 CODEX_WORKSPACE_MODE=actions \
 DATA_DIR=./data \
-bun run patch.moi -- run codex-release --tag rust-v0.130.0
+bun run patch.moi -- run codex-release
 ```
 
 That writes flow run state under `.codex/workspace/actions/flow-client` and

@@ -91,14 +91,15 @@ Dry-run the release event. This records nothing and runs no maintenance work:
 
 ```bash
 bun run patch.moi -- run codex-release \
-  --tag rust-v0.130.0 \
   --dry-run \
   --json
 ```
 
 The output should show the flow steps that will receive the event. For the
 current Codex release package, the expected fanout is the bindings update flow
-and the Codex fork release-cycle flow.
+and the Codex fork release-cycle flow. When `--tag` is omitted for
+`openai/codex`, patch.moi resolves `@openai/codex`'s npm `latest` version and
+maps it to the upstream `rust-v<version>` release tag.
 
 When a Peezy downstream package release needs to refresh the codex-flows fork
 release candidate, dry-run the downstream release event:
@@ -123,7 +124,7 @@ bun run patch.moi -- run codex-main \
   --json
 ```
 
-That event should match the Codex fork `main-branch-update` Code Mode step.
+That event should match the Codex fork `main-branch-update` Bun step.
 
 ## 5. Dispatch the maintenance attempt
 
@@ -134,7 +135,6 @@ CODEX_WORKSPACE_MODE=actions \
 CODEX_FLOW_PUSH=0 \
 CODEX_FLOW_PUBLISH=0 \
 bun run patch.moi -- run codex-release \
-  --tag rust-v0.130.0 \
   --json
 ```
 
@@ -145,17 +145,8 @@ patch.moi writes:
 - `maintenance-attempts.jsonl` for the attempt record
 
 codex-flows writes the execution run state under `.codex/workspace/actions`.
-
-If the dry-run output includes Code Mode steps, enable the Code Mode capability
-before dispatching in the runner environment:
-
-```bash
-export CODEX_FLOWS_MODE=code-mode
-```
-
-The legacy narrow gate `CODEX_FLOWS_ENABLE_CODE_MODE=1` is also accepted.
-Without one of those gates, the attempt should block instead of silently
-running privileged Code Mode work.
+The Codex fork maintenance step is a deterministic Bun step; it does not need
+the Code Mode runner gate.
 
 ## 6. Inspect the result
 

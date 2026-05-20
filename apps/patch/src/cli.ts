@@ -55,7 +55,7 @@ Usage:
   patch.moi dispatches [--event-id ID] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
   patch.moi attempts [--event-id ID] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
   patch.moi run harness [--event FILE] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--json]
-  patch.moi run codex-release --tag TAG [--repo openai/codex] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
+  patch.moi run codex-release [--tag TAG] [--repo openai/codex] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run codex-main [--sha SHA] [--repo openai/codex] [--ref refs/heads/main] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run downstream-release --package PACKAGE --version VERSION [--repo OWNER/NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run event --file FILE [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--json]
@@ -246,11 +246,8 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
     return await runEvent(event, context);
   }
   if (target === "codex-release") {
-    const tag = flagValue(context.parsed, "tag");
-    if (!tag) {
-      throw new UsageError("run codex-release requires --tag");
-    }
     const repo = flagValue(context.parsed, "repo") ?? "openai/codex";
+    const tag = flagValue(context.parsed, "tag") ?? await latestCodexReleaseTag(context, repo);
     const event = patchUpstreamReleaseEvent({ repo, tag });
     if (!flagBool(context.parsed, "dry-run") && !flagBool(context.parsed, "record-only")) {
       assertCodexDispatchAllowed(context);
@@ -654,6 +651,33 @@ function workspaceConfig(context: CliContext): WorkspaceDispatchConfig {
 
 function patchRepoPath(context: CliContext): string {
   return resolvePath(context.workspaceRoot, flagValue(context.parsed, "repo") ?? context.env.PATCH_MOI_PATCH_REPO ?? context.env.PEEZY_CODEX_REPO ?? "../codex");
+}
+
+async function latestCodexReleaseTag(context: CliContext, repo: string): Promise<string> {
+  if (repo !== "openai/codex") {
+    throw new UsageError("run codex-release without --tag is only supported for openai/codex");
+  }
+  const version = await latestNpmPackageVersion("@openai/codex", context);
+  return `rust-v${version}`;
+}
+
+async function latestNpmPackageVersion(packageName: string, context: CliContext): Promise<string> {
+  const registry = (context.env.NPM_CONFIG_REGISTRY ?? "https://registry.npmjs.org").replace(/\/+$/, "");
+  const url = `${registry}/${packageName.replace("/", "%2F")}`;
+  const response = await (context.fetchImpl ?? fetch)(url, {
+    headers: {
+      accept: "application/json",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`npm registry returned ${response.status} while resolving ${packageName}`);
+  }
+  const parsed = await response.json() as { "dist-tags"?: Record<string, unknown> };
+  const latest = parsed["dist-tags"]?.latest;
+  if (typeof latest !== "string" || !latest.trim()) {
+    throw new Error(`npm registry response for ${packageName} is missing dist-tags.latest`);
+  }
+  return latest.trim();
 }
 
 function writeOutput(context: CliContext, payload: {

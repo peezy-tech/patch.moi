@@ -35,6 +35,17 @@ const rss = `<?xml version="1.0"?>
   </item>
 </channel></rss>`;
 
+const githubReleaseAtom = `<?xml version="1.0"?>
+<feed>
+  <entry>
+    <id>tag:github.com,2008:Repository/965415649/rust-v0.131.0</id>
+    <link type="text/html" rel="alternate" href="https://github.com/openai/codex/releases/tag/rust-v0.131.0"/>
+    <title>0.131.0</title>
+    <updated>2026-05-18T18:05:43Z</updated>
+    <author><name>github-actions</name></author>
+  </entry>
+</feed>`;
+
 const npmPackage = JSON.stringify({
   name: "@peezy.tech/codex-flows",
   "dist-tags": {
@@ -103,6 +114,25 @@ describe("feed watcher", () => {
     });
   });
 
+  test("normalizes GitHub release refs from release tag URLs", () => {
+    const releaseSource: FeedSourceConfig = {
+      ...source,
+      id: "github-openai-codex-releases",
+      url: "https://github.com/openai/codex/releases.atom",
+      event: "release",
+    };
+
+    const signal = signalFromEntry(releaseSource, parseFeedEntries(githubReleaseAtom)[0]);
+    expect(signal).toMatchObject({
+      sourceId: "github-openai-codex-releases",
+      provider: "github",
+      event: "release",
+      title: "0.131.0",
+      ref: "rust-v0.131.0",
+      repo: { fullName: "openai/codex" },
+    });
+  });
+
   test("loads configured feed sources", async () => {
     const sources = await loadSources(join(import.meta.dir, "..", "feed-sources.json"));
     expect(sources.map((item) => item.id)).toEqual([
@@ -165,6 +195,53 @@ describe("feed watcher", () => {
     expect(await readFile(join(dataDir, "feed-events.jsonl"), "utf8")).toContain("\"event\":\"release\"");
     expect(await readFile(join(dataDir, "feed-jobs.jsonl"), "utf8")).toContain("\"kind\":\"fork_sync\"");
     expect(feedCalls).toBe(1);
+  });
+
+  test("primeOnly false emits existing release entries on first poll", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "patch-feed-"));
+    const sourcesPath = join(dataDir, "sources.json");
+    const releaseSource: FeedSourceConfig = {
+      ...source,
+      id: "github-openai-codex-releases",
+      url: "https://github.com/openai/codex/releases.atom",
+      event: "release",
+      primeOnly: false,
+      target: {
+        mode: "workspace_flow",
+        eventType: "upstream.release",
+        workspaceUrlEnv: "WORKSPACE_URL",
+        payload: {
+          repo: "openai/codex",
+          provider: "github",
+        },
+      },
+    };
+    await writeFile(sourcesPath, JSON.stringify({ sources: [releaseSource] }), "utf8");
+
+    await pollFeedsOnce({
+      dataDir,
+      sourcesPath,
+      discord: { enabled: false, notifyEvents: new Set(["release"]) },
+      flowDispatch: {
+        env: {
+          WORKSPACE_URL: "https://workspace.example/events",
+        },
+        fetchImpl: async (_url, init) => {
+          const eventId = JSON.parse(String(init.body ?? "{}")).id;
+          return Response.json({ status: "accepted", eventId, runIds: [], matched: 1 }, { status: 202 });
+        },
+      },
+    }, async () => {
+      return new Response(githubReleaseAtom, { status: 200 });
+    });
+
+    const flowEventText = await readFile(join(dataDir, "flow-events.jsonl"), "utf8");
+    const flowEvent = JSON.parse(flowEventText.trim()) as Record<string, any>;
+    expect(flowEvent.id).toBe("patch:github-openai-codex-releases:tag:github.com,2008:Repository/965415649/rust-v0.131.0:upstream.release");
+    expect(flowEvent.payload.tag).toBe("rust-v0.131.0");
+    expect(flowEvent.payload.title).toBe("0.131.0");
+    const state = JSON.parse(await readFile(join(dataDir, "feed-state.json"), "utf8"));
+    expect(state["github-openai-codex-releases"].lastSeenId).toBe("tag:github.com,2008:Repository/965415649/rust-v0.131.0");
   });
 
   test("later polls dispatch generic flow events through the workspace backend adapter", async () => {

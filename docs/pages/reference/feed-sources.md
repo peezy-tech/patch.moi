@@ -51,6 +51,10 @@ adapter. The flow payload includes provider, event, source id, entry id, title,
 URL, author, published time, repository fields, ref, SHA, tag, and raw feed
 metadata. Values from `target.payload` are merged last.
 
+For release feeds, patch.moi prefers a tag parsed from release URLs such as
+`/releases/tag/<tag>` before falling back to the feed title. This preserves
+upstream tag names when a provider displays a shorter release title.
+
 For upstream release maintenance, use a stable event type such as
 `upstream.release`. For upstream main movement, use `upstream.branch_update`.
 For downstream package releases, use `downstream.release` with `packageName` and
