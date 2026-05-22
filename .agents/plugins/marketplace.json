@@ -1,14 +1,14 @@
 {
-  "name": "patch-moi-local",
+  "name": "patch-moi",
   "interface": {
-    "displayName": "patch.moi Local"
+    "displayName": "patch.moi"
   },
   "plugins": [
     {
       "name": "patch-moi",
       "source": {
-        "source": "local",
-        "path": "."
+        "source": "url",
+        "url": "./"
       },
       "policy": {
         "installation": "AVAILABLE",

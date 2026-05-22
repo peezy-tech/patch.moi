@@ -22,11 +22,18 @@ describe("patch.moi Codex plugin package", () => {
     expect(manifest.interface.capabilities).toContain("Read");
     expect(mcp.mcpServers["patch-moi"]).toMatchObject({
       command: "bun",
-      args: ["run", "mcp"],
+      args: ["run", "scripts/patch-moi-mcp-bootstrap.ts"],
+      cwd: ".",
+    });
+    expect(marketplace).toMatchObject({
+      name: "patch-moi",
+      interface: {
+        displayName: "patch.moi",
+      },
     });
     expect(marketplace.plugins).toContainEqual({
       name: "patch-moi",
-      source: { source: "local", path: "." },
+      source: { source: "url", url: "./" },
       policy: { installation: "AVAILABLE", authentication: "ON_INSTALL" },
       category: "Coding",
     });

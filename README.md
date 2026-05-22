@@ -20,34 +20,41 @@ those Git facts.
 
 ## Codex Plugin
 
-This repo is also a local Codex plugin package:
+This repo is also a Codex plugin marketplace:
 
 - `.codex-plugin/plugin.json` declares the marketplace metadata.
-- `.mcp.json` starts the `patch-moi` MCP server with `bun run mcp`.
+- `.agents/plugins/marketplace.json` exposes the repo-root plugin through a
+  Git-backed marketplace entry.
+- `.mcp.json` starts the `patch-moi` MCP server through
+  `scripts/patch-moi-mcp-bootstrap.ts`.
 - `skills/` contains `patch-moi:` operator workflows.
 
-Install dependencies before installing the plugin, because Codex starts the MCP
-server from this checkout:
+Codex needs `git` and `bun` on the PATH visible to Codex App. The plugin
+bootstrap runs `bun install --frozen-lockfile` in Codex's installed plugin cache
+the first time the MCP server starts.
 
-```bash
-bun install
-```
-
-Then add this checkout as a local marketplace and install `patch-moi` in Codex
-App:
+To install from GitHub after the repository is published, add the marketplace
+source in Codex App:
 
 1. Open Codex App Plugins.
 2. Choose Add marketplace.
-3. Enter the checkout root, for example `/home/peezy/meta-workspace/patch.moi`.
-4. Install `patch-moi` from the `patch-moi-local` marketplace.
-5. Reload Codex App, or start a new thread, so the bundled skills and MCP server
-   are loaded.
+3. Enter `peezy-tech/patch.moi` or
+   `https://github.com/peezy-tech/patch.moi`.
+4. Install `patch-moi` from the `patch.moi` marketplace.
+5. Start a new thread so the bundled skills and MCP server are loaded.
 
 The same install can be done from a Codex CLI that shares the same `CODEX_HOME`:
 
 ```bash
+codex plugin marketplace add peezy-tech/patch.moi --ref main
+codex plugin add patch-moi@patch-moi
+```
+
+For local development before publishing, add the checkout root instead:
+
+```bash
 codex plugin marketplace add /home/peezy/meta-workspace/patch.moi
-codex plugin add patch-moi@patch-moi-local
+codex plugin add patch-moi@patch-moi
 ```
 
 The MCP server defaults to local mode. It inspects Git and `DATA_DIR`, uses
