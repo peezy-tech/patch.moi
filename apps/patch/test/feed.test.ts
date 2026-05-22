@@ -133,20 +133,9 @@ describe("feed watcher", () => {
     });
   });
 
-  test("loads configured feed sources", async () => {
+  test("bundled feed source config has no private operational defaults", async () => {
     const sources = await loadSources(join(import.meta.dir, "..", "feed-sources.json"));
-    expect(sources.map((item) => item.id)).toEqual([
-      "codeberg-forgejo-branch",
-      "codeberg-forgejo-releases",
-      "github-openai-codex-main",
-      "github-openai-codex-releases",
-      "npm-peezy-codex-releases",
-      "npm-peezy-codex-flows-releases",
-    ]);
-    expect(sources.find((item) => item.id === "github-openai-codex-main")?.target).toMatchObject({
-      mode: "workspace_flow",
-      eventType: "upstream.branch_update",
-    });
+    expect(sources).toEqual([]);
   });
 
   test("first poll primes state without emitting old entries", async () => {

@@ -11,11 +11,12 @@ event. The receiving workspace or runner rebuilds the maintained `main` branch
 from the upstream release tag plus the ordered `patch/*` branches, then
 verifies the candidate.
 
-## 1. Use the release source
+## 1. Use a workspace-owned release source
 
-The bundled `apps/patch/feed-sources.json` includes
-`github-openai-codex-releases`. Its target emits `upstream.release` events with
-the upstream repository and release tag in the payload.
+The patch.moi product repo does not bundle the private Codex feed source. Put a
+`github-openai-codex-releases` source in the workspace repo that owns the
+installed Codex maintenance flows. Its target should emit `upstream.release`
+events with the upstream repository and release tag in the payload.
 
 The maintained Codex fork should still be modeled in Git. In the neighboring
 `../codex` checkout, `origin` is `https://github.com/peezy-tech/codex` and
@@ -41,13 +42,14 @@ git status --short --branch
 If `git status` shows local changes or untracked files, resolve them before an
 automated rebuild.
 
-## 2. Install the Codex release capabilities
+## 2. Install the Codex release capabilities in the workspace
 
-The Codex release maintenance capabilities are installed from the neighboring
-`../codex-flows` pack into `.codex/flows`:
+The Codex release maintenance capabilities should be installed in the workspace
+repo that uses patch.moi. In a meta-workspace where `codex-flows/` and
+`patch.moi/` are sibling checkouts, run this from the workspace root:
 
 ```bash
-codex-flows pack add ../codex-flows \
+codex-flows pack add codex-flows \
   --include openai-codex-bindings \
   --include peezy-codex-fork \
   --include peezy-codex-flows-fork \
@@ -55,11 +57,12 @@ codex-flows pack add ../codex-flows \
 codex-flows pack doctor --json
 ```
 
-The current local install pins `openai-codex-bindings`, `peezy-codex-fork`, and
-`peezy-codex-flows-fork` in `.codex/pack-lock.json`. The codex-flows runtime discovers installed
-`.codex/flows/*` before source-owned `flows/*`, so the installed Codex
-capabilities are visible to patch.moi while the harness remains a source-owned
-repo flow.
+The workspace install pins `openai-codex-bindings`, `peezy-codex-fork`, and
+`peezy-codex-flows-fork` in the workspace `.codex/pack-lock.json`. The
+codex-flows runtime discovers installed `.codex/flows/*` before source-owned
+`flows/*`, so the installed Codex capabilities are visible when patch.moi is
+run with the workspace root while the harness remains source-owned inside the
+patch.moi product repo.
 
 Safe local verification stops at event matching and runner gating. The test
 suite confirms that a stored `upstream.release` event for `openai/codex`
@@ -69,7 +72,11 @@ release lifecycle just to exercise the flow.
 You can run the same safe match check through the CLI:
 
 ```bash
-bun run patch.moi -- run codex-release --dry-run
+bun run --cwd patch.moi patch.moi -- run upstream-release \
+  --workspace-root /home/peezy/meta-workspace \
+  --repo openai/codex \
+  --tag rust-v0.130.0 \
+  --dry-run
 ```
 
 ## 3. Pick an execution surface
@@ -81,7 +88,10 @@ surface:
 ```bash
 CODEX_WORKSPACE_MODE=actions \
 DATA_DIR=./data \
-bun run patch.moi -- run codex-release
+bun run --cwd patch.moi patch.moi -- run upstream-release \
+  --workspace-root /home/peezy/meta-workspace \
+  --repo openai/codex \
+  --tag rust-v0.130.0
 ```
 
 That writes flow run state under `.codex/workspace/actions/flow-client` and
@@ -94,8 +104,8 @@ backend:
 PATCH_WORKSPACE_BACKEND_URL=http://127.0.0.1:3586 \
 PATCH_WORKSPACE_BACKEND_SECRET=dev-secret \
 DATA_DIR=./data \
-FEED_SOURCES_PATH=./feed-sources.json \
-bun run --filter @peezy.tech/patch start
+FEED_SOURCES_PATH=../feed-sources.json \
+bun run --cwd patch.moi start
 ```
 
 `PATCH_WORKSPACE_BACKEND_URL` can point at the Codex workspace backend base URL

@@ -93,7 +93,28 @@ bun run workspace:run:harness-flow
 Start the Patch service when you want feed intake and admin state:
 
 ```bash
-DATA_DIR=./data FEED_SOURCES_PATH=./feed-sources.json bun run --filter @peezy.tech/patch dev
+DATA_DIR=./data FEED_SOURCES_PATH=/path/to/workspace/feed-sources.json bun run --filter @peezy.tech/patch dev
+```
+
+## Codex App Plugin
+
+This checkout is also a local Codex plugin marketplace. Install dependencies
+first so Codex can start the bundled MCP server:
+
+```bash
+bun install
+```
+
+In Codex App, open Plugins, choose Add marketplace, enter the checkout root, for
+example `/home/peezy/meta-workspace/patch.moi`, then install `patch-moi` from
+the `patch-moi-local` marketplace. Reload Codex App, or start a new thread, so
+the plugin skills and MCP server are loaded.
+
+The same install can be done from a Codex CLI that shares the same `CODEX_HOME`:
+
+```bash
+codex plugin marketplace add /home/peezy/meta-workspace/patch.moi
+codex plugin add patch-moi@patch-moi-local
 ```
 
 ## Read Next
@@ -114,8 +135,8 @@ DATA_DIR=./data FEED_SOURCES_PATH=./feed-sources.json bun run --filter @peezy.te
   output, and workspace backend adapter.
 - `flows/patch-moi-harness-*`: source harness flows that mirror the Codex
   fork release, main-update, and downstream-release surfaces.
-- `.codex/flows`: installed external flow capabilities, currently the Codex
-  release maintenance flows from the neighboring `../codex-flows` pack.
+- `.codex/workspace.toml`: optional repo-native harness automation config.
+  Real installed maintenance flows belong in the workspace repo that uses
+  patch.moi, not in this product repo.
 - `harness`: upstream and maintained fork repositories used for rehearsal.
-- `.codex/workspace.toml`: optional repo-native workspace automation config.
 - `docs`: this Tome documentation site.

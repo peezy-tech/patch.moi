@@ -39,7 +39,7 @@ const jsonObjectSchema = {
 const commonProperties = {
   cwd: { type: "string", description: "Workspace root for flow discovery. Defaults to process cwd." },
   workspaceRoot: { type: "string", description: "Explicit workspace root for flow discovery and relative DATA_DIR." },
-  repo: { type: "string", description: "Git repository to inspect or mutate. Defaults to cwd/PATCH_MOI_PATCH_REPO/PEEZY_CODEX_REPO." },
+  repo: { type: "string", description: "Git repository to inspect or mutate. Defaults to cwd, PATCH_MOI_PATCH_REPO, or the workspace root." },
   dataDir: { type: "string", description: "patch.moi DATA_DIR. Defaults to DATA_DIR or ./data under the workspace root." },
   mode: { type: "string", enum: ["local", "remote"], description: "Override PATCH_MOI_MODE for this call." },
 };
@@ -74,29 +74,29 @@ export const patchMoiTools: ToolDefinition[] = [
   }),
   tool("git_discover", "Discover the Git-first patch.moi project model and local readiness issues.", {}),
   tool("fetch_upstream", "Fetch the configured upstream branch and tags when fetch policy explicitly allows it.", {}),
-  tool("run_codex_release_dry_run", "Build an upstream.release event for openai/codex and report matching flows without writing DATA_DIR.", {
+  tool("run_upstream_release_dry_run", "Build an upstream.release event and report matching flows without writing DATA_DIR.", {
     tag: { type: "string" },
     upstreamRepo: { type: "string" },
-  }, ["tag"]),
-  tool("run_codex_main_dry_run", "Build an upstream.branch_update event for openai/codex main and report matching flows without writing DATA_DIR.", {
+  }, ["upstreamRepo", "tag"]),
+  tool("run_upstream_branch_dry_run", "Build an upstream.branch_update event and report matching flows without writing DATA_DIR.", {
     sha: { type: "string" },
     upstreamRepo: { type: "string" },
     ref: { type: "string" },
-  }),
+  }, ["upstreamRepo"]),
   tool("run_downstream_release_dry_run", "Build a downstream.release event and report matching flows without writing DATA_DIR.", {
     packageName: { type: "string" },
     version: { type: "string" },
     repo: { type: "string" },
   }, ["packageName", "version"]),
-  tool("run_codex_release", "Dispatch an upstream.release maintenance event. Gated by patch.moi safety policy.", {
+  tool("run_upstream_release", "Dispatch an upstream.release maintenance event. Gated by patch.moi safety policy.", {
     tag: { type: "string" },
     upstreamRepo: { type: "string" },
-  }, ["tag"]),
-  tool("run_codex_main", "Dispatch an upstream.branch_update maintenance event. Gated by patch.moi safety policy.", {
+  }, ["upstreamRepo", "tag"]),
+  tool("run_upstream_branch", "Dispatch an upstream.branch_update maintenance event. Gated by patch.moi safety policy.", {
     sha: { type: "string" },
     upstreamRepo: { type: "string" },
     ref: { type: "string" },
-  }),
+  }, ["upstreamRepo"]),
   tool("run_downstream_release", "Dispatch a downstream.release maintenance event. Gated by patch.moi safety policy.", {
     packageName: { type: "string" },
     version: { type: "string" },
@@ -217,16 +217,16 @@ async function callLocalTool(name: string, args: ToolArgs, env: McpEnv): Promise
       assertFetchAllowed(config, env);
       return await fetchUpstream(repoPath, config);
     }
-    case "run_codex_release_dry_run":
-      return await dryRunEvent(codexReleaseEvent(args), workspaceRoot);
-    case "run_codex_main_dry_run":
-      return await dryRunEvent(codexMainEvent(args), workspaceRoot);
+    case "run_upstream_release_dry_run":
+      return await dryRunEvent(upstreamReleaseEvent(args), workspaceRoot);
+    case "run_upstream_branch_dry_run":
+      return await dryRunEvent(upstreamBranchEvent(args), workspaceRoot);
     case "run_downstream_release_dry_run":
       return await dryRunEvent(downstreamReleaseEvent(args), workspaceRoot);
-    case "run_codex_release":
-      return await dispatchEvent(codexReleaseEvent(args), store, workspaceRoot, args, env, await configForRepo(repoPath, args));
-    case "run_codex_main":
-      return await dispatchEvent(codexMainEvent(args), store, workspaceRoot, args, env, await configForRepo(repoPath, args));
+    case "run_upstream_release":
+      return await dispatchEvent(upstreamReleaseEvent(args), store, workspaceRoot, args, env, await configForRepo(repoPath, args));
+    case "run_upstream_branch":
+      return await dispatchEvent(upstreamBranchEvent(args), store, workspaceRoot, args, env, await configForRepo(repoPath, args));
     case "run_downstream_release":
       return await dispatchEvent(downstreamReleaseEvent(args), store, workspaceRoot, args, env, await configForRepo(repoPath, args));
     case "retry":
@@ -415,16 +415,16 @@ async function configForRepo(repoPath: string, args: ToolArgs): Promise<PatchMoi
   };
 }
 
-function codexReleaseEvent(args: ToolArgs): FlowEvent<Record<string, unknown>> {
+function upstreamReleaseEvent(args: ToolArgs): FlowEvent<Record<string, unknown>> {
   return patchUpstreamReleaseEvent({
-    repo: stringArg(args, "upstreamRepo") ?? "openai/codex",
+    repo: requiredStringArg(args, "upstreamRepo"),
     tag: requiredStringArg(args, "tag"),
   });
 }
 
-function codexMainEvent(args: ToolArgs): FlowEvent<Record<string, unknown>> {
+function upstreamBranchEvent(args: ToolArgs): FlowEvent<Record<string, unknown>> {
   return patchUpstreamBranchUpdateEvent({
-    repo: stringArg(args, "upstreamRepo") ?? "openai/codex",
+    repo: requiredStringArg(args, "upstreamRepo"),
     ref: stringArg(args, "ref") ?? "refs/heads/main",
     sha: stringArg(args, "sha"),
   });
@@ -498,7 +498,7 @@ function dataDirArg(args: ToolArgs, workspaceRoot: string, env: McpEnv): string 
 }
 
 function repoArg(args: ToolArgs, workspaceRoot: string, env: McpEnv): string {
-  const value = stringArg(args, "repo") ?? env.PATCH_MOI_PATCH_REPO ?? env.PEEZY_CODEX_REPO ?? stringArg(args, "cwd") ?? workspaceRoot;
+  const value = stringArg(args, "repo") ?? env.PATCH_MOI_PATCH_REPO ?? stringArg(args, "cwd") ?? workspaceRoot;
   return path.isAbsolute(value) ? value : path.resolve(workspaceRoot, value);
 }
 

@@ -26,6 +26,30 @@ This repo is also a local Codex plugin package:
 - `.mcp.json` starts the `patch-moi` MCP server with `bun run mcp`.
 - `skills/` contains `patch-moi:` operator workflows.
 
+Install dependencies before installing the plugin, because Codex starts the MCP
+server from this checkout:
+
+```bash
+bun install
+```
+
+Then add this checkout as a local marketplace and install `patch-moi` in Codex
+App:
+
+1. Open Codex App Plugins.
+2. Choose Add marketplace.
+3. Enter the checkout root, for example `/home/peezy/meta-workspace/patch.moi`.
+4. Install `patch-moi` from the `patch-moi-local` marketplace.
+5. Reload Codex App, or start a new thread, so the bundled skills and MCP server
+   are loaded.
+
+The same install can be done from a Codex CLI that shares the same `CODEX_HOME`:
+
+```bash
+codex plugin marketplace add /home/peezy/meta-workspace/patch.moi
+codex plugin add patch-moi@patch-moi-local
+```
+
 The MCP server defaults to local mode. It inspects Git and `DATA_DIR`, uses
 `refs/remotes/<upstreamRemote>/<upstreamBranch>` as the canonical upstream base,
 and does not require a local branch named `upstream`. Dry-run tools are safe by
@@ -84,12 +108,15 @@ bun run workspace:doctor
 bun run dev
 ```
 
-Feed watcher events are configured in `apps/patch/feed-sources.json`. The first
-poll primes `DATA_DIR/feed-state.json`; later polls append upstream activity to
-`DATA_DIR/feed-events.jsonl`. Targets using `mode: "fork_sync"` append legacy
-work to `DATA_DIR/feed-jobs.jsonl`. Targets using `mode: "workspace_flow"`
-append generic flow events to `DATA_DIR/flow-events.jsonl`, send them to the
-configured workspace backend or local adapter, and record dispatch outcomes in
+Feed watcher events are configured by `FEED_SOURCES_PATH`. The bundled
+`apps/patch/feed-sources.json` is intentionally empty; real workspace repos
+should own their private feed config beside their installed flow capabilities.
+The first poll primes `DATA_DIR/feed-state.json`; later polls append upstream
+activity to `DATA_DIR/feed-events.jsonl`. Targets using `mode: "fork_sync"`
+append legacy work to `DATA_DIR/feed-jobs.jsonl`. Targets using
+`mode: "workspace_flow"` append generic flow events to
+`DATA_DIR/flow-events.jsonl`, send them to the configured workspace backend or
+local adapter, and record dispatch outcomes in
 `DATA_DIR/workspace-dispatches.jsonl`. Each dispatch also creates or updates a
 patch.moi-owned `DATA_DIR/maintenance-attempts.jsonl` entry that links the
 upstream update to workspace run ids, final flow outcome, and candidate refs.

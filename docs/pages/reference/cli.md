@@ -17,16 +17,22 @@ state directory and `--json` for machine-readable output.
 
 ## Setup
 
-Inspect the neighboring Codex fork checkout:
+Inspect a maintained fork checkout:
 
 ```bash
-bun run patch.moi -- setup codex --json
+bun run patch.moi -- setup fork \
+  --repo ../project-fork \
+  --upstream-url https://example.com/upstream/project.git \
+  --json
 ```
 
-Add the canonical OpenAI upstream remote when it is missing:
+Add the canonical upstream remote when it is missing:
 
 ```bash
-bun run patch.moi -- setup codex --apply
+bun run patch.moi -- setup fork \
+  --repo ../project-fork \
+  --upstream-url https://example.com/upstream/project.git \
+  --apply
 ```
 
 The setup command reports the current branch, `origin`, `upstream`, worktree
@@ -37,24 +43,24 @@ run. It does not clean local changes.
 
 Patch branch commands operate on a local fork workspace. They do not push.
 
-Inspect whether a workspace has the expected `main`, `upstream`, and
+Inspect whether a fork workspace has the expected `main`, `upstream`, and
 `patch/*` branches:
 
 ```bash
-bun run patch.moi -- patch doctor --repo ../codex --json
+bun run patch.moi -- patch doctor --repo ../project-fork --json
 ```
 
 List ordered local patch branches:
 
 ```bash
-bun run patch.moi -- patch list --repo ../codex
+bun run patch.moi -- patch list --repo ../project-fork
 ```
 
 Capture a feature branch as a single patch branch commit:
 
 ```bash
 bun run patch.moi -- patch capture patch/010-packaging-build \
-  --repo ../codex \
+  --repo ../project-fork \
   --from packaging-work \
   --base main \
   --message "patch: packaging and release build"
@@ -64,7 +70,7 @@ Rebuild the maintained `main` branch from `upstream` plus all ordered
 `patch/*` branch tips:
 
 ```bash
-bun run patch.moi -- patch rebuild --repo ../codex --base upstream --to main
+bun run patch.moi -- patch rebuild --repo ../project-fork --base upstream --to main
 ```
 
 If a cherry-pick conflicts, rebuild stops with `needs_intervention` and leaves
@@ -84,52 +90,51 @@ under `DATA_DIR`. If `PATCH_WORKSPACE_BACKEND_URL` is unset, the dispatch uses
 local flow execution from the workspace root. If it is set, the dispatch goes to
 the configured workspace backend.
 
-Verify Codex release flow matching without executing release work:
+Verify upstream release flow matching without executing release work:
 
 ```bash
-bun run patch.moi -- run codex-release --dry-run
+bun run patch.moi -- run upstream-release \
+  --repo owner/project \
+  --tag v1.2.3 \
+  --dry-run
 ```
 
-When `--tag` is omitted for `openai/codex`, patch.moi resolves
-`@openai/codex`'s npm `latest` version and maps it to the upstream
-`rust-v<version>` release tag. Use `--tag` only when you need a specific
-non-latest release.
-
-Verify Codex upstream main update matching without executing branch maintenance:
+Verify upstream branch update matching without executing branch maintenance:
 
 ```bash
-bun run patch.moi -- run codex-main \
+bun run patch.moi -- run upstream-branch \
+  --repo owner/project \
   --sha '<upstream-main-sha>' \
   --dry-run
 ```
 
-Verify a downstream Peezy package release without executing fork packaging:
+Verify a downstream package release without executing fork packaging:
 
 ```bash
 bun run patch.moi -- run downstream-release \
-  --package @peezy.tech/codex-flows \
-  --version 0.4.0 \
-  --repo peezy-tech/codex-flows \
+  --package @scope/package \
+  --version 1.2.3 \
+  --repo owner/project \
   --dry-run
 ```
 
-Dispatching the Codex release task requires an explicit execution surface. Use
+Dispatching an upstream release task requires an explicit execution surface. Use
 Actions/local mode when no workspace backend is running:
 
 ```bash
 CODEX_WORKSPACE_MODE=actions \
-bun run patch.moi -- run codex-release
+bun run patch.moi -- run upstream-release --repo owner/project --tag v1.2.3
 ```
 
 Or point at a workspace backend:
 
 ```bash
 PATCH_WORKSPACE_BACKEND_URL=ws://127.0.0.1:3586 \
-bun run patch.moi -- run codex-release
+bun run patch.moi -- run upstream-release --repo owner/project --tag v1.2.3
 ```
 
 Use `--allow-local` only when you intentionally want the local Patch process to
-execute matching Codex release flows.
+execute matching workspace flows.
 
 ## Status
 

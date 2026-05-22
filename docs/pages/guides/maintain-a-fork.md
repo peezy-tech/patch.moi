@@ -90,16 +90,17 @@ bun run patch.moi -- patch rebuild --repo ../codex --base upstream --to main
 Dry-run the release event. This records nothing and runs no maintenance work:
 
 ```bash
-bun run patch.moi -- run codex-release \
+bun run patch.moi -- run upstream-release \
+  --repo openai/codex \
+  --tag rust-v0.130.0 \
   --dry-run \
   --json
 ```
 
 The output should show the flow steps that will receive the event. For the
-current Codex release package, the expected fanout is the bindings update flow
-and the Codex fork release-cycle flow. When `--tag` is omitted for
-`openai/codex`, patch.moi resolves `@openai/codex`'s npm `latest` version and
-maps it to the upstream `rust-v<version>` release tag.
+private Codex workspace, the expected fanout is the bindings update flow and
+the Codex fork release-cycle flow. Product workspaces should pass the repo and
+tag explicitly; patch.moi does not carry private release lookup policy.
 
 When a Peezy downstream package release needs to refresh the codex-flows fork
 release candidate, dry-run the downstream release event:
@@ -118,7 +119,8 @@ same flow also accepts `@peezy.tech/codex-flows` releases.
 Dry-run the upstream main branch update path separately:
 
 ```bash
-bun run patch.moi -- run codex-main \
+bun run patch.moi -- run upstream-branch \
+  --repo openai/codex \
   --sha '<upstream-main-sha>' \
   --dry-run \
   --json
@@ -134,7 +136,9 @@ Dispatch with Actions/local and pushes still disabled:
 CODEX_WORKSPACE_MODE=actions \
 CODEX_FLOW_PUSH=0 \
 CODEX_FLOW_PUBLISH=0 \
-bun run patch.moi -- run codex-release \
+bun run patch.moi -- run upstream-release \
+  --repo openai/codex \
+  --tag rust-v0.130.0 \
   --json
 ```
 

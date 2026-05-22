@@ -21,7 +21,8 @@ git status --short --branch
 
 ## 1. Add a feed source
 
-Create or edit `apps/patch/feed-sources.json`:
+Create or edit a workspace-owned feed file, for example
+`feed-sources.json` in the workspace that uses patch.moi:
 
 ```json
 {

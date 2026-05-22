@@ -55,8 +55,8 @@ Usage:
   patch.moi dispatches [--event-id ID] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
   patch.moi attempts [--event-id ID] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
   patch.moi run harness [--event FILE] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--json]
-  patch.moi run codex-release [--tag TAG] [--repo openai/codex] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
-  patch.moi run codex-main [--sha SHA] [--repo openai/codex] [--ref refs/heads/main] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
+  patch.moi run upstream-release --repo OWNER/NAME --tag TAG [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
+  patch.moi run upstream-branch --repo OWNER/NAME [--sha SHA] [--ref refs/heads/main] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run downstream-release --package PACKAGE --version VERSION [--repo OWNER/NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run event --file FILE [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--json]
   patch.moi patch doctor [--repo DIR] [--main BRANCH] [--upstream-remote REMOTE] [--upstream-branch BRANCH] [--fork-remote REMOTE] [--json]
@@ -66,7 +66,7 @@ Usage:
   patch.moi retry EVENT_ID [--workspace-root DIR] [--data-dir DIR] [--json]
   patch.moi replay EVENT_ID [--workspace-root DIR] [--data-dir DIR] [--json]
   patch.moi sync ATTEMPT_ID [--workspace-root DIR] [--data-dir DIR] [--json]
-  patch.moi setup codex [--repo DIR] [--upstream-url URL] [--target-branch BRANCH] [--apply] [--json]
+  patch.moi setup fork --repo DIR --upstream-url URL [--upstream-remote REMOTE] [--target-branch BRANCH] [--apply] [--json]
 `;
 
 export async function runCli(args = Bun.argv.slice(2), options: CliOptions = {}): Promise<number> {
@@ -240,7 +240,7 @@ async function handleAttempts(context: CliContext): Promise<number> {
 async function handleRun(positionals: string[], context: CliContext): Promise<number> {
   const target = positionals[0];
   if (!target) {
-    throw new UsageError("run requires harness, codex-release, codex-main, downstream-release, or event");
+    throw new UsageError("run requires harness, upstream-release, upstream-branch, downstream-release, or event");
   }
   if (target === "harness") {
     const eventFile = flagValue(context.parsed, "event") ??
@@ -248,17 +248,26 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
     const event = await readFlowEvent(eventFile, context.workspaceRoot);
     return await runEvent(event, context);
   }
-  if (target === "codex-release") {
-    const repo = flagValue(context.parsed, "repo") ?? "openai/codex";
-    const tag = flagValue(context.parsed, "tag") ?? await latestCodexReleaseTag(context, repo);
+  if (target === "upstream-release") {
+    const repo = flagValue(context.parsed, "repo");
+    const tag = flagValue(context.parsed, "tag");
+    if (!repo) {
+      throw new UsageError("run upstream-release requires --repo");
+    }
+    if (!tag) {
+      throw new UsageError("run upstream-release requires --tag");
+    }
     const event = patchUpstreamReleaseEvent({ repo, tag });
     if (!flagBool(context.parsed, "dry-run") && !flagBool(context.parsed, "record-only")) {
-      assertCodexDispatchAllowed(context);
+      assertDispatchSurfaceAllowed(context, "upstream-release");
     }
     return await runEvent(event, context);
   }
-  if (target === "codex-main") {
-    const repo = flagValue(context.parsed, "repo") ?? "openai/codex";
+  if (target === "upstream-branch") {
+    const repo = flagValue(context.parsed, "repo");
+    if (!repo) {
+      throw new UsageError("run upstream-branch requires --repo");
+    }
     const ref = flagValue(context.parsed, "ref") ?? "refs/heads/main";
     const event = patchUpstreamBranchUpdateEvent({
       repo,
@@ -266,7 +275,7 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
       sha: flagValue(context.parsed, "sha"),
     });
     if (!flagBool(context.parsed, "dry-run") && !flagBool(context.parsed, "record-only")) {
-      assertCodexDispatchAllowed(context, "codex-main");
+      assertDispatchSurfaceAllowed(context, "upstream-branch");
     }
     return await runEvent(event, context);
   }
@@ -285,7 +294,7 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
       repo: flagValue(context.parsed, "repo"),
     });
     if (!flagBool(context.parsed, "dry-run") && !flagBool(context.parsed, "record-only")) {
-      assertCodexDispatchAllowed(context, "downstream-release");
+      assertDispatchSurfaceAllowed(context, "downstream-release");
     }
     return await runEvent(event, context);
   }
@@ -487,12 +496,19 @@ async function handleSync(attemptId: string | undefined, context: CliContext): P
 
 async function handleSetup(positionals: string[], context: CliContext): Promise<number> {
   const target = positionals[0];
-  if (target !== "codex") {
-    throw new UsageError("setup requires codex");
+  if (target !== "fork") {
+    throw new UsageError("setup requires fork");
   }
-  const repoPath = resolvePath(context.workspaceRoot, flagValue(context.parsed, "repo") ?? context.env.PEEZY_CODEX_REPO ?? "../codex");
+  const repoArg = flagValue(context.parsed, "repo") ?? context.env.PATCH_MOI_PATCH_REPO;
+  if (!repoArg) {
+    throw new UsageError("setup fork requires --repo");
+  }
+  const upstreamUrl = flagValue(context.parsed, "upstream-url") ?? context.env.PATCH_MOI_UPSTREAM_URL;
+  if (!upstreamUrl) {
+    throw new UsageError("setup fork requires --upstream-url");
+  }
+  const repoPath = resolvePath(context.workspaceRoot, repoArg);
   const upstreamRemote = flagValue(context.parsed, "upstream-remote") ?? "upstream";
-  const upstreamUrl = flagValue(context.parsed, "upstream-url") ?? "https://github.com/openai/codex.git";
   const targetBranch = flagValue(context.parsed, "target-branch") ?? "main";
   const apply = flagBool(context.parsed, "apply");
   const repo = await inspectGitRepo(repoPath, {
@@ -522,7 +538,7 @@ async function handleSetup(positionals: string[], context: CliContext): Promise<
   return 0;
 }
 
-type CodexSetupReport = {
+type ForkSetupReport = {
   path: string;
   branch?: string;
   branchMatchesTarget: boolean;
@@ -544,7 +560,7 @@ async function inspectGitRepo(
     targetBranch: string;
     apply: boolean;
   },
-): Promise<CodexSetupReport> {
+): Promise<ForkSetupReport> {
   await git(repoPath, ["rev-parse", "--is-inside-work-tree"]);
   const [branchResult, originResult, upstreamResult, statusResult] = await Promise.all([
     git(repoPath, ["symbolic-ref", "--short", "HEAD"]),
@@ -622,7 +638,7 @@ async function appendFlowEventIfMissing(store: EventStore, event: FlowEvent): Pr
   return true;
 }
 
-function assertCodexDispatchAllowed(context: CliContext, command = "codex-release"): void {
+function assertDispatchSurfaceAllowed(context: CliContext, command = "upstream-release"): void {
   if (
     flagBool(context.parsed, "allow-local") ||
     workspaceBackendConfigured(context.env) ||
@@ -709,34 +725,7 @@ function attemptFailed(attempt: MaintenanceAttemptRecord): boolean {
 }
 
 function patchRepoPath(context: CliContext): string {
-  return resolvePath(context.workspaceRoot, flagValue(context.parsed, "repo") ?? context.env.PATCH_MOI_PATCH_REPO ?? context.env.PEEZY_CODEX_REPO ?? "../codex");
-}
-
-async function latestCodexReleaseTag(context: CliContext, repo: string): Promise<string> {
-  if (repo !== "openai/codex") {
-    throw new UsageError("run codex-release without --tag is only supported for openai/codex");
-  }
-  const version = await latestNpmPackageVersion("@openai/codex", context);
-  return `rust-v${version}`;
-}
-
-async function latestNpmPackageVersion(packageName: string, context: CliContext): Promise<string> {
-  const registry = (context.env.NPM_CONFIG_REGISTRY ?? "https://registry.npmjs.org").replace(/\/+$/, "");
-  const url = `${registry}/${packageName.replace("/", "%2F")}`;
-  const response = await (context.fetchImpl ?? fetch)(url, {
-    headers: {
-      accept: "application/json",
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`npm registry returned ${response.status} while resolving ${packageName}`);
-  }
-  const parsed = await response.json() as { "dist-tags"?: Record<string, unknown> };
-  const latest = parsed["dist-tags"]?.latest;
-  if (typeof latest !== "string" || !latest.trim()) {
-    throw new Error(`npm registry response for ${packageName} is missing dist-tags.latest`);
-  }
-  return latest.trim();
+  return resolvePath(context.workspaceRoot, flagValue(context.parsed, "repo") ?? context.env.PATCH_MOI_PATCH_REPO ?? ".");
 }
 
 function writeOutput(context: CliContext, payload: {

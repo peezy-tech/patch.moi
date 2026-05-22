@@ -66,27 +66,27 @@ feed source when it can be read from the repository.
 ## npm release sources
 
 npm package sources read the registry package document and treat each published
-version as a release entry. patch.moi uses this for the local downstream release
-broadcasts from `@peezy.tech/codex` and `@peezy.tech/codex-flows`:
+version as a release entry. Use this shape when a downstream package release
+should trigger a workspace flow:
 
 ```json
 {
-  "id": "npm-peezy-codex-flows-releases",
+  "id": "npm-acme-tool-releases",
   "provider": "npm",
-  "url": "https://registry.npmjs.org/@peezy.tech%2Fcodex-flows",
+  "url": "https://registry.npmjs.org/@acme%2Ftool",
   "event": "release",
   "repo": {
-    "owner": "@peezy.tech",
-    "name": "codex-flows",
-    "fullName": "@peezy.tech/codex-flows",
-    "webUrl": "https://www.npmjs.com/package/@peezy.tech/codex-flows"
+    "owner": "@acme",
+    "name": "tool",
+    "fullName": "@acme/tool",
+    "webUrl": "https://www.npmjs.com/package/@acme/tool"
   },
   "target": {
     "mode": "workspace_flow",
     "eventType": "downstream.release",
     "payload": {
-      "packageName": "@peezy.tech/codex-flows",
-      "repo": "peezy-tech/codex-flows"
+      "packageName": "@acme/tool",
+      "repo": "acme/tool"
     }
   }
 }

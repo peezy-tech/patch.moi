@@ -119,12 +119,14 @@ describe("patch.moi CLI", () => {
     });
   });
 
-  test("dry-runs Codex release matching and blocks accidental local execution", async () => {
+  test("dry-runs upstream release matching and blocks accidental local execution", async () => {
     const blocked = await invoke([
       "run",
-      "codex-release",
+      "upstream-release",
+      "--repo",
+      "peezy-tech/patch-moi-harness",
       "--tag",
-      "rust-v0.130.0",
+      "v0.1.3",
       "--workspace-root",
       workspaceRoot,
     ], { env: {} });
@@ -133,9 +135,11 @@ describe("patch.moi CLI", () => {
 
     const dryRun = await invoke([
       "run",
-      "codex-release",
+      "upstream-release",
+      "--repo",
+      "peezy-tech/patch-moi-harness",
       "--tag",
-      "rust-v0.130.0",
+      "v0.1.3",
       "--workspace-root",
       workspaceRoot,
       "--dry-run",
@@ -143,49 +147,31 @@ describe("patch.moi CLI", () => {
     ]);
     expect(dryRun.code).toBe(0);
     expect(JSON.parse(dryRun.stdout).matches).toEqual([
-      { flow: "openai-codex-bindings", step: "regenerate-bindings", runner: "bun" },
-      { flow: "peezy-codex-fork", step: "release-cycle", runner: "bun" },
+      { flow: "patch-moi-harness-bindings", step: "generate-bindings", runner: "bun" },
+      { flow: "patch-moi-harness-fork", step: "release-cycle", runner: "bun" },
     ]);
   });
 
-  test("resolves the latest Codex npm release when no release tag is provided", async () => {
-    let registryUrl = "";
+  test("requires upstream release repo and tag explicitly", async () => {
     const dryRun = await invoke([
       "run",
-      "codex-release",
+      "upstream-release",
       "--workspace-root",
       workspaceRoot,
       "--dry-run",
       "--json",
-    ], {
-      fetchImpl: async (url) => {
-        registryUrl = url;
-        return Response.json({
-          "dist-tags": {
-            latest: "0.131.0",
-          },
-        });
-      },
-    });
+    ]);
 
-    expect(dryRun.code).toBe(0);
-    expect(registryUrl).toBe("https://registry.npmjs.org/@openai%2Fcodex");
-    expect(JSON.parse(dryRun.stdout)).toMatchObject({
-      event: {
-        id: "patch:upstream.release:openai/codex:rust-v0.131.0",
-        type: "upstream.release",
-        payload: {
-          repo: "openai/codex",
-          tag: "rust-v0.131.0",
-        },
-      },
-    });
+    expect(dryRun.code).toBe(2);
+    expect(dryRun.stderr).toContain("run upstream-release requires --repo");
   });
 
-  test("dry-runs Codex main branch update matching", async () => {
+  test("dry-runs upstream branch update matching", async () => {
     const dryRun = await invoke([
       "run",
-      "codex-main",
+      "upstream-branch",
+      "--repo",
+      "peezy-tech/patch-moi-harness",
       "--sha",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "--workspace-root",
@@ -199,27 +185,27 @@ describe("patch.moi CLI", () => {
       event: {
         type: "upstream.branch_update",
         payload: {
-          repo: "openai/codex",
+          repo: "peezy-tech/patch-moi-harness",
           ref: "refs/heads/main",
           sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         },
       },
       matches: [
-        { flow: "peezy-codex-fork", step: "main-branch-update", runner: "bun" },
+        { flow: "patch-moi-harness-fork", step: "main-branch-update", runner: "bun" },
       ],
     });
   });
 
-  test("dry-runs downstream release matching for codex-flows fork releases", async () => {
+  test("dry-runs downstream release matching for package fork releases", async () => {
     const dryRun = await invoke([
       "run",
       "downstream-release",
       "--package",
-      "@peezy.tech/codex-flows",
+      "@peezy.tech/patch-moi-harness",
       "--version",
-      "0.4.0",
+      "0.1.3-fork.0",
       "--repo",
-      "peezy-tech/codex-flows",
+      "matamune-peezy/patch-moi-harness",
       "--workspace-root",
       workspaceRoot,
       "--dry-run",
@@ -231,13 +217,13 @@ describe("patch.moi CLI", () => {
       event: {
         type: "downstream.release",
         payload: {
-          packageName: "@peezy.tech/codex-flows",
-          version: "0.4.0",
-          repo: "peezy-tech/codex-flows",
+          packageName: "@peezy.tech/patch-moi-harness",
+          version: "0.1.3-fork.0",
+          repo: "matamune-peezy/patch-moi-harness",
         },
       },
       matches: [
-        { flow: "peezy-codex-flows-fork", step: "release-fork", runner: "bun" },
+        { flow: "patch-moi-harness-flows-fork", step: "release-fork", runner: "bun" },
       ],
     });
   });
@@ -306,17 +292,19 @@ describe("patch.moi CLI", () => {
     ]);
   });
 
-  test("sets up the Codex upstream remote when explicitly applied", async () => {
-    const repo = await mkdtemp(join(tmpdir(), "patch-cli-codex-"));
+  test("sets up an upstream remote when explicitly applied", async () => {
+    const repo = await mkdtemp(join(tmpdir(), "patch-cli-fork-"));
     await mkdir(repo, { recursive: true });
     await git(repo, ["init", "-b", "main"]);
-    await git(repo, ["remote", "add", "origin", "https://github.com/peezy-tech/codex"]);
+    await git(repo, ["remote", "add", "origin", "https://example.test/fork.git"]);
 
     const result = await invoke([
       "setup",
-      "codex",
+      "fork",
       "--repo",
       repo,
+      "--upstream-url",
+      "https://example.test/upstream.git",
       "--apply",
       "--json",
     ]);
@@ -325,12 +313,12 @@ describe("patch.moi CLI", () => {
     expect(JSON.parse(result.stdout)).toMatchObject({
       path: repo,
       branch: "main",
-      upstream: "https://github.com/openai/codex.git",
+      upstream: "https://example.test/upstream.git",
       addedUpstream: true,
       clean: true,
       ready: true,
     });
-    expect((await git(repo, ["remote", "get-url", "upstream"])).stdout.trim()).toBe("https://github.com/openai/codex.git");
+    expect((await git(repo, ["remote", "get-url", "upstream"])).stdout.trim()).toBe("https://example.test/upstream.git");
   });
 });
 

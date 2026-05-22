@@ -6,7 +6,9 @@ description: Add upstream feeds and route update signals into patch maintenance 
 # Configure feed sources
 
 Feed sources live in a JSON file referenced by `FEED_SOURCES_PATH`. The bundled
-file is `apps/patch/feed-sources.json`.
+`apps/patch/feed-sources.json` file is intentionally empty so the product repo
+does not carry private operational intake policy. Put real feed sources in the
+workspace repo that owns the corresponding installed flows.
 
 Feed sources describe intake. They should not duplicate the maintained patch
 stack. The patch stack lives in Git as remotes, branches, tags, and commits;
@@ -24,7 +26,7 @@ feeds. Patch normalizes both into `FeedSignal` records.
 ```json
 {
   "provider": "github",
-  "repoFullName": "peezy-tech/codex",
+  "repoFullName": "owner/project",
   "branch": "main",
   "mode": "notify_only"
 }
@@ -40,7 +42,7 @@ backend adapter:
   "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",
   "workspaceSecretEnv": "PATCH_WORKSPACE_BACKEND_SECRET",
   "payload": {
-    "repo": "openai/codex"
+    "repo": "owner/project"
   }
 }
 ```

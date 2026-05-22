@@ -155,22 +155,22 @@ describe("patch.moi harness flow", () => {
     expect(tarballs.some((entry) => entry.endsWith(".tgz"))).toBe(true);
   });
 
-  test("matches installed Codex release flows without executing release work", async () => {
+  test("matches source harness release flows without executing release work", async () => {
     const flows = await discoverFlows({ cwd: workspaceRoot });
     const matches = await matchingSteps(flows, {
-      id: "patch:upstream.release:openai/codex:rust-v0.130.0",
+      id: "patch:harness:v0.1.3:upstream.release",
       type: "upstream.release",
       source: "patch",
       receivedAt: "2026-05-16T00:00:00.000Z",
-      payload: { repo: "openai/codex", tag: "rust-v0.130.0" },
+      payload: { repo: "peezy-tech/patch-moi-harness", tag: "v0.1.3" },
     });
 
     expect(matches.map(({ flow, step }) => `${flow.manifest.name}/${step.name}`)).toEqual([
-      "openai-codex-bindings/regenerate-bindings",
-      "peezy-codex-fork/release-cycle",
+      "patch-moi-harness-bindings/generate-bindings",
+      "patch-moi-harness-fork/release-cycle",
     ]);
 
-    const forkMatch = matches.find((entry) => entry.flow.manifest.name === "peezy-codex-fork");
+    const forkMatch = matches.find((entry) => entry.flow.manifest.name === "patch-moi-harness-fork");
     expect(forkMatch?.step.runner).toBe("bun");
     expect(forkMatch?.step.script).toBe("exec/update-fork.ts");
   });

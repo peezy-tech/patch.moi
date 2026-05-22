@@ -21,18 +21,19 @@ describe("patch.moi MCP tools", () => {
 
   test("dry-run tools do not write DATA_DIR", async () => {
     const dataDir = join(await mkdtemp(join(tmpdir(), "patch-mcp-dry-run-")), "data");
-    const result = await callPatchMoiTool("run_codex_release_dry_run", {
+    const result = await callPatchMoiTool("run_upstream_release_dry_run", {
       workspaceRoot,
       dataDir,
-      tag: "rust-v0.130.0",
+      upstreamRepo: "peezy-tech/patch-moi-harness",
+      tag: "v0.1.3",
     }, {});
 
     expect(result).toMatchObject({
       dryRun: true,
       event: { type: "upstream.release" },
       matches: [
-        { flow: "openai-codex-bindings", step: "regenerate-bindings", runner: "bun" },
-        { flow: "peezy-codex-fork", step: "release-cycle", runner: "bun" },
+        { flow: "patch-moi-harness-bindings", step: "generate-bindings", runner: "bun" },
+        { flow: "patch-moi-harness-fork", step: "release-cycle", runner: "bun" },
       ],
     });
     expect(existsSync(dataDir)).toBe(false);
