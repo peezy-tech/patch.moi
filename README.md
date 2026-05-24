@@ -20,11 +20,11 @@ those Git facts.
 
 ## Codex Plugin
 
-This repo is also a Codex plugin marketplace:
+This repo owns the patch.moi Codex plugin source:
 
 - `.codex-plugin/plugin.json` declares the marketplace metadata.
-- `.agents/plugins/marketplace.json` exposes the repo-root plugin through a
-  Git-backed marketplace entry.
+- `.agents/plugins/marketplace.json` exposes the repo-root plugin for direct
+  local/product-repo installs.
 - `.mcp.json` starts the `patch-moi` MCP server through
   `scripts/patch-moi-mcp-bootstrap.ts`.
 - `skills/` contains `patch-moi:` operator workflows.
@@ -33,24 +33,23 @@ Codex needs `git` and `bun` on the PATH visible to Codex App. The plugin
 bootstrap runs `bun install --frozen-lockfile` in Codex's installed plugin cache
 the first time the MCP server starts.
 
-To install from GitHub after the repository is published, add the marketplace
-source in Codex App:
+For normal installs, use the shared Peezy Tech marketplace:
 
 1. Open Codex App Plugins.
 2. Choose Add marketplace.
-3. Enter `peezy-tech/patch.moi` or
-   `https://github.com/peezy-tech/patch.moi`.
-4. Install `patch-moi` from the `patch.moi` marketplace.
+3. Enter `peezy-tech/skills` or `https://github.com/peezy-tech/skills`.
+4. Install `patch-moi` from the `peezy-tech` marketplace.
 5. Start a new thread so the bundled skills and MCP server are loaded.
 
 The same install can be done from a Codex CLI that shares the same `CODEX_HOME`:
 
 ```bash
-codex plugin marketplace add peezy-tech/patch.moi --ref main
-codex plugin add patch-moi@patch-moi
+codex plugin marketplace add peezy-tech/skills --ref main
+codex plugin add patch-moi@peezy-tech
 ```
 
-For local development before publishing, add the checkout root instead:
+For local development against this product checkout, add the checkout root
+instead:
 
 ```bash
 codex plugin marketplace add /home/peezy/meta-workspace/patch.moi

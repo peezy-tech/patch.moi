@@ -98,24 +98,25 @@ DATA_DIR=./data FEED_SOURCES_PATH=/path/to/workspace/feed-sources.json bun run -
 
 ## Codex App Plugin
 
-This repo is also a Codex plugin marketplace. Codex needs `git` and `bun` on
+This repo owns the patch.moi Codex plugin source. Codex needs `git` and `bun` on
 the PATH visible to Codex App. The plugin bootstrap runs
 `bun install --frozen-lockfile` in Codex's installed plugin cache the first time
 the MCP server starts.
 
 In Codex App, open Plugins, choose Add marketplace, enter
-`peezy-tech/patch.moi` or `https://github.com/peezy-tech/patch.moi`, then
-install `patch-moi` from the `patch.moi` marketplace. Start a new thread so the
+`peezy-tech/skills` or `https://github.com/peezy-tech/skills`, then
+install `patch-moi` from the `peezy-tech` marketplace. Start a new thread so the
 plugin skills and MCP server are loaded.
 
 The same install can be done from a Codex CLI that shares the same `CODEX_HOME`:
 
 ```bash
-codex plugin marketplace add peezy-tech/patch.moi --ref main
-codex plugin add patch-moi@patch-moi
+codex plugin marketplace add peezy-tech/skills --ref main
+codex plugin add patch-moi@peezy-tech
 ```
 
-For local development before publishing, add the checkout root instead:
+For local development against this product checkout, add the checkout root
+instead:
 
 ```bash
 codex plugin marketplace add /home/peezy/meta-workspace/patch.moi
