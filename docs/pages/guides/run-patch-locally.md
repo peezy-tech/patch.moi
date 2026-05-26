@@ -68,7 +68,7 @@ The CLI uses the same dispatch and state path as the service. To record a local
 harness maintenance attempt:
 
 ```bash
-CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run patch.moi -- run harness
+bun run patch.moi -- run harness
 bun run patch.moi -- attempts
 ```
 
@@ -76,7 +76,7 @@ The repo-native workspace task runs the harness fixture through the same direct
 flow command:
 
 ```bash
-CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run workspace:run:harness
+bun run workspace:run:harness
 ```
 
 That task writes local run state under `.codex/workspace/local/`, which is
@@ -91,8 +91,8 @@ bun run workspace:backend --cwd /home/peezy/meta-workspace/patch.moi
 
 ```bash
 CODEX_WORKSPACE_BACKEND_WS_URL=ws://127.0.0.1:3586 \
-CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 \
-bun run workspace:run:harness-flow
+\
+bun run workspace:run:harness
 ```
 
 That path requires a running Codex workspace backend. Use it to inspect backend

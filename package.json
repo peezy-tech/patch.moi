@@ -32,19 +32,17 @@
     "docs:build": "bun run --filter @peezy.tech/patch-docs build",
     "docs:deploy": "bun run --filter @peezy.tech/patch-docs deploy",
     "docs:dev": "bun run --filter @peezy.tech/patch-docs dev",
-    "harness:flow": "bun run --filter @peezy.tech/patch harness:flow",
+    "harness:automation": "bun run --filter @peezy.tech/patch harness:automation",
     "mcp": "bun run --filter @peezy.tech/patch mcp",
     "patch.moi": "bun run --filter @peezy.tech/patch patch.moi",
     "start": "bun run --filter @peezy.tech/patch start",
     "test": "bun run --filter @peezy.tech/patch test",
-    "flow:list": "codex-flow-runner --cwd . list",
     "workspace:backend": "codex-workspace-backend-local serve --cwd . --local-app-server",
     "workspace:doctor": "codex-flows workspace doctor --workspace-root .",
     "workspace:run:harness": "codex-flows workspace run harness-maintenance-fixture --workspace-root . --mode local",
-    "workspace:run:harness-flow": "codex-flows workspace run harness-maintenance-flow-smoke --workspace-root . --mode local",
     "workspace:tick": "codex-flows workspace tick --workspace-root . --mode local"
   },
   "devDependencies": {
-    "@peezy.tech/codex-flows": "^0.4.0"
+    "@peezy.tech/codex-flows": "^0.133.0"
   }
 }

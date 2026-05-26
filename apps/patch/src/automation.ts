@@ -1,45 +1,50 @@
+import {
+  createTurnAutomationHost,
+  resolveTurnAutomationTarget,
+  runTurnAutomationScript,
+  type TurnAutomationRun,
+} from "@peezy.tech/codex-flows";
 import type {
-  FlowDispatchResult,
-  FlowReplayResult,
-  FlowRunView,
-} from "@peezy.tech/codex-flows/flow-runtime/client";
-import type {
+  AutomationDispatchRecord,
+  AutomationEvent,
+  AutomationRunView,
   CandidateRefRecord,
-  FeedWorkspaceFlowTarget,
   FeedSignal,
-  FlowDispatchRecord,
-  FlowEvent,
+  FeedWorkspaceAutomationTarget,
   MaintenanceAttemptRecord,
   MaintenanceAttemptStatus,
   WorkspaceThreadRefRecord,
 } from "./types";
 import {
-  createPatchWorkspaceBackend,
+  createAutomationHostBackend,
   targetWorkspaceBackendUrl,
   type WorkspaceBackendConfig,
 } from "./workspace-backend";
 
 const serviceSource = "patch";
 
-export type FlowDispatchConfig = WorkspaceBackendConfig;
+export type AutomationDispatchConfig = WorkspaceBackendConfig;
 export type WorkspaceDispatchConfig = WorkspaceBackendConfig;
 
+export type AutomationDispatchResult = {
+  eventId: string;
+  runIds: string[];
+  matched: number;
+  runs: AutomationRunView[];
+};
+
 export type WorkspaceDispatchOutcome = {
-  record: FlowDispatchRecord;
-  result?: FlowDispatchResult;
+  record: AutomationDispatchRecord;
+  result?: AutomationDispatchResult;
 };
 
-export type WorkspaceReplayOutcome = {
-  record: FlowDispatchRecord;
-  result?: FlowReplayResult;
-};
+export type WorkspaceReplayOutcome = WorkspaceDispatchOutcome;
 
-function isWorkspaceFlowTarget(value: unknown): value is FeedWorkspaceFlowTarget {
+function isWorkspaceAutomationTarget(value: unknown): value is FeedWorkspaceAutomationTarget {
   return (
     typeof value === "object" &&
     value !== null &&
-    ((value as { mode?: unknown }).mode === "workspace_flow" ||
-      (value as { mode?: unknown }).mode === "flow_dispatch")
+    (value as { mode?: unknown }).mode === "workspace_automation"
   );
 }
 
@@ -54,7 +59,7 @@ function tagFromSignal(signal: FeedSignal): string | undefined {
   return signal.title.trim() || undefined;
 }
 
-function flowPayloadFromSignal(signal: FeedSignal): Record<string, unknown> {
+function automationPayloadFromSignal(signal: FeedSignal): Record<string, unknown> {
   const tag = tagFromSignal(signal);
   return {
     provider: signal.provider,
@@ -76,11 +81,11 @@ function flowPayloadFromSignal(signal: FeedSignal): Record<string, unknown> {
   };
 }
 
-export function flowEventForFeedSignal(
+export function automationEventForFeedSignal(
   signal: FeedSignal,
   receivedAt = new Date().toISOString(),
-): FlowEvent<Record<string, unknown>> | undefined {
-  if (!isWorkspaceFlowTarget(signal.target)) {
+): AutomationEvent<Record<string, unknown>> | undefined {
+  if (!isWorkspaceAutomationTarget(signal.target)) {
     return undefined;
   }
 
@@ -90,8 +95,9 @@ export function flowEventForFeedSignal(
     source: serviceSource,
     occurredAt: signal.publishedAt,
     receivedAt,
+    automations: signal.target.automations,
     payload: {
-      ...flowPayloadFromSignal(signal),
+      ...automationPayloadFromSignal(signal),
       ...(signal.target.payload ?? {}),
     },
   };
@@ -100,13 +106,15 @@ export function flowEventForFeedSignal(
 export function patchUpstreamReleaseEvent(input: {
   repo: string;
   tag: string;
+  automations?: string[];
   receivedAt?: string;
-}): FlowEvent<Record<string, unknown>> {
+}): AutomationEvent<Record<string, unknown>> {
   return {
     id: `${serviceSource}:upstream.release:${input.repo}:${input.tag}`,
     type: "upstream.release",
     source: serviceSource,
     receivedAt: input.receivedAt ?? new Date().toISOString(),
+    automations: input.automations,
     payload: {
       repo: input.repo,
       tag: input.tag,
@@ -118,13 +126,15 @@ export function patchUpstreamBranchUpdateEvent(input: {
   repo: string;
   ref: string;
   sha?: string;
+  automations?: string[];
   receivedAt?: string;
-}): FlowEvent<Record<string, unknown>> {
+}): AutomationEvent<Record<string, unknown>> {
   return {
     id: `${serviceSource}:upstream.branch_update:${input.repo}:${input.ref}${input.sha ? `:${input.sha}` : ""}`,
     type: "upstream.branch_update",
     source: serviceSource,
     receivedAt: input.receivedAt ?? new Date().toISOString(),
+    automations: input.automations,
     payload: {
       repo: input.repo,
       ref: input.ref,
@@ -137,13 +147,15 @@ export function patchDownstreamReleaseEvent(input: {
   packageName: string;
   version: string;
   repo?: string;
+  automations?: string[];
   receivedAt?: string;
-}): FlowEvent<Record<string, unknown>> {
+}): AutomationEvent<Record<string, unknown>> {
   return {
     id: `${serviceSource}:downstream.release:${input.packageName}:${input.version}`,
     type: "downstream.release",
     source: serviceSource,
     receivedAt: input.receivedAt ?? new Date().toISOString(),
+    automations: input.automations,
     payload: {
       packageName: input.packageName,
       version: input.version,
@@ -153,168 +165,70 @@ export function patchDownstreamReleaseEvent(input: {
   };
 }
 
-export async function dispatchFlowEvent(
-  event: FlowEvent,
-  target: Partial<FeedWorkspaceFlowTarget> = {},
-  config: FlowDispatchConfig = {},
-): Promise<FlowDispatchRecord> {
-  return dispatchWorkspaceEvent(event, target, config);
-}
-
 export async function dispatchWorkspaceEvent(
-  event: FlowEvent,
-  target: Partial<FeedWorkspaceFlowTarget> = {},
+  event: AutomationEvent,
+  target: Partial<FeedWorkspaceAutomationTarget> = {},
   config: WorkspaceDispatchConfig = {},
-): Promise<FlowDispatchRecord> {
+): Promise<AutomationDispatchRecord> {
   return (await dispatchWorkspaceEventDetailed(event, target, config)).record;
 }
 
 export async function dispatchWorkspaceEventDetailed(
-  event: FlowEvent,
-  target: Partial<FeedWorkspaceFlowTarget> = {},
+  event: AutomationEvent,
+  target: Partial<FeedWorkspaceAutomationTarget> = {},
   config: WorkspaceDispatchConfig = {},
 ): Promise<WorkspaceDispatchOutcome> {
-  const workspaceTarget = { mode: "workspace_flow" as const, eventType: event.type, ...target };
-  const backend = createPatchWorkspaceBackend(workspaceTarget, config);
-
-  try {
-    const result = await backend.client.dispatchEvent(event);
-    return {
-      result,
-      record: {
-        eventId: event.id,
-        eventType: event.type,
-        operation: "dispatch",
-        target: localTransport(backend.mode) ? "local" : "workspace-backend",
-        transport: backend.mode,
-        workspaceBackendUrl: backend.url,
-        url: backend.eventsUrl,
-        status: "dispatched",
-        runIds: result.runIds,
-        matched: result.matched,
-        idempotent: result.idempotent,
-        createdAt: new Date().toISOString(),
-      },
-    };
-  } catch (error) {
-    const httpStatus = httpStatusFromError(error);
-    return {
-      record: {
-        eventId: event.id,
-        eventType: event.type,
-        operation: "dispatch",
-        target: localTransport(backend.mode) ? "local" : "workspace-backend",
-        transport: backend.mode,
-        workspaceBackendUrl: backend.url,
-        url: backend.eventsUrl,
-        status: "failed",
-        ...(httpStatus ? { httpStatus } : {}),
-        error: error instanceof Error ? error.message : String(error),
-        createdAt: new Date().toISOString(),
-      },
-    };
-  }
-}
-
-export async function replayFlowEvent(
-  event: FlowEvent,
-  target: Partial<FeedWorkspaceFlowTarget> = {},
-  config: FlowDispatchConfig = {},
-): Promise<FlowDispatchRecord> {
-  return replayWorkspaceEvent(event, target, config);
+  return await runAutomationDispatch("dispatch", event, target, config);
 }
 
 export async function replayWorkspaceEvent(
-  event: FlowEvent,
-  target: Partial<FeedWorkspaceFlowTarget> = {},
+  event: AutomationEvent,
+  target: Partial<FeedWorkspaceAutomationTarget> = {},
   config: WorkspaceDispatchConfig = {},
-): Promise<FlowDispatchRecord> {
+): Promise<AutomationDispatchRecord> {
   return (await replayWorkspaceEventDetailed(event, target, config)).record;
 }
 
 export async function replayWorkspaceEventDetailed(
-  event: FlowEvent,
-  target: Partial<FeedWorkspaceFlowTarget> = {},
+  event: AutomationEvent,
+  target: Partial<FeedWorkspaceAutomationTarget> = {},
   config: WorkspaceDispatchConfig = {},
 ): Promise<WorkspaceReplayOutcome> {
-  const env = config.env ?? process.env;
-  const workspaceTarget = { mode: "workspace_flow" as const, eventType: event.type, ...target };
-  const backend = createPatchWorkspaceBackend(workspaceTarget, config);
-  const configuredUrl = targetWorkspaceBackendUrl(workspaceTarget, env);
-
-  try {
-    const result = configuredUrl
-      ? await backend.client.replayEvent(event.id, { wait: false })
-      : await backend.client.dispatchEvent(event);
-    return {
-      result,
-      record: {
-        eventId: event.id,
-        eventType: event.type,
-        operation: "replay",
-        target: localTransport(backend.mode) ? "local" : "workspace-backend",
-        transport: backend.mode,
-        workspaceBackendUrl: backend.url,
-        url: backend.eventsUrl ? `${backend.eventsUrl}/${encodeURIComponent(event.id)}/replay` : undefined,
-        status: "dispatched",
-        runIds: result.runIds,
-        matched: result.matched,
-        idempotent: result.idempotent,
-        createdAt: new Date().toISOString(),
-      },
-    };
-  } catch (error) {
-    const httpStatus = httpStatusFromError(error);
-    return {
-      record: {
-        eventId: event.id,
-        eventType: event.type,
-        operation: "replay",
-        target: localTransport(backend.mode) ? "local" : "workspace-backend",
-        transport: backend.mode,
-        workspaceBackendUrl: backend.url,
-        url: backend.eventsUrl,
-        status: "failed",
-        ...(httpStatus ? { httpStatus } : {}),
-        error: error instanceof Error ? error.message : String(error),
-        createdAt: new Date().toISOString(),
-      },
-    };
-  }
+  return await runAutomationDispatch("replay", event, target, config);
 }
 
-export async function listWorkspaceRuns(config: WorkspaceDispatchConfig = {}, options: {
+export async function listWorkspaceRuns(_config: WorkspaceDispatchConfig = {}, _options: {
   eventId?: string;
   status?: string;
   limit?: number;
-} = {}) {
-  return await createPatchWorkspaceBackend({}, config).client.listRuns(options);
+} = {}): Promise<{ runs: AutomationRunView[] }> {
+  return { runs: [] };
 }
 
-export async function getWorkspaceRun(runId: string, config: WorkspaceDispatchConfig = {}) {
-  return await createPatchWorkspaceBackend({}, config).client.getRun(runId);
+export async function getWorkspaceRun(runId: string, _config: WorkspaceDispatchConfig = {}): Promise<AutomationRunView> {
+  throw new Error(`workspace automation run lookup is not available for ${runId}`);
 }
 
-export async function getWorkspaceEvent(eventId: string, config: WorkspaceDispatchConfig = {}) {
-  return await createPatchWorkspaceBackend({}, config).client.getEvent(eventId);
+export async function getWorkspaceEvent(eventId: string, _config: WorkspaceDispatchConfig = {}) {
+  throw new Error(`workspace automation event lookup is not available for ${eventId}`);
 }
 
-export async function listWorkspaceEvents(config: WorkspaceDispatchConfig = {}, options: {
+export async function listWorkspaceEvents(_config: WorkspaceDispatchConfig = {}, _options: {
   type?: string;
   limit?: number;
 } = {}) {
-  return await createPatchWorkspaceBackend({}, config).client.listEvents(options);
+  return { events: [] };
 }
 
 export async function dispatchWorkspaceEventForFeedSignal(
   signal: FeedSignal,
   config: WorkspaceDispatchConfig = {},
-): Promise<{ event?: FlowEvent<Record<string, unknown>>; record?: FlowDispatchRecord; result?: FlowDispatchResult }> {
-  if (!isWorkspaceFlowTarget(signal.target)) {
+): Promise<{ event?: AutomationEvent<Record<string, unknown>>; record?: AutomationDispatchRecord; result?: AutomationDispatchResult }> {
+  if (!isWorkspaceAutomationTarget(signal.target)) {
     return {};
   }
 
-  const event = flowEventForFeedSignal(signal);
+  const event = automationEventForFeedSignal(signal);
   if (!event) {
     return {};
   }
@@ -323,17 +237,10 @@ export async function dispatchWorkspaceEventForFeedSignal(
   return { event, ...outcome };
 }
 
-export async function dispatchFlowEventForFeedSignal(
-  signal: FeedSignal,
-  config: FlowDispatchConfig = {},
-): Promise<{ event?: FlowEvent<Record<string, unknown>>; record?: FlowDispatchRecord }> {
-  return dispatchWorkspaceEventForFeedSignal(signal, config);
-}
-
 export function maintenanceAttemptForWorkspaceDispatch(
-  event: FlowEvent,
-  record: FlowDispatchRecord,
-  runs: FlowRunView[] = [],
+  event: AutomationEvent,
+  record: AutomationDispatchRecord,
+  runs: AutomationRunView[] = [],
 ): MaintenanceAttemptRecord {
   const payload = typeof event.payload === "object" && event.payload !== null
     ? event.payload as Record<string, unknown>
@@ -362,7 +269,7 @@ export function maintenanceAttemptForWorkspaceDispatch(
 
 export function maintenanceAttemptWithWorkspaceRuns(
   attempt: MaintenanceAttemptRecord,
-  runs: FlowRunView[],
+  runs: AutomationRunView[],
   updatedAt = new Date().toISOString(),
 ): MaintenanceAttemptRecord {
   if (runs.length === 0) {
@@ -373,13 +280,13 @@ export function maintenanceAttemptWithWorkspaceRuns(
     runs.map((run) => [run.id, String(run.effectiveStatus ?? run.status ?? "unknown")]),
   );
   const resultPayloads = runs
-    .map((run) => flowResultPayload(run.resultPayload))
+    .map((run) => automationResultPayload(run.resultPayload))
     .filter((payload): payload is Record<string, unknown> => payload !== undefined);
   const status = statusFromRuns(runs);
   const message = newestString(resultPayloads.map((payload) => payload.message)) ?? attempt.message;
   const candidateRefs = uniqueCandidateRefs([
     ...attempt.candidateRefs,
-    ...resultPayloads.flatMap(candidateRefsFromFlowResult),
+    ...resultPayloads.flatMap(candidateRefsFromAutomationResult),
   ]);
   const workspaceThreadRefs = uniqueThreadRefs([
     ...(attempt.workspaceThreadRefs ?? []),
@@ -413,21 +320,153 @@ export function maintenanceAttemptWithWorkspaceRuns(
   };
 }
 
-function httpStatusFromError(error: unknown): number | undefined {
-  const message = error instanceof Error ? error.message : String(error);
-  const match = message.match(/\bfailed with (\d{3})\b/);
-  return match?.[1] ? Number(match[1]) : undefined;
+async function runAutomationDispatch(
+  operation: "dispatch" | "replay",
+  event: AutomationEvent,
+  target: Partial<FeedWorkspaceAutomationTarget>,
+  config: WorkspaceDispatchConfig,
+): Promise<WorkspaceDispatchOutcome> {
+  const env = config.env ?? process.env;
+  const automationNames = targetAutomations(event, target, env);
+  const workspaceBackendUrl = targetWorkspaceBackendUrl(target, env);
+  if (automationNames.length === 0) {
+    return {
+      result: { eventId: event.id, runIds: [], matched: 0, runs: [] },
+      record: {
+        eventId: event.id,
+        eventType: event.type,
+        operation,
+        target: workspaceBackendUrl ? "workspace-backend" : "local",
+        transport: workspaceBackendUrl ? "workspace-ws" : "app-server",
+        workspaceBackendUrl,
+        status: "skipped",
+        matched: 0,
+        runIds: [],
+        error: "No workspace automations were configured for this event.",
+        createdAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  const runs: AutomationRunView[] = [];
+  for (const automationName of automationNames) {
+    runs.push(await runNamedAutomation(automationName, event, target, config));
+  }
+  const failed = runs.find((run) => run.status === "failed");
+  return {
+    result: {
+      eventId: event.id,
+      runIds: runs.map((run) => run.id),
+      matched: automationNames.length,
+      runs,
+    },
+    record: {
+      eventId: event.id,
+      eventType: event.type,
+      operation,
+      target: workspaceBackendUrl ? "workspace-backend" : "local",
+      transport: workspaceBackendUrl ? "workspace-ws" : "app-server",
+      workspaceBackendUrl,
+      status: failed ? "failed" : "dispatched",
+      runIds: runs.map((run) => run.id),
+      matched: automationNames.length,
+      ...(failed?.error ? { error: failed.error } : {}),
+      createdAt: new Date().toISOString(),
+    },
+  };
 }
 
-function localTransport(value: string): boolean {
-  return value === "local" || value === "actions-local";
+async function runNamedAutomation(
+  automationName: string,
+  event: AutomationEvent,
+  target: Partial<FeedWorkspaceAutomationTarget>,
+  config: WorkspaceDispatchConfig,
+): Promise<AutomationRunView> {
+  const startedAt = new Date().toISOString();
+  const id = `${event.id}:${automationName}:${startedAt}`;
+  let backend: Awaited<ReturnType<typeof createAutomationHostBackend>> | undefined;
+  try {
+    const runTarget = await resolveTurnAutomationTarget(automationName, { cwd: config.cwd ?? process.cwd() });
+    backend = await createAutomationHostBackend(target, config);
+    const run = await runTurnAutomationScript({
+      scriptPath: runTarget.scriptPath,
+      automation: runTarget.automation,
+      event,
+      prompt: runTarget.prompt,
+      cwd: runTarget.cwd ?? config.cwd,
+      timeoutMs: 90_000,
+      host: createTurnAutomationHost({
+        via: backend.mode === "workspace-ws" ? "workspace" : "app-server",
+        appRequest: backend.appRequest,
+        workspaceRequest: backend.workspaceRequest,
+        defaults: {
+          prompt: runTarget.prompt,
+          cwd: runTarget.cwd ?? config.cwd,
+          skills: runTarget.skills,
+        },
+      }),
+    });
+    return runViewFromAutomationRun(id, event, automationName, run, startedAt);
+  } catch (error) {
+    return {
+      id,
+      eventId: event.id,
+      automationName,
+      status: "failed",
+      effectiveStatus: "failed",
+      error: error instanceof Error ? error.message : String(error),
+      startedAt,
+      completedAt: new Date().toISOString(),
+    };
+  } finally {
+    backend?.close();
+  }
+}
+
+function runViewFromAutomationRun(
+  id: string,
+  event: AutomationEvent,
+  automationName: string,
+  run: TurnAutomationRun,
+  startedAt: string,
+): AutomationRunView {
+  const payload = automationResultPayload(run.result);
+  const status = stringValue(payload?.status) ?? "completed";
+  return {
+    id,
+    eventId: event.id,
+    automationName,
+    status,
+    effectiveStatus: status,
+    resultPayload: run.result,
+    startedAt,
+    completedAt: new Date().toISOString(),
+  };
+}
+
+function targetAutomations(
+  event: AutomationEvent,
+  target: Partial<FeedWorkspaceAutomationTarget>,
+  env: Record<string, string | undefined>,
+): string[] {
+  return uniqueStrings([
+    ...(target.automations ?? []),
+    ...(event.automations ?? []),
+    ...commaList(env.PATCH_AUTOMATIONS),
+  ]);
+}
+
+function commaList(value: string | undefined): string[] {
+  return value
+    ? value.split(",").map((entry) => entry.trim()).filter(Boolean)
+    : [];
 }
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-function flowResultPayload(value: unknown): Record<string, unknown> | undefined {
+function automationResultPayload(value: unknown): Record<string, unknown> | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return undefined;
   }
@@ -439,23 +478,23 @@ function flowResultPayload(value: unknown): Record<string, unknown> | undefined 
   return typeof nested.status === "string" ? nested : undefined;
 }
 
-function statusFromRuns(runs: FlowRunView[]): MaintenanceAttemptStatus {
+function statusFromRuns(runs: AutomationRunView[]): MaintenanceAttemptStatus {
   const statuses = runs.map((run) => resultStatus(run));
   if (statuses.some((status) => status === "needs_intervention")) return "needs_intervention";
   if (statuses.some((status) => status === "blocked")) return "blocked";
   if (statuses.some((status) => status === "failed")) return "failed";
   if (statuses.some((status) => status === "changed")) return "changed";
   if (statuses.length > 0 && statuses.every((status) => status === "skipped")) return "skipped";
-  if (statuses.length > 0 && statuses.every((status) => status === "completed" || status === "skipped")) return "completed";
+  if (statuses.length > 0 && statuses.every((status) => status === "completed" || status === "skipped" || status === "started")) return "started";
   return "started";
 }
 
-function resultStatus(run: FlowRunView): string {
-  const payload = flowResultPayload(run.resultPayload);
+function resultStatus(run: AutomationRunView): string {
+  const payload = automationResultPayload(run.resultPayload);
   return stringValue(payload?.status) ?? String(run.effectiveStatus ?? run.status ?? "started");
 }
 
-function candidateRefsFromFlowResult(result: Record<string, unknown>): CandidateRefRecord[] {
+function candidateRefsFromAutomationResult(result: Record<string, unknown>): CandidateRefRecord[] {
   const artifacts = recordValue(result.artifacts);
   const candidates = [
     ...arrayValue(artifacts.candidateRefs),
@@ -465,13 +504,11 @@ function candidateRefsFromFlowResult(result: Record<string, unknown>): Candidate
   return candidates.flatMap(candidateRefValue);
 }
 
-function threadRefsFromRun(run: FlowRunView): WorkspaceThreadRefRecord[] {
-  const payload = flowResultPayload(run.resultPayload);
-  const artifacts = recordValue(payload?.artifacts);
-  return threadRefsFromValue(artifacts, {
+function threadRefsFromRun(run: AutomationRunView): WorkspaceThreadRefRecord[] {
+  const payload = automationResultPayload(run.resultPayload);
+  return threadRefsFromValue(payload, {
     runId: run.id,
-    ...(stringValue(run.flowName) ? { flowName: stringValue(run.flowName) } : {}),
-    ...(stringValue(run.stepName) ? { stepName: stringValue(run.stepName) } : {}),
+    automationName: run.automationName,
   });
 }
 
@@ -491,7 +528,6 @@ function threadRefsFromValue(
       ...source,
       threadId,
       ...(stringValue(record.turnId) ? { turnId: stringValue(record.turnId) } : {}),
-      ...(stringValue(record.threadJsonPath) ? { threadJsonPath: stringValue(record.threadJsonPath) } : {}),
       ...(stringValue(record.turnStatus) ? { turnStatus: stringValue(record.turnStatus) } : {}),
       ...(stringValue(record.label) ? { label: stringValue(record.label) } : label ? { label } : {}),
     });
@@ -545,8 +581,7 @@ function uniqueThreadRefs(refs: WorkspaceThreadRefRecord[]): WorkspaceThreadRefR
   for (const ref of refs) {
     const key = [
       ref.runId ?? "",
-      ref.flowName ?? "",
-      ref.stepName ?? "",
+      ref.automationName ?? "",
       ref.label ?? "",
       ref.threadId,
       ref.turnId ?? "",
@@ -561,7 +596,7 @@ function uniqueThreadRefs(refs: WorkspaceThreadRefRecord[]): WorkspaceThreadRefR
 }
 
 function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values)];
+  return [...new Set(values.filter(Boolean))];
 }
 
 function newestString(values: unknown[]): string | undefined {

@@ -81,11 +81,11 @@ the checkout in the conflicted state for the operator or a Code Mode turn.
 Dispatch the harness release fixture through the patch.moi state path:
 
 ```bash
-CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 \
+\
 bun run patch.moi -- run harness
 ```
 
-The command records the flow event, dispatch record, and maintenance attempt
+The command records the automation event, dispatch record, and maintenance attempt
 under `DATA_DIR`. If `PATCH_WORKSPACE_BACKEND_URL` is unset, the dispatch uses
 local flow execution from the workspace root. If it is set, the dispatch goes to
 the configured workspace backend.
@@ -134,7 +134,7 @@ bun run patch.moi -- run upstream-release --repo owner/project --tag v1.2.3
 ```
 
 Use `--allow-local` only when you intentionally want the local Patch process to
-execute matching workspace flows.
+execute matching workspace automations.
 
 ## Status
 

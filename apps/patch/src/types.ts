@@ -9,15 +9,12 @@ export type FeedForkSyncTarget = {
   mode: "notify_only" | "fork_sync";
 };
 
-export type FeedWorkspaceFlowTarget = {
-  mode: "workspace_flow" | "flow_dispatch";
+export type FeedWorkspaceAutomationTarget = {
+  mode: "workspace_automation";
   eventType: string;
+  automations: string[];
   workspaceUrl?: string;
   workspaceUrlEnv?: string;
-  workspaceSecretEnv?: string;
-  dispatchUrl?: string;
-  dispatchUrlEnv?: string;
-  dispatchSecretEnv?: string;
   payload?: Record<string, unknown>;
 };
 
@@ -33,7 +30,7 @@ export type FeedSourceConfig = {
     webUrl: string;
     defaultBranch?: string;
   };
-  target?: FeedForkSyncTarget | FeedWorkspaceFlowTarget;
+  target?: FeedForkSyncTarget | FeedWorkspaceAutomationTarget;
   pollIntervalSeconds?: number;
   primeOnly?: boolean;
 };
@@ -69,33 +66,31 @@ export type FeedJob = {
   createdAt: string;
 };
 
-export type FlowEvent<T = unknown> = {
+export type AutomationEvent<T = unknown> = {
   id: string;
   type: string;
   source?: string;
   occurredAt?: string;
   receivedAt: string;
+  automations?: string[];
   payload: T;
 };
 
-export type FlowDispatchRecord = {
+export type AutomationDispatchRecord = {
   eventId: string;
   eventType: string;
   operation?: "dispatch" | "replay";
   target?: "local" | "workspace-backend";
-  transport?: "local" | "actions-local" | "workspace-http" | "workspace-ws";
+  transport?: "app-server" | "workspace-ws";
   workspaceBackendUrl?: string;
-  url?: string;
   status: "dispatched" | "failed" | "skipped";
   runIds?: string[];
   matched?: number;
-  idempotent?: boolean;
-  httpStatus?: number;
   error?: string;
   createdAt: string;
 };
 
-export type WorkspaceDispatchRecord = FlowDispatchRecord;
+export type WorkspaceDispatchRecord = AutomationDispatchRecord;
 
 export type CandidateRefRecord = {
   kind: string;
@@ -110,12 +105,22 @@ export type CandidateRefRecord = {
 export type WorkspaceThreadRefRecord = {
   threadId: string;
   turnId?: string;
-  threadJsonPath?: string;
   turnStatus?: string;
   label?: string;
   runId?: string;
-  flowName?: string;
-  stepName?: string;
+  automationName?: string;
+};
+
+export type AutomationRunView = {
+  id: string;
+  eventId: string;
+  automationName: string;
+  status: string;
+  effectiveStatus?: string;
+  resultPayload?: unknown;
+  error?: string;
+  startedAt: string;
+  completedAt?: string;
 };
 
 export type MaintenanceAttemptStatus =

@@ -16,7 +16,7 @@ Responsibilities:
 - Poll configured feeds.
 - Normalize entries into `FeedSignal` records.
 - Store JSONL state.
-- Submit generic `FlowEvent` triggers through the patch.moi workspace backend
+- Submit generic `AutomationEvent` triggers through the patch.moi workspace backend
   adapter.
 - Provide the `patch.moi` CLI for setup, local maintenance runs, status,
   retry, replay, and sync.
@@ -40,7 +40,7 @@ current `@peezy.tech/codex-flows` package surface so repo-native workspace,
 flow, app-server, and backend commands are available:
 
 ```bash
-bun run flow:list
+codex-flows automation list
 bun run workspace:backend
 bun run workspace:doctor
 bun run workspace:tick
@@ -63,7 +63,7 @@ codex-flows pack doctor --json
 ```
 
 Those installed capabilities are workspace state, not patch.moi product state.
-patch.moi still records feed-owned flow events, workspace dispatches, and
+patch.moi still records feed-owned automation events, workspace dispatches, and
 maintenance attempts under `DATA_DIR`.
 
 ## Related Runtime Package

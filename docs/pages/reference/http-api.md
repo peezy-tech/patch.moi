@@ -16,10 +16,10 @@ Returns `ok`.
 ## Flow events
 
 ```text
-GET /flow-events?type=<type>&limit=<n>
-GET /flow-events/:id?limit=<n>
-POST /flow-events/:id/retry
-POST /flow-events/:id/replay
+GET /automation-events?type=<type>&limit=<n>
+GET /automation-events/:id?limit=<n>
+POST /automation-events/:id/retry
+POST /automation-events/:id/replay
 ```
 
 The list endpoint returns stored events newest first. The detail endpoint
@@ -49,10 +49,10 @@ candidate refs, and appends the latest attempt state.
 
 ```text
 GET /workspace-dispatches?eventId=<id>&status=dispatched|failed|skipped&limit=<n>
-GET /flow-dispatches?eventId=<id>&status=dispatched|failed|skipped&limit=<n>
+GET /automation-dispatches?eventId=<id>&status=dispatched|failed|skipped&limit=<n>
 ```
 
-`/flow-dispatches` is a compatibility alias for older operators.
+`/automation-dispatches` is a compatibility alias for older operators.
 
 ## Workspace inspection
 

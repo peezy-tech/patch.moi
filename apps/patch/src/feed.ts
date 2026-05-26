@@ -6,7 +6,7 @@ import {
   dispatchWorkspaceEventForFeedSignal,
   maintenanceAttemptForWorkspaceDispatch,
   type WorkspaceDispatchConfig,
-} from "./flow";
+} from "./automation";
 import { EventStore, jobForFeedSignal } from "./queue";
 import type { FeedEventName, FeedSignal, FeedSourceConfig } from "./types";
 
@@ -29,7 +29,6 @@ type FeedPollerConfig = {
   sourcesPath: string;
   discord?: DiscordConfig;
   workspaceBackend?: WorkspaceDispatchConfig;
-  flowDispatch?: WorkspaceDispatchConfig;
 };
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -237,9 +236,8 @@ export async function pollFeedSource(input: {
   store: EventStore;
   discord?: DiscordConfig;
   workspaceBackend?: WorkspaceDispatchConfig;
-  flowDispatch?: WorkspaceDispatchConfig;
   fetchImpl?: FetchLike;
-}): Promise<{ signals: FeedSignal[]; jobs: number; flowDispatches: number; primed: boolean }> {
+}): Promise<{ signals: FeedSignal[]; jobs: number; automationDispatches: number; primed: boolean }> {
   const response = await (input.fetchImpl ?? fetch)(input.source.url, {
     headers: { accept: "application/json, application/atom+xml, application/rss+xml, application/xml, text/xml;q=0.9" },
   });
@@ -255,7 +253,7 @@ export async function pollFeedSource(input: {
   const selectedEntries = entriesForPoll(entries, previous?.lastSeenId, input.source.primeOnly);
   const signals: FeedSignal[] = [];
   let jobs = 0;
-  let flowDispatches = 0;
+  let automationDispatches = 0;
 
   for (const entry of selectedEntries) {
     const signal = signalFromEntry(input.source, entry);
@@ -267,10 +265,10 @@ export async function pollFeedSource(input: {
     }
     const workspaceDispatch = await dispatchWorkspaceEventForFeedSignal(
       signal,
-      input.workspaceBackend ?? input.flowDispatch,
+      input.workspaceBackend,
     );
     if (workspaceDispatch.event) {
-      await input.store.appendFlowEvent(workspaceDispatch.event);
+      await input.store.appendAutomationEvent(workspaceDispatch.event);
     }
     if (workspaceDispatch.record) {
       await input.store.appendWorkspaceDispatch(workspaceDispatch.record);
@@ -284,7 +282,7 @@ export async function pollFeedSource(input: {
         );
       }
       if (workspaceDispatch.record.status === "dispatched") {
-        flowDispatches += 1;
+        automationDispatches += 1;
       }
     }
     await notifyDiscord(input.discord ?? { enabled: false, notifyEvents: new Set() }, { signal, job });
@@ -296,7 +294,7 @@ export async function pollFeedSource(input: {
       event: signal.event,
       entryId: signal.entryId,
       job: job?.id,
-      flowEvent: workspaceDispatch.event?.id,
+      automationEvent: workspaceDispatch.event?.id,
       workspaceDispatch: workspaceDispatch.record?.status,
     }));
   }
@@ -309,7 +307,7 @@ export async function pollFeedSource(input: {
     await saveState(input.statePath, input.state);
   }
 
-  return { signals, jobs, flowDispatches, primed };
+  return { signals, jobs, automationDispatches, primed };
 }
 
 export async function pollFeedsOnce(config: FeedPollerConfig, fetchImpl?: FetchLike): Promise<void> {
@@ -327,7 +325,6 @@ export async function pollFeedsOnce(config: FeedPollerConfig, fetchImpl?: FetchL
         store,
         discord: config.discord,
         workspaceBackend: config.workspaceBackend,
-        flowDispatch: config.flowDispatch,
         fetchImpl,
       });
     } catch (error) {

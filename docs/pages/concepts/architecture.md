@@ -20,7 +20,7 @@ patch.moi has three product responsibilities:
 ```mermaid
 flowchart TD
   A["upstream release, tag, branch update, or advisory"] --> B["Patch FeedSignal"]
-  B --> C["durable FlowEvent"]
+  B --> C["durable AutomationEvent"]
   C --> D["maintenance attempt"]
   D --> E{"execution surface"}
   E -- local --> F["local workspace"]
@@ -42,7 +42,7 @@ The current service has these pieces:
 | --- | --- |
 | HTTP server | health, admin listing, retry, replay, sync, and workspace inspection endpoints |
 | feed poller | reads configured upstream feeds and emits normalized signals |
-| JSONL store | writes feed events, flow events, workspace dispatches, and maintenance attempts under `DATA_DIR` |
+| JSONL store | writes feed events, automation events, workspace dispatches, and maintenance attempts under `DATA_DIR` |
 | workspace backend adapter | dispatches locally when no backend URL is set, or calls a configured Codex workspace backend |
 | harness flows | exercise Codex-shaped fork maintenance through `flows/patch-moi-harness-*` |
 | repo workspace config | exposes manual operator tasks through `codex-flows workspace doctor|tick|run` |
@@ -55,7 +55,7 @@ workspace or runner performs the patch application work.
 patch.moi-owned state lives under `DATA_DIR`:
 
 - feed cursors and feed events
-- deterministic flow events
+- deterministic automation events
 - workspace dispatch, retry, and replay records
 - maintenance attempts, outcomes, candidate refs, and intervention state
 
@@ -98,7 +98,7 @@ See [Forge service mode](forge-service-mode) for the service shape.
 
 ## Boundary Rule
 
-Use flow events for portable automation triggers. Use patch.moi state for the
+Use automation events for portable automation triggers. Use patch.moi state for the
 product lifecycle around those triggers: feed history, dispatch attempts,
 workspace run ids, candidate refs, review status, and intervention state.
 

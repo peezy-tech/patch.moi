@@ -3,7 +3,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { discoverFlows, matchingSteps, type FlowEvent as RuntimeFlowEvent } from "@peezy.tech/codex-flows/flow-runtime";
 import { loadPatchMoiConfig } from "./config";
 import {
   dispatchWorkspaceEventDetailed,
@@ -13,7 +12,7 @@ import {
   patchUpstreamReleaseEvent,
   replayWorkspaceEventDetailed,
   type WorkspaceDispatchConfig,
-} from "./flow";
+} from "./automation";
 import { syncMaintenanceAttempt } from "./maintenance";
 import {
   capturePatchBranch,
@@ -22,7 +21,7 @@ import {
   rebuildPatchMain,
 } from "./patch-workspace";
 import { EventStore } from "./queue";
-import type { FlowDispatchRecord, FlowEvent, MaintenanceAttemptRecord } from "./types";
+import type { AutomationDispatchRecord, AutomationEvent, MaintenanceAttemptRecord } from "./types";
 import type { WorkspaceBackendFetch } from "./workspace-backend";
 
 type CliOptions = {
@@ -55,9 +54,9 @@ Usage:
   patch.moi dispatches [--event-id ID] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
   patch.moi attempts [--event-id ID] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
   patch.moi run harness [--event FILE] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--json]
-  patch.moi run upstream-release --repo OWNER/NAME --tag TAG [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
-  patch.moi run upstream-branch --repo OWNER/NAME [--sha SHA] [--ref refs/heads/main] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
-  patch.moi run downstream-release --package PACKAGE --version VERSION [--repo OWNER/NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
+  patch.moi run upstream-release --repo OWNER/NAME --tag TAG [--automation NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
+  patch.moi run upstream-branch --repo OWNER/NAME [--sha SHA] [--ref refs/heads/main] [--automation NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
+  patch.moi run downstream-release --package PACKAGE --version VERSION [--repo OWNER/NAME] [--automation NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run event --file FILE [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--json]
   patch.moi patch doctor [--repo DIR] [--main BRANCH] [--upstream-remote REMOTE] [--upstream-branch BRANCH] [--fork-remote REMOTE] [--json]
   patch.moi patch list [--repo DIR] [--prefix patch/] [--json]
@@ -158,7 +157,7 @@ function cliContext(
 async function handleStatus(context: CliContext): Promise<number> {
   const limit = numberFlag(context.parsed, "limit", 20);
   const [events, dispatches, attempts] = await Promise.all([
-    context.store.listFlowEvents({ limit }),
+    context.store.listAutomationEvents({ limit }),
     context.store.listWorkspaceDispatches({ limit }),
     context.store.listMaintenanceAttempts({ limit }),
   ]);
@@ -191,7 +190,7 @@ async function handleStatus(context: CliContext): Promise<number> {
 }
 
 async function handleEvents(context: CliContext): Promise<number> {
-  const events = await context.store.listFlowEvents({
+  const events = await context.store.listAutomationEvents({
     type: flagValue(context.parsed, "type"),
     limit: numberFlag(context.parsed, "limit", 50),
   });
@@ -244,8 +243,8 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
   }
   if (target === "harness") {
     const eventFile = flagValue(context.parsed, "event") ??
-      path.join(context.workspaceRoot, "flows/patch-moi-harness-fork/fixtures/upstream-release-v0.1.3.json");
-    const event = await readFlowEvent(eventFile, context.workspaceRoot);
+      path.join(context.workspaceRoot, "automations/patch-moi-harness-fork/fixtures/upstream-release-v0.1.3.json");
+    const event = await readAutomationEvent(eventFile, context.workspaceRoot);
     return await runEvent(event, context);
   }
   if (target === "upstream-release") {
@@ -257,7 +256,7 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
     if (!tag) {
       throw new UsageError("run upstream-release requires --tag");
     }
-    const event = patchUpstreamReleaseEvent({ repo, tag });
+    const event = patchUpstreamReleaseEvent({ repo, tag, automations: automationFlags(context.parsed) });
     if (!flagBool(context.parsed, "dry-run") && !flagBool(context.parsed, "record-only")) {
       assertDispatchSurfaceAllowed(context, "upstream-release");
     }
@@ -273,6 +272,7 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
       repo,
       ref,
       sha: flagValue(context.parsed, "sha"),
+      automations: automationFlags(context.parsed),
     });
     if (!flagBool(context.parsed, "dry-run") && !flagBool(context.parsed, "record-only")) {
       assertDispatchSurfaceAllowed(context, "upstream-branch");
@@ -292,6 +292,7 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
       packageName,
       version,
       repo: flagValue(context.parsed, "repo"),
+      automations: automationFlags(context.parsed),
     });
     if (!flagBool(context.parsed, "dry-run") && !flagBool(context.parsed, "record-only")) {
       assertDispatchSurfaceAllowed(context, "downstream-release");
@@ -303,7 +304,7 @@ async function handleRun(positionals: string[], context: CliContext): Promise<nu
     if (!eventFile) {
       throw new UsageError("run event requires --file");
     }
-    return await runEvent(await readFlowEvent(eventFile, context.workspaceRoot), context);
+    return await runEvent(await readAutomationEvent(eventFile, context.workspaceRoot), context);
   }
   throw new UsageError(`unknown run target: ${target}`);
 }
@@ -417,33 +418,26 @@ async function handlePatch(positionals: string[], context: CliContext): Promise<
   throw new UsageError(`unknown patch action: ${action}`);
 }
 
-async function runEvent(event: FlowEvent, context: CliContext): Promise<number> {
+async function runEvent(event: AutomationEvent, context: CliContext): Promise<number> {
   if (flagBool(context.parsed, "dry-run")) {
-    const matches = await matchingSteps(
-      await discoverFlows({ cwd: context.workspaceRoot }),
-      event as RuntimeFlowEvent<Record<string, unknown>>,
-    );
+    const automations = automationsForEvent(event, context);
     const payload = {
       event,
-      matches: matches.map(({ flow, step }) => ({
-        flow: flow.manifest.name,
-        step: step.name,
-        runner: step.runner,
-      })),
+      automations,
     };
     if (context.json) {
       writeJson(context, payload);
     } else {
-      writeLine(context, `${event.id} matches ${payload.matches.length} step(s)`);
-      for (const match of payload.matches) {
-        writeLine(context, `- ${match.flow}/${match.step} (${match.runner})`);
+      writeLine(context, `${event.id} targets ${automations.length} automation(s)`);
+      for (const automation of automations) {
+        writeLine(context, `- ${automation}`);
       }
     }
     return 0;
   }
 
   await writeDispatchPlan(context, event);
-  const recorded = await appendFlowEventIfMissing(context.store, event);
+  const recorded = await appendAutomationEventIfMissing(context.store, event);
   if (flagBool(context.parsed, "record-only")) {
     writeOutput(context, { event, recorded });
     return 0;
@@ -466,9 +460,9 @@ async function handleDispatchOperation(
   if (!eventId) {
     throw new UsageError(`${operation} requires EVENT_ID`);
   }
-  const event = await context.store.getFlowEvent(eventId);
+  const event = await context.store.getAutomationEvent(eventId);
   if (!event) {
-    throw new UsageError(`flow event not found: ${eventId}`, 1);
+    throw new UsageError(`automation event not found: ${eventId}`, 1);
   }
   const outcome = operation === "retry"
     ? await dispatchWorkspaceEventDetailed(event, {}, workspaceConfig(context))
@@ -622,45 +616,51 @@ async function git(
   return { code, stdout, stderr };
 }
 
-async function readFlowEvent(filePath: string, cwd: string): Promise<FlowEvent> {
-  const raw = JSON.parse(await readFile(resolvePath(cwd, filePath), "utf8")) as FlowEvent;
+async function readAutomationEvent(filePath: string, cwd: string): Promise<AutomationEvent> {
+  const raw = JSON.parse(await readFile(resolvePath(cwd, filePath), "utf8")) as AutomationEvent;
   if (!raw || typeof raw !== "object" || typeof raw.id !== "string" || typeof raw.type !== "string") {
-    throw new UsageError(`invalid flow event file: ${filePath}`);
+    throw new UsageError(`invalid automation event file: ${filePath}`);
   }
   return raw;
 }
 
-async function appendFlowEventIfMissing(store: EventStore, event: FlowEvent): Promise<boolean> {
-  if (await store.getFlowEvent(event.id)) {
+async function appendAutomationEventIfMissing(store: EventStore, event: AutomationEvent): Promise<boolean> {
+  if (await store.getAutomationEvent(event.id)) {
     return false;
   }
-  await store.appendFlowEvent(event);
+  await store.appendAutomationEvent(event);
   return true;
 }
 
 function assertDispatchSurfaceAllowed(context: CliContext, command = "upstream-release"): void {
   if (
     flagBool(context.parsed, "allow-local") ||
-    workspaceBackendConfigured(context.env) ||
-    actionsLocalConfigured(context.env)
+    workspaceBackendConfigured(context.env)
   ) {
     return;
   }
   throw new UsageError(
-    `${command} dispatch requires PATCH_WORKSPACE_BACKEND_URL, CODEX_WORKSPACE_MODE=actions, or --allow-local; use --dry-run to verify matching without executing maintenance work`,
+    `${command} dispatch requires PATCH_WORKSPACE_BACKEND_URL or --allow-local; use --dry-run to verify configured automations without executing maintenance work`,
   );
 }
 
 function workspaceBackendConfigured(env: Record<string, string | undefined>): boolean {
   return Boolean(
-    env.PATCH_WORKSPACE_BACKEND_URL?.trim() ||
-    env.PATCH_FLOW_BACKEND_URL?.trim() ||
-    env.PATCH_FLOW_DISPATCH_URL?.trim(),
+    env.PATCH_WORKSPACE_BACKEND_URL?.trim(),
   );
 }
 
-function actionsLocalConfigured(env: Record<string, string | undefined>): boolean {
-  return env.CODEX_WORKSPACE_MODE === "actions" || env.GITHUB_ACTIONS === "true";
+function automationsForEvent(event: AutomationEvent, context: CliContext): string[] {
+  return [
+    ...(event.automations ?? []),
+    ...commaList(context.env.PATCH_AUTOMATIONS),
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+}
+
+function commaList(value: string | undefined): string[] {
+  return value
+    ? value.split(",").map((entry) => entry.trim()).filter(Boolean)
+    : [];
 }
 
 function workspaceConfig(context: CliContext): WorkspaceDispatchConfig {
@@ -668,28 +668,24 @@ function workspaceConfig(context: CliContext): WorkspaceDispatchConfig {
     env: context.env,
     cwd: context.workspaceRoot,
     progress: progressSink(context),
-    ...(context.fetchImpl ? { fetchImpl: context.fetchImpl } : {}),
   };
 }
 
-async function writeDispatchPlan(context: CliContext, event: FlowEvent): Promise<void> {
-  const matches = await matchingSteps(
-    await discoverFlows({ cwd: context.workspaceRoot }),
-    event as RuntimeFlowEvent<Record<string, unknown>>,
-  );
-  writeProgress(context, `[flow] dispatch ${event.id} -> ${matches.length} step(s)\n`);
-  for (const { flow, step } of matches) {
-    writeProgress(context, `[flow] queued ${flow.manifest.name}/${step.name} (${step.runner})\n`);
+async function writeDispatchPlan(context: CliContext, event: AutomationEvent): Promise<void> {
+  const automations = automationsForEvent(event, context);
+  writeProgress(context, `[automation] dispatch ${event.id} -> ${automations.length} automation(s)\n`);
+  for (const automation of automations) {
+    writeProgress(context, `[automation] queued ${automation}\n`);
   }
 }
 
 function writeAttemptProgress(context: CliContext, attempt: MaintenanceAttemptRecord): void {
-  writeProgress(context, `[flow] attempt ${attempt.status} ${attempt.id}\n`);
+  writeProgress(context, `[automation] attempt ${attempt.status} ${attempt.id}\n`);
   for (const thread of attempt.workspaceThreadRefs ?? []) {
-    const owner = [thread.flowName, thread.stepName].filter(Boolean).join("/");
+    const owner = thread.automationName;
     writeProgress(
       context,
-      `[flow] thread ${owner || thread.label || "codex"} ${thread.threadId}${thread.turnId ? ` turn=${thread.turnId}` : ""}\n`,
+      `[automation] thread ${owner || thread.label || "codex"} ${thread.threadId}${thread.turnId ? ` turn=${thread.turnId}` : ""}\n`,
     );
   }
 }
@@ -698,16 +694,15 @@ function progressSink(context: CliContext): (event: unknown) => void {
   return (event) => {
     const record = event && typeof event === "object" ? event as Record<string, unknown> : {};
     const kind = typeof record.kind === "string" ? record.kind : "";
-    const flow = typeof record.flowName === "string" ? record.flowName : "unknown-flow";
-    const step = typeof record.stepName === "string" ? record.stepName : "unknown-step";
+    const automation = typeof record.automationName === "string" ? record.automationName : "unknown-automation";
     const runId = typeof record.runId === "string" ? record.runId : "";
     if (kind === "run_start") {
-      writeProgress(context, `[flow] start ${flow}/${step}${runId ? ` ${runId}` : ""}\n`);
+      writeProgress(context, `[automation] start ${automation}${runId ? ` ${runId}` : ""}\n`);
       return;
     }
     if (kind === "run_complete") {
       const status = typeof record.status === "string" ? record.status : "unknown";
-      writeProgress(context, `[flow] done ${flow}/${step}${runId ? ` ${runId}` : ""} status=${status}\n`);
+      writeProgress(context, `[automation] done ${automation}${runId ? ` ${runId}` : ""} status=${status}\n`);
       return;
     }
     if ((kind === "stderr" || kind === "stdout") && typeof record.text === "string") {
@@ -729,9 +724,9 @@ function patchRepoPath(context: CliContext): string {
 }
 
 function writeOutput(context: CliContext, payload: {
-  event?: FlowEvent;
+  event?: AutomationEvent;
   recorded?: boolean;
-  record?: FlowDispatchRecord;
+  record?: AutomationDispatchRecord;
   attempt?: MaintenanceAttemptRecord;
 }): void {
   if (context.json) {
@@ -750,7 +745,7 @@ function writeOutput(context: CliContext, payload: {
   if (payload.attempt) {
     writeLine(context, `attempt: ${payload.attempt.status} ${payload.attempt.id}`);
     for (const thread of payload.attempt.workspaceThreadRefs ?? []) {
-      const owner = [thread.flowName, thread.stepName].filter(Boolean).join("/");
+      const owner = thread.automationName;
       writeLine(
         context,
         `thread: ${owner || thread.label || "codex"} ${thread.threadId}${thread.turnId ? ` turn=${thread.turnId}` : ""}`,
@@ -813,6 +808,14 @@ function flagBool(parsed: ParsedArgs, name: string): boolean {
   return value === "true" || value === "1" || value === "yes";
 }
 
+function automationFlags(parsed: ParsedArgs): string[] | undefined {
+  const values = parsed.flags.get("automation") ?? parsed.flags.get("automations") ?? [];
+  const automations = values.flatMap((value) =>
+    value.split(",").map((entry) => entry.trim()).filter((entry) => entry && entry !== "true")
+  );
+  return automations.length > 0 ? [...new Set(automations)] : undefined;
+}
+
 function numberFlag(parsed: ParsedArgs, name: string, fallback: number): number {
   const value = flagValue(parsed, name);
   if (!value) {
@@ -834,7 +837,7 @@ function findWorkspaceRoot(cwd: string): string {
   while (true) {
     if (
       existsSync(path.join(current, ".codex/workspace.toml")) ||
-      existsSync(path.join(current, "flows/patch-moi-harness-fork/flow.toml"))
+      existsSync(path.join(current, "automations/patch-moi-harness-fork/automation.json"))
     ) {
       return current;
     }
@@ -846,7 +849,7 @@ function findWorkspaceRoot(cwd: string): string {
   }
 }
 
-function dispatchStatus(value: string | undefined): FlowDispatchRecord["status"] | undefined {
+function dispatchStatus(value: string | undefined): AutomationDispatchRecord["status"] | undefined {
   if (!value) return undefined;
   if (value === "dispatched" || value === "failed" || value === "skipped") return value;
   throw new UsageError("--status must be dispatched, failed, or skipped");

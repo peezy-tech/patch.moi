@@ -32,7 +32,7 @@ export default {
         "reference/environment",
         "reference/feed-sources",
         "reference/http-api",
-        "reference/dispatch-and-replay-flow-events",
+        "reference/dispatch-and-replay-automation-events",
         "reference/jsonl-state",
         "reference/packages",
       ],

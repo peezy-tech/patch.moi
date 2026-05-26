@@ -8,7 +8,7 @@ import {
   listWorkspaceRuns,
   maintenanceAttemptForWorkspaceDispatch,
   replayWorkspaceEventDetailed,
-} from "./flow";
+} from "./automation";
 import { jsonResponse, methodNotAllowed, textResponse } from "./http";
 import { syncMaintenanceAttempt } from "./maintenance";
 import { EventStore } from "./queue";
@@ -58,32 +58,32 @@ function maintenanceStatus(value: string | null) {
   throw new Error("maintenance attempt status is invalid");
 }
 
-async function handleFlowEvents(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
+async function handleAutomationEvents(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
   const unauthorized = requireAdmin(request, config);
   if (unauthorized) return unauthorized;
 
   const url = new URL(request.url);
-  if (request.method === "GET" && url.pathname === "/flow-events") {
+  if (request.method === "GET" && url.pathname === "/automation-events") {
     return jsonResponse({
-      events: await store.listFlowEvents({
+      events: await store.listAutomationEvents({
         type: url.searchParams.get("type") ?? undefined,
         limit: numberParam(url.searchParams.get("limit")),
       }),
     });
   }
 
-  const eventMatch = url.pathname.match(/^\/flow-events\/([^/]+)(?:\/(retry|replay))?$/);
+  const eventMatch = url.pathname.match(/^\/automation-events\/([^/]+)(?:\/(retry|replay))?$/);
   if (!eventMatch?.[1]) return jsonResponse({ error: "not_found" }, { status: 404 });
 
   const eventId = decodeURIComponent(eventMatch[1]);
-  const event = await store.getFlowEvent(eventId);
+  const event = await store.getAutomationEvent(eventId);
   if (!event) {
-    return jsonResponse({ error: "flow_event_not_found" }, { status: 404 });
+    return jsonResponse({ error: "automation_event_not_found" }, { status: 404 });
   }
   if (request.method === "GET" && !eventMatch[2]) {
     return jsonResponse({
       event,
-      dispatches: await store.listFlowDispatches({ eventId, limit: numberParam(url.searchParams.get("limit")) }),
+      dispatches: await store.listWorkspaceDispatches({ eventId, limit: numberParam(url.searchParams.get("limit")) }),
     });
   }
   if (request.method === "POST" && eventMatch[2] === "retry") {
@@ -101,7 +101,7 @@ async function handleFlowEvents(request: Request, config: ServerConfig, store: E
   return methodNotAllowed();
 }
 
-async function handleFlowDispatches(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
+async function handleAutomationDispatches(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
   const unauthorized = requireAdmin(request, config);
   if (unauthorized) return unauthorized;
   if (request.method !== "GET") return methodNotAllowed();
@@ -195,11 +195,11 @@ export function createHandler(config: ServerConfig): (request: Request) => Promi
     if (url.pathname === "/healthz") {
       return textResponse("ok\n");
     }
-    if (url.pathname === "/flow-events" || url.pathname.startsWith("/flow-events/")) {
-      return handleFlowEvents(request, config, store);
+    if (url.pathname === "/automation-events" || url.pathname.startsWith("/automation-events/")) {
+      return handleAutomationEvents(request, config, store);
     }
-    if (url.pathname === "/workspace-dispatches" || url.pathname === "/flow-dispatches") {
-      return handleFlowDispatches(request, config, store);
+    if (url.pathname === "/workspace-dispatches" || url.pathname === "/automation-dispatches") {
+      return handleAutomationDispatches(request, config, store);
     }
     if (url.pathname === "/maintenance-attempts" || url.pathname.startsWith("/maintenance-attempts/")) {
       return handleMaintenanceAttempts(request, config, store);

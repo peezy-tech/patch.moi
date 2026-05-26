@@ -102,24 +102,21 @@ backend:
 
 ```bash
 PATCH_WORKSPACE_BACKEND_URL=http://127.0.0.1:3586 \
-PATCH_WORKSPACE_BACKEND_SECRET=dev-secret \
 DATA_DIR=./data \
 FEED_SOURCES_PATH=../feed-sources.json \
 bun run --cwd patch.moi start
 ```
 
-`PATCH_WORKSPACE_BACKEND_URL` can point at the Codex workspace backend base URL
-or its `/events` endpoint. Patch normalizes either HTTP form before calling the
-workspace flow capability. `PATCH_FLOW_BACKEND_URL` and
-`PATCH_FLOW_DISPATCH_URL` remain accepted for older feed targets.
+`PATCH_WORKSPACE_BACKEND_URL` points at the Codex workspace backend WebSocket
+URL used as the turn host for workspace automations.
 
-Leave `PATCH_WORKSPACE_BACKEND_URL` unset only when you intentionally want local
-or Actions/local flow execution from the Patch process working directory.
+Leave `PATCH_WORKSPACE_BACKEND_URL` unset only when you intentionally allow
+local app-server execution from the Patch process working directory.
 
 ## 4. Inspect the stored event
 
 ```bash
-curl http://127.0.0.1:3000/flow-events
+curl http://127.0.0.1:3000/automation-events
 ```
 
 When `PATCH_ADMIN_TOKEN` is set, include either `Authorization: Bearer <token>`

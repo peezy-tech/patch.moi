@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
 import path from "node:path";
-import { discoverFlows, matchingSteps, type FlowEvent as RuntimeFlowEvent } from "@peezy.tech/codex-flows/flow-runtime";
 import { canonicalUpstreamRef, loadPatchMoiConfig, type PatchMoiConfig } from "./config";
 import {
   dispatchWorkspaceEventDetailed,
@@ -10,7 +9,7 @@ import {
   patchUpstreamBranchUpdateEvent,
   patchUpstreamReleaseEvent,
   replayWorkspaceEventDetailed,
-} from "./flow";
+} from "./automation";
 import { discoverPatchGitProject, fetchUpstream } from "./git-discovery";
 import { syncMaintenanceAttempt } from "./maintenance";
 import {
@@ -20,7 +19,7 @@ import {
   rebuildPatchMain,
 } from "./patch-workspace";
 import { EventStore } from "./queue";
-import type { FlowEvent } from "./types";
+import type { AutomationEvent } from "./types";
 
 type McpEnv = Record<string, string | undefined>;
 type ToolArgs = Record<string, unknown>;
@@ -37,8 +36,8 @@ const jsonObjectSchema = {
 };
 
 const commonProperties = {
-  cwd: { type: "string", description: "Workspace root for flow discovery. Defaults to process cwd." },
-  workspaceRoot: { type: "string", description: "Explicit workspace root for flow discovery and relative DATA_DIR." },
+  cwd: { type: "string", description: "Workspace root for automation discovery. Defaults to process cwd." },
+  workspaceRoot: { type: "string", description: "Explicit workspace root for automation discovery and relative DATA_DIR." },
   repo: { type: "string", description: "Git repository to inspect or mutate. Defaults to cwd, PATCH_MOI_PATCH_REPO, or the workspace root." },
   dataDir: { type: "string", description: "patch.moi DATA_DIR. Defaults to DATA_DIR or ./data under the workspace root." },
   mode: { type: "string", enum: ["local", "remote"], description: "Override PATCH_MOI_MODE for this call." },
@@ -48,7 +47,7 @@ export const patchMoiTools: ToolDefinition[] = [
   tool("status", "Show recent patch.moi events, dispatches, and maintenance attempts.", {
     limit: { type: "number" },
   }),
-  tool("events", "List recorded patch.moi flow events from DATA_DIR.", {
+  tool("events", "List recorded patch.moi automation events from DATA_DIR.", {
     type: { type: "string" },
     limit: { type: "number" },
   }),
@@ -74,16 +73,16 @@ export const patchMoiTools: ToolDefinition[] = [
   }),
   tool("git_discover", "Discover the Git-first patch.moi project model and local readiness issues.", {}),
   tool("fetch_upstream", "Fetch the configured upstream branch and tags when fetch policy explicitly allows it.", {}),
-  tool("run_upstream_release_dry_run", "Build an upstream.release event and report matching flows without writing DATA_DIR.", {
+  tool("run_upstream_release_dry_run", "Build an upstream.release event and report configured automations without writing DATA_DIR.", {
     tag: { type: "string" },
     upstreamRepo: { type: "string" },
   }, ["upstreamRepo", "tag"]),
-  tool("run_upstream_branch_dry_run", "Build an upstream.branch_update event and report matching flows without writing DATA_DIR.", {
+  tool("run_upstream_branch_dry_run", "Build an upstream.branch_update event and report configured automations without writing DATA_DIR.", {
     sha: { type: "string" },
     upstreamRepo: { type: "string" },
     ref: { type: "string" },
   }, ["upstreamRepo"]),
-  tool("run_downstream_release_dry_run", "Build a downstream.release event and report matching flows without writing DATA_DIR.", {
+  tool("run_downstream_release_dry_run", "Build a downstream.release event and report configured automations without writing DATA_DIR.", {
     packageName: { type: "string" },
     version: { type: "string" },
     repo: { type: "string" },
@@ -150,7 +149,7 @@ async function callLocalTool(name: string, args: ToolArgs, env: McpEnv): Promise
     case "status": {
       const limit = numberArg(args, "limit", 20);
       const [events, dispatches, attempts] = await Promise.all([
-        store.listFlowEvents({ limit }),
+        store.listAutomationEvents({ limit }),
         store.listWorkspaceDispatches({ limit }),
         store.listMaintenanceAttempts({ limit }),
       ]);
@@ -166,7 +165,7 @@ async function callLocalTool(name: string, args: ToolArgs, env: McpEnv): Promise
       return {
         mode: "local",
         dataDir,
-        events: await store.listFlowEvents({
+        events: await store.listAutomationEvents({
           type: stringArg(args, "type"),
           limit: numberArg(args, "limit", 50),
         }),
@@ -271,14 +270,14 @@ async function callRemoteTool(name: string, args: ToolArgs, env: McpEnv): Promis
     case "status": {
       const limit = numberArg(args, "limit", 20);
       const [events, dispatches, attempts] = await Promise.all([
-        remoteGet(baseUrl, `/flow-events?limit=${limit}`, env),
+        remoteGet(baseUrl, `/automation-events?limit=${limit}`, env),
         remoteGet(baseUrl, `/workspace-dispatches?limit=${limit}`, env),
         remoteGet(baseUrl, `/maintenance-attempts?limit=${limit}`, env),
       ]);
       return { mode: "remote", url: baseUrl, latest: { ...recordValue(events), ...recordValue(dispatches), ...recordValue(attempts) } };
     }
     case "events":
-      return await remoteGet(baseUrl, queryPath("/flow-events", {
+      return await remoteGet(baseUrl, queryPath("/automation-events", {
         type: stringArg(args, "type"),
         limit: numberArg(args, "limit", 50),
       }), env);
@@ -299,24 +298,18 @@ async function callRemoteTool(name: string, args: ToolArgs, env: McpEnv): Promis
   }
 }
 
-async function dryRunEvent(event: FlowEvent, workspaceRoot: string): Promise<unknown> {
-  const matches = await matchingSteps(
-    await discoverFlows({ cwd: workspaceRoot }),
-    event as RuntimeFlowEvent<Record<string, unknown>>,
-  );
+async function dryRunEvent(event: AutomationEvent, workspaceRoot: string): Promise<unknown> {
+  const automations = automationsForEvent(event, {});
   return {
     dryRun: true,
     event,
-    matches: matches.map(({ flow, step }) => ({
-      flow: flow.manifest.name,
-      step: step.name,
-      runner: step.runner,
-    })),
+    workspaceRoot,
+    automations,
   };
 }
 
 async function dispatchEvent(
-  event: FlowEvent,
+  event: AutomationEvent,
   store: EventStore,
   workspaceRoot: string,
   args: ToolArgs,
@@ -324,7 +317,7 @@ async function dispatchEvent(
   config: PatchMoiConfig,
 ): Promise<unknown> {
   assertSafetyAllowed(config, "allowDispatch", "PATCH_MOI_ALLOW_DISPATCH", env);
-  const recorded = await appendFlowEventIfMissing(store, event);
+  const recorded = await appendAutomationEventIfMissing(store, event);
   const outcome = await dispatchWorkspaceEventDetailed(event, {}, {
     env,
     cwd: workspaceRoot,
@@ -344,9 +337,9 @@ async function retryEvent(
   config: PatchMoiConfig,
 ): Promise<unknown> {
   assertSafetyAllowed(config, "allowDispatch", "PATCH_MOI_ALLOW_DISPATCH", env);
-  const event = await store.getFlowEvent(eventId);
+  const event = await store.getAutomationEvent(eventId);
   if (!event) {
-    throw new Error(`flow event not found: ${eventId}`);
+    throw new Error(`automation event not found: ${eventId}`);
   }
   const outcome = await dispatchWorkspaceEventDetailed(event, {}, { env, cwd: workspaceRoot });
   await store.appendWorkspaceDispatch(outcome.record);
@@ -364,9 +357,9 @@ async function replayEvent(
   config: PatchMoiConfig,
 ): Promise<unknown> {
   assertSafetyAllowed(config, "allowReplay", "PATCH_MOI_ALLOW_REPLAY", env);
-  const event = await store.getFlowEvent(eventId);
+  const event = await store.getAutomationEvent(eventId);
   if (!event) {
-    throw new Error(`flow event not found: ${eventId}`);
+    throw new Error(`automation event not found: ${eventId}`);
   }
   const outcome = await replayWorkspaceEventDetailed(event, {}, { env, cwd: workspaceRoot });
   await store.appendWorkspaceDispatch(outcome.record);
@@ -391,11 +384,11 @@ async function syncAttempt(
   return { attempt: await syncMaintenanceAttempt(store, attempt, { env, cwd: workspaceRoot }) };
 }
 
-async function appendFlowEventIfMissing(store: EventStore, event: FlowEvent): Promise<boolean> {
-  if (await store.getFlowEvent(event.id)) {
+async function appendAutomationEventIfMissing(store: EventStore, event: AutomationEvent): Promise<boolean> {
+  if (await store.getAutomationEvent(event.id)) {
     return false;
   }
-  await store.appendFlowEvent(event);
+  await store.appendAutomationEvent(event);
   return true;
 }
 
@@ -415,26 +408,29 @@ async function configForRepo(repoPath: string, args: ToolArgs): Promise<PatchMoi
   };
 }
 
-function upstreamReleaseEvent(args: ToolArgs): FlowEvent<Record<string, unknown>> {
+function upstreamReleaseEvent(args: ToolArgs): AutomationEvent<Record<string, unknown>> {
   return patchUpstreamReleaseEvent({
     repo: requiredStringArg(args, "upstreamRepo"),
     tag: requiredStringArg(args, "tag"),
+    automations: automationsArg(args),
   });
 }
 
-function upstreamBranchEvent(args: ToolArgs): FlowEvent<Record<string, unknown>> {
+function upstreamBranchEvent(args: ToolArgs): AutomationEvent<Record<string, unknown>> {
   return patchUpstreamBranchUpdateEvent({
     repo: requiredStringArg(args, "upstreamRepo"),
     ref: stringArg(args, "ref") ?? "refs/heads/main",
     sha: stringArg(args, "sha"),
+    automations: automationsArg(args),
   });
 }
 
-function downstreamReleaseEvent(args: ToolArgs): FlowEvent<Record<string, unknown>> {
+function downstreamReleaseEvent(args: ToolArgs): AutomationEvent<Record<string, unknown>> {
   return patchDownstreamReleaseEvent({
     packageName: requiredStringArg(args, "packageName"),
     version: requiredStringArg(args, "version"),
     repo: stringArg(args, "repo"),
+    automations: automationsArg(args),
   });
 }
 
@@ -528,6 +524,35 @@ function requiredStringArg(args: ToolArgs, key: string): string {
 function stringArg(args: ToolArgs, key: string): string | undefined {
   const value = args[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function automationsArg(args: ToolArgs): string[] | undefined {
+  const value = args.automations ?? args.automation;
+  const list = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  const automations = list
+    .map((entry) => typeof entry === "string" ? entry.trim() : "")
+    .filter(Boolean);
+  return automations.length > 0 ? [...new Set(automations)] : undefined;
+}
+
+function automationsForEvent(
+  event: AutomationEvent,
+  env: Record<string, string | undefined>,
+): string[] {
+  return [
+    ...(event.automations ?? []),
+    ...commaList(env.PATCH_AUTOMATIONS),
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+}
+
+function commaList(value: string | undefined): string[] {
+  return value
+    ? value.split(",").map((entry) => entry.trim()).filter(Boolean)
+    : [];
 }
 
 function numberArg(args: ToolArgs, key: string, fallback: number): number {

@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "dev": "bun --watch src/server.ts",
-    "harness:flow": "bun src/run-harness-flow.ts",
+    "harness:automation": "bun src/cli.ts run harness --allow-local",
     "mcp": "bun src/mcp.ts",
     "patch.moi": "bun src/cli.ts",
     "start": "bun src/server.ts",
@@ -19,7 +19,7 @@
     "check": "bun run check:types && bun run test"
   },
   "dependencies": {
-    "@peezy.tech/codex-flows": "^0.4.0"
+    "@peezy.tech/codex-flows": "^0.133.0"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

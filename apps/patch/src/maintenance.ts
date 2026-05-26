@@ -3,7 +3,7 @@ import {
   listWorkspaceRuns,
   maintenanceAttemptWithWorkspaceRuns,
   type WorkspaceDispatchConfig,
-} from "./flow";
+} from "./automation";
 import { EventStore } from "./queue";
 import type { MaintenanceAttemptRecord } from "./types";
 

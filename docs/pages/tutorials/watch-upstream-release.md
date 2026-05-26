@@ -6,7 +6,7 @@ description: Configure a release feed and turn an upstream release into patch ma
 # Watch an upstream release
 
 This tutorial creates the smallest useful patch.moi service path: one upstream
-release feed becomes a stored update signal, a deterministic flow event, a
+release feed becomes a stored update signal, a deterministic automation event, a
 workspace dispatch, and a maintenance attempt record. The patch application work
 still happens in a local workspace, workspace backend, or forge runner.
 
@@ -40,11 +40,9 @@ Create or edit a workspace-owned feed file, for example
         "defaultBranch": "main"
       },
       "target": {
-        "mode": "workspace_flow",
+        "mode": "workspace_automation",
         "eventType": "upstream.release",
-        "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",
-        "workspaceSecretEnv": "PATCH_WORKSPACE_BACKEND_SECRET",
-        "payload": {
+        "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",        "payload": {
           "provider": "github",
           "repo": "openai/codex"
         }
@@ -74,7 +72,7 @@ not emitted on that first pass.
 When the feed later contains an unseen release entry, Patch appends:
 
 - `data/feed-events.jsonl` for the normalized signal.
-- `data/flow-events.jsonl` for the generic flow event.
+- `data/automation-events.jsonl` for the generic automation event.
 - `data/maintenance-attempts.jsonl` for the patch.moi maintenance attempt and
   later candidate refs.
 - `data/workspace-dispatches.jsonl` for the workspace dispatch outcome.
@@ -82,7 +80,8 @@ When the feed later contains an unseen release entry, Patch appends:
 If no workspace backend URL is set, Patch uses local flow execution from the
 working directory. If `PATCH_WORKSPACE_BACKEND_URL` is set, Patch sends the
 event to that workspace backend's flow capability. Legacy
-`PATCH_FLOW_BACKEND_URL` and `PATCH_FLOW_DISPATCH_URL` values remain accepted.
+Old flow dispatch URL fallbacks are no longer accepted; use
+`PATCH_WORKSPACE_BACKEND_URL` for the workspace backend WebSocket URL.
 
 ## 4. Connect patch work
 
@@ -99,5 +98,5 @@ Internal builds and public release jobs can then consume the candidate ref
 independently.
 
 For a local rehearsal before wiring feed intake, use the harness tutorial. It
-shows both the direct `bun run harness:flow` path and the repo-native
+shows both the direct `bun run harness:automation` path and the repo-native
 `bun run workspace:run:harness` path.

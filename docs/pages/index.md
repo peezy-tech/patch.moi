@@ -35,7 +35,7 @@ flowchart LR
 patch.moi owns product state around the patch stack:
 
 - feed cursors and normalized update signals
-- deterministic flow events
+- deterministic automation events
 - workspace dispatch, retry, and replay records
 - maintenance attempts, candidate refs, outcomes, and intervention state
 - admin inspection APIs for that state
@@ -64,13 +64,13 @@ bun run check
 Run the harness directly:
 
 ```bash
-CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run harness:flow
+bun run harness:automation
 ```
 
 Run the same harness through the patch.moi CLI and record `DATA_DIR` state:
 
 ```bash
-CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run patch.moi -- run harness
+bun run patch.moi -- run harness
 bun run patch.moi -- status
 ```
 
@@ -78,7 +78,7 @@ Run the same harness through repo-native workspace autonomy:
 
 ```bash
 bun run workspace:doctor
-CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run workspace:run:harness
+bun run workspace:run:harness
 ```
 
 Run the manual workspace-owned flow smoke task only when a Codex workspace
@@ -86,8 +86,8 @@ backend is running:
 
 ```bash
 CODEX_WORKSPACE_BACKEND_WS_URL=ws://127.0.0.1:3586 \
-CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 \
-bun run workspace:run:harness-flow
+\
+bun run workspace:run:harness
 ```
 
 Start the Patch service when you want feed intake and admin state:
@@ -131,7 +131,7 @@ codex plugin add patch-moi@patch-moi
 - CLI operations: [CLI](reference/cli).
 - System model: [Architecture](concepts/architecture).
 - Durable state: [JSONL state](reference/jsonl-state).
-- Retry and replay: [Flow event retry and replay](reference/dispatch-and-replay-flow-events).
+- Retry and replay: [Automation event retry and replay](reference/dispatch-and-replay-automation-events).
 - Codex-specific model: [Codex fork model](concepts/codex-fork-model).
 - Service runner shape: [Forge service mode](concepts/forge-service-mode).
 

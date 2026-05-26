@@ -7,7 +7,7 @@ description: JSON schema by convention for upstream update intake.
 
 `FEED_SOURCES_PATH` points at a JSON object with a `sources` array.
 
-This file configures update intake, not the patch stack. A flow target can add
+This file configures update intake, not the patch stack. A automation target can add
 payload hints, but the receiving workspace should use Git remotes, branches, and
 tags as the maintained project source of truth.
 
@@ -30,15 +30,14 @@ type FeedSourceConfig = {
 };
 ```
 
-## Workspace flow target
+## Workspace automation target
 
 ```ts
 type FeedWorkspaceFlowTarget = {
-  mode: "workspace_flow" | "flow_dispatch";
+  mode: "workspace_automation" | "workspace_automation";
   eventType: string;
   workspaceUrl?: string;
   workspaceUrlEnv?: string;
-  workspaceSecretEnv?: string;
   dispatchUrl?: string;
   dispatchUrlEnv?: string;
   dispatchSecretEnv?: string;
@@ -46,7 +45,7 @@ type FeedWorkspaceFlowTarget = {
 };
 ```
 
-The target creates a generic `FlowEvent` and hands it to the workspace backend
+The target creates a generic `AutomationEvent` and hands it to the workspace backend
 adapter. The flow payload includes provider, event, source id, entry id, title,
 URL, author, published time, repository fields, ref, SHA, tag, and raw feed
 metadata. Values from `target.payload` are merged last.
@@ -67,7 +66,7 @@ feed source when it can be read from the repository.
 
 npm package sources read the registry package document and treat each published
 version as a release entry. Use this shape when a downstream package release
-should trigger a workspace flow:
+should trigger a workspace automation:
 
 ```json
 {
@@ -82,7 +81,7 @@ should trigger a workspace flow:
     "webUrl": "https://www.npmjs.com/package/@acme/tool"
   },
   "target": {
-    "mode": "workspace_flow",
+    "mode": "workspace_automation",
     "eventType": "downstream.release",
     "payload": {
       "packageName": "@acme/tool",

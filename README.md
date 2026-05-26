@@ -70,14 +70,15 @@ change.
 
 ```text
 GET  /healthz
-GET  /flow-events
-GET  /flow-events/:id
-POST /flow-events/:id/retry
-POST /flow-events/:id/replay
+GET  /automation-events
+GET  /automation-events/:id
+POST /automation-events/:id/retry
+POST /automation-events/:id/replay
 GET  /maintenance-attempts
 GET  /maintenance-attempts/:id
 POST /maintenance-attempts/:id/sync
 GET  /workspace-dispatches
+GET  /automation-dispatches
 GET  /workspace-events
 GET  /workspace-runs
 ```
@@ -93,12 +94,8 @@ DISCORD_WEBHOOK_URL=
 DISCORD_NOTIFY_EVENTS=push,release
 FEED_SOURCES_PATH=./feed-sources.json
 PATCH_WORKSPACE_BACKEND_URL=
-PATCH_WORKSPACE_BACKEND_SECRET=
-PATCH_FLOW_BACKEND_URL=
-PATCH_FLOW_DISPATCH_URL=
-PATCH_FLOW_DISPATCH_SECRET=
+PATCH_AUTOMATIONS=
 PATCH_ADMIN_TOKEN=
-CODEX_WORKSPACE_MODE=
 ```
 
 Discord notifications are off by default. Set `DISCORD_OUTPUT_ENABLED=true`
@@ -116,27 +113,25 @@ bun run dev
 
 Feed watcher events are configured by `FEED_SOURCES_PATH`. The bundled
 `apps/patch/feed-sources.json` is intentionally empty; real workspace repos
-should own their private feed config beside their installed flow capabilities.
+should own their private feed config beside their installed automation capabilities.
 The first poll primes `DATA_DIR/feed-state.json`; later polls append upstream
 activity to `DATA_DIR/feed-events.jsonl`. Targets using `mode: "fork_sync"`
 append legacy work to `DATA_DIR/feed-jobs.jsonl`. Targets using
-`mode: "workspace_flow"` append generic flow events to
-`DATA_DIR/flow-events.jsonl`, send them to the configured workspace backend or
-local adapter, and record dispatch outcomes in
+`mode: "workspace_automation"` append generic automation events to
+`DATA_DIR/automation-events.jsonl`, run the configured named automations, and record dispatch outcomes in
 `DATA_DIR/workspace-dispatches.jsonl`. Each dispatch also creates or updates a
 patch.moi-owned `DATA_DIR/maintenance-attempts.jsonl` entry that links the
-upstream update to workspace run ids, final flow outcome, and candidate refs.
+upstream update to workspace run ids, final automation outcome, and candidate refs.
 
-Patch can dispatch through a configured workspace backend, through the
-codex-flows Actions/local surface with `CODEX_WORKSPACE_MODE=actions`, or
-through synchronous local flow execution for development. The backend does not
-need to be running in this checkout unless you are explicitly testing or
-operating that surface.
+Patch can dispatch through a configured WebSocket workspace backend, or through
+the direct app-server surface when an operator explicitly allows local
+execution. The backend does not need to be running in this checkout unless you
+are explicitly testing or operating that surface.
 
 The harness can also be run through the repo-native workspace task:
 
 ```bash
-CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run workspace:run:harness
+bun run workspace:run:harness
 ```
 
 That task writes local operator run state under `.codex/workspace/local/`,

@@ -43,8 +43,7 @@ For an explicit workspace backend:
 
 ```bash
 export PATCH_WORKSPACE_BACKEND_URL=http://127.0.0.1:3586
-export PATCH_WORKSPACE_BACKEND_SECRET=dev-secret
-```
+export ```
 
 Do not set both unless you are intentionally testing precedence. A configured
 workspace backend URL wins over Actions/local mode.
@@ -55,8 +54,6 @@ Leave destructive or externally visible operations off until the candidate is
 understood:
 
 ```bash
-export CODEX_FLOW_PUSH=0
-export CODEX_FLOW_PUBLISH=0
 ```
 
 Flow package defaults should also keep pushes and publishing off, but exporting
@@ -64,10 +61,8 @@ the flags makes the operator intent explicit. For harness-only local rehearsals
 you can also disable network fetches:
 
 ```bash
-export CODEX_FLOW_FETCH=0
 ```
 
-Do not use `CODEX_FLOW_FETCH=0` for a real upstream release unless the runner
 already has the release tag and upstream refs.
 
 ## 4. Verify matching before dispatch
@@ -134,8 +129,6 @@ Dispatch with Actions/local and pushes still disabled:
 
 ```bash
 CODEX_WORKSPACE_MODE=actions \
-CODEX_FLOW_PUSH=0 \
-CODEX_FLOW_PUBLISH=0 \
 bun run patch.moi -- run upstream-release \
   --repo openai/codex \
   --tag rust-v0.130.0 \
@@ -144,7 +137,7 @@ bun run patch.moi -- run upstream-release \
 
 patch.moi writes:
 
-- `flow-events.jsonl` for the normalized upstream event
+- `automation-events.jsonl` for the normalized upstream event
 - `workspace-dispatches.jsonl` for the dispatch result
 - `maintenance-attempts.jsonl` for the attempt record
 
@@ -208,17 +201,15 @@ Only enable pushing on a runner that is allowed to update the maintained fork:
 
 ```bash
 CODEX_WORKSPACE_MODE=actions \
-CODEX_FLOW_PUSH=1 \
-CODEX_FLOW_PUBLISH=0 \
+\
 bun run patch.moi -- replay '<event-id>' --json
 ```
 
-Flow packages decide exactly what `CODEX_FLOW_PUSH=1` means. The harness flow
+Automation scripts decide exactly when candidate refs should be pushed. The harness automation
 pushes configured branch refs with `--force-with-lease`. The Codex fork flow
 pushes the maintained `main` branch and, when configured to publish, release
 tags.
 
-Keep `CODEX_FLOW_PUBLISH=0` unless you are intentionally entering the public
 release channel.
 
 ## 9. Leave durable state in Git and the forge

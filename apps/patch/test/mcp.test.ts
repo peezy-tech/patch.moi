@@ -26,15 +26,13 @@ describe("patch.moi MCP tools", () => {
       dataDir,
       upstreamRepo: "peezy-tech/patch-moi-harness",
       tag: "v0.1.3",
+      automation: "patch-moi-harness-fork",
     }, {});
 
     expect(result).toMatchObject({
       dryRun: true,
       event: { type: "upstream.release" },
-      matches: [
-        { flow: "patch-moi-harness-bindings", step: "generate-bindings", runner: "bun" },
-        { flow: "patch-moi-harness-fork", step: "release-cycle", runner: "bun" },
-      ],
+      automations: ["patch-moi-harness-fork"],
     });
     expect(existsSync(dataDir)).toBe(false);
   });

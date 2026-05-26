@@ -3,8 +3,8 @@ import { dirname, join } from "node:path";
 import type {
   FeedJob,
   FeedSignal,
-  FlowDispatchRecord,
-  FlowEvent,
+  AutomationDispatchRecord,
+  AutomationEvent,
   MaintenanceAttemptRecord,
   WorkspaceDispatchRecord,
 } from "./types";
@@ -39,16 +39,14 @@ function limitNewest<T>(items: T[], limit = 50): T[] {
 export class EventStore {
   readonly feedEventsPath: string;
   readonly feedJobsPath: string;
-  readonly flowEventsPath: string;
-  readonly flowDispatchesPath: string;
+  readonly automationEventsPath: string;
   readonly workspaceDispatchesPath: string;
   readonly maintenanceAttemptsPath: string;
 
   constructor(dataDir: string) {
     this.feedEventsPath = join(dataDir, "feed-events.jsonl");
     this.feedJobsPath = join(dataDir, "feed-jobs.jsonl");
-    this.flowEventsPath = join(dataDir, "flow-events.jsonl");
-    this.flowDispatchesPath = join(dataDir, "flow-dispatches.jsonl");
+    this.automationEventsPath = join(dataDir, "automation-events.jsonl");
     this.workspaceDispatchesPath = join(dataDir, "workspace-dispatches.jsonl");
     this.maintenanceAttemptsPath = join(dataDir, "maintenance-attempts.jsonl");
   }
@@ -61,12 +59,8 @@ export class EventStore {
     await appendJsonLine(this.feedJobsPath, job);
   }
 
-  async appendFlowEvent(event: FlowEvent): Promise<void> {
-    await appendJsonLine(this.flowEventsPath, event);
-  }
-
-  async appendFlowDispatch(record: FlowDispatchRecord): Promise<void> {
-    await this.appendWorkspaceDispatch(record);
+  async appendAutomationEvent(event: AutomationEvent): Promise<void> {
+    await appendJsonLine(this.automationEventsPath, event);
   }
 
   async appendWorkspaceDispatch(record: WorkspaceDispatchRecord): Promise<void> {
@@ -77,16 +71,16 @@ export class EventStore {
     await appendJsonLine(this.maintenanceAttemptsPath, record);
   }
 
-  async listFlowEvents(options: { limit?: number; type?: string } = {}): Promise<FlowEvent[]> {
-    const events = await readJsonLines<FlowEvent>(this.flowEventsPath);
+  async listAutomationEvents(options: { limit?: number; type?: string } = {}): Promise<AutomationEvent[]> {
+    const events = await readJsonLines<AutomationEvent>(this.automationEventsPath);
     return limitNewest(
       options.type ? events.filter((event) => event.type === options.type) : events,
       options.limit,
     );
   }
 
-  async getFlowEvent(eventId: string): Promise<FlowEvent | undefined> {
-    const events = await readJsonLines<FlowEvent>(this.flowEventsPath);
+  async getAutomationEvent(eventId: string): Promise<AutomationEvent | undefined> {
+    const events = await readJsonLines<AutomationEvent>(this.automationEventsPath);
     for (let index = events.length - 1; index >= 0; index -= 1) {
       if (events[index]?.id === eventId) {
         return events[index];
@@ -95,15 +89,8 @@ export class EventStore {
     return undefined;
   }
 
-  async listFlowDispatches(options: { limit?: number; eventId?: string; status?: FlowDispatchRecord["status"] } = {}): Promise<FlowDispatchRecord[]> {
-    return this.listWorkspaceDispatches(options);
-  }
-
   async listWorkspaceDispatches(options: { limit?: number; eventId?: string; status?: WorkspaceDispatchRecord["status"] } = {}): Promise<WorkspaceDispatchRecord[]> {
-    const records = [
-      ...await readJsonLines<WorkspaceDispatchRecord>(this.flowDispatchesPath),
-      ...await readJsonLines<WorkspaceDispatchRecord>(this.workspaceDispatchesPath),
-    ];
+    const records = await readJsonLines<WorkspaceDispatchRecord>(this.workspaceDispatchesPath);
     return limitNewest(
       records.filter((record) =>
         (!options.eventId || record.eventId === options.eventId) &&

@@ -17,7 +17,7 @@ flow packages mirror the Codex fork structure:
 
 There are two local operator paths:
 
-- run the flow directly with `bun run harness:flow`
+- run the flow directly with `bun run harness:automation`
 - run the same flow through the repo-native command workspace task
 
 Both paths exercise the harness. The Patch service path still starts with feed
@@ -39,9 +39,7 @@ fork or service remotes.
 ## 2. Run the fixture event directly
 
 ```bash
-CODEX_FLOW_FETCH=0 \
-CODEX_FLOW_PUSH=0 \
-bun run harness:flow
+bun run harness:automation
 ```
 
 The fixture event is `v0.1.3`, which the current fork already contains. The
@@ -56,22 +54,20 @@ and leaves the fork checkout unchanged.
 The repo also exposes the same fixture as a manual codex-flows workspace task:
 
 ```bash
-CODEX_FLOW_FETCH=0 \
-CODEX_FLOW_PUSH=0 \
 bun run workspace:run:harness
 ```
 
 That task is defined in `.codex/workspace.toml` as a command task that runs
-`bun run harness:flow`. It is intentionally unscheduled, so `bun run
+`bun run harness:automation`. It is intentionally unscheduled, so `bun run
 workspace:tick` is safe by default and explicit `workspace run` remains the
 operator action.
 
 Use `bun run workspace:doctor` to inspect the repo-native workspace config and
 generated local run state. The generated local state is ignored by Git.
 
-## 4. Try the workspace flow smoke task
+## 4. Try the workspace automation smoke task
 
-The experimental workspace flow task dispatches a generated `upstream.release`
+The experimental workspace automation task dispatches a generated `upstream.release`
 event through a running Codex workspace backend:
 
 ```bash
@@ -83,9 +79,7 @@ Then, from the patch.moi repo:
 
 ```bash
 CODEX_WORKSPACE_BACKEND_WS_URL=ws://127.0.0.1:3586 \
-CODEX_FLOW_FETCH=0 \
-CODEX_FLOW_PUSH=0 \
-bun run workspace:run:harness-flow
+bun run workspace:run:harness
 ```
 
 Use this only to exercise workspace-owned automation. It is not the product
@@ -111,7 +105,7 @@ git push origin main "v${version}"
 Run the harness flow again without disabling fetch:
 
 ```bash
-bun run harness:flow <event-file>
+bun run harness:automation <event-file>
 ```
 
 Use an event file whose `id`, `occurredAt`, `receivedAt`, and `payload.tag`
@@ -125,7 +119,7 @@ pushes off.
 When the local result is the maintained fork state you want:
 
 ```bash
-CODEX_FLOW_PUSH=1 bun run harness:flow <event-file>
+bun run harness:automation <event-file>
 ```
 
 That pushes the rebuilt fork branch to the configured `origin` and `jojo`

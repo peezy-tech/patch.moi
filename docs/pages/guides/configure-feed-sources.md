@@ -32,28 +32,26 @@ feeds. Patch normalizes both into `FeedSignal` records.
 }
 ```
 
-`workspace_flow` creates a generic `FlowEvent` and submits it to the workspace
+`workspace_automation` creates a generic `AutomationEvent` and submits it to the workspace
 backend adapter:
 
 ```json
 {
-  "mode": "workspace_flow",
+  "mode": "workspace_automation",
   "eventType": "upstream.release",
-  "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",
-  "workspaceSecretEnv": "PATCH_WORKSPACE_BACKEND_SECRET",
-  "payload": {
+  "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",  "payload": {
     "repo": "owner/project"
   }
 }
 ```
 
-For patch-stack maintenance, prefer `workspace_flow` to create an
+For patch-stack maintenance, prefer `workspace_automation` to create an
 `upstream.release` or `upstream.branch_update` trigger. Let the receiving
 workspace read Git to discover the maintained branch, patch inventory, and
 candidate refs.
 
 Use explicit payload fields for patch.moi-dispatched events. Do not rely on
-implicit workspace flow defaults for maintenance events, because patch.moi uses
+implicit workspace automation defaults for maintenance events, because patch.moi uses
 deterministic ids and timestamps for dispatch and replay.
 
 Set `primeOnly: false` only when old feed entries should be emitted on the first

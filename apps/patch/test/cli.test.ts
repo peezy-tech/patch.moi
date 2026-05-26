@@ -3,153 +3,48 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import { runCli } from "../src/cli";
-import { EventStore } from "../src/queue";
 
 const workspaceRoot = join(import.meta.dir, "../../..");
 
 describe("patch.moi CLI", () => {
-  test("dispatches the harness event and records patch.moi state", async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), "patch-cli-"));
-    const calls: Array<{ url: string; body: string }> = [];
-    const result = await invoke([
-      "run",
-      "harness",
-      "--workspace-root",
-      workspaceRoot,
-      "--data-dir",
-      dataDir,
-      "--json",
-    ], {
-      env: {
-        PATCH_WORKSPACE_BACKEND_URL: "https://workspace.example",
-      },
-      fetchImpl: async (url, init) => {
-        calls.push({ url, body: String(init.body ?? "") });
-        const eventId = JSON.parse(String(init.body ?? "{}")).id;
-        return Response.json({
-          status: "accepted",
-          eventId,
-          runIds: ["run-harness"],
-          matched: 1,
-        }, { status: 202 });
-      },
-    });
-
-    expect(result.code).toBe(0);
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe("https://workspace.example/events");
-    const payload = JSON.parse(result.stdout);
-    expect(payload).toMatchObject({
-      event: { id: "patch:harness:v0.1.3:upstream.release" },
-      recorded: true,
-      record: { status: "dispatched", runIds: ["run-harness"], matched: 1 },
-      attempt: {
-        status: "started",
-        eventId: "patch:harness:v0.1.3:upstream.release",
-        workspaceRunIds: ["run-harness"],
-      },
-    });
-
-    const store = new EventStore(dataDir);
-    expect(await store.getFlowEvent("patch:harness:v0.1.3:upstream.release")).toMatchObject({
-      type: "upstream.release",
-    });
-    expect(await store.listMaintenanceAttempts()).toMatchObject([
-      { eventId: "patch:harness:v0.1.3:upstream.release", status: "started" },
-    ]);
-  });
-
-  test("keeps JSON pipeable while reporting progress and thread refs", async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), "patch-cli-"));
-    const result = await invoke([
-      "run",
-      "harness",
-      "--workspace-root",
-      workspaceRoot,
-      "--data-dir",
-      dataDir,
-      "--json",
-    ], {
-      env: {
-        PATCH_WORKSPACE_BACKEND_URL: "https://workspace.example",
-      },
-      fetchImpl: async (url, init) => {
-        const eventId = JSON.parse(String(init.body ?? "{}")).id;
-        return Response.json({
-          status: "accepted",
-          eventId,
-          runIds: ["run-harness"],
-          matched: 1,
-          runs: [{
-            id: "run-harness",
-            eventId,
-            flowName: "patch-moi-harness-fork",
-            stepName: "maintain-release",
-            status: "completed",
-            resultJson: {
-              status: "completed",
-              artifacts: {
-                interventionTurn: {
-                  threadId: "thread-1",
-                  turnId: "turn-1",
-                },
-              },
-            },
-          }],
-        }, { status: 202 });
-      },
-    });
-
-    expect(result.code).toBe(0);
-    expect(result.stderr).toContain("[flow] dispatch patch:harness:v0.1.3:upstream.release");
-    expect(result.stderr).toContain("[flow] queued patch-moi-harness-fork/release-cycle (bun)");
-    expect(result.stdout).not.toContain("[flow]");
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      attempt: {
-        status: "completed",
-        workspaceThreadRefs: [{
-          runId: "run-harness",
-          flowName: "patch-moi-harness-fork",
-          stepName: "maintain-release",
-          label: "interventionTurn",
-          threadId: "thread-1",
-          turnId: "turn-1",
-        }],
-      },
-    });
-  });
-
-  test("dry-runs upstream release matching and blocks accidental local execution", async () => {
+  test("dry-runs explicit automation targets and blocks accidental local execution", async () => {
     const blocked = await invoke([
       "run",
       "upstream-release",
       "--repo",
-      "peezy-tech/patch-moi-harness",
+      "openai/codex",
       "--tag",
-      "v0.1.3",
+      "rust-v1.2.3",
       "--workspace-root",
       workspaceRoot,
+      "--automation",
+      "peezy-codex-fork",
     ], { env: {} });
     expect(blocked.code).toBe(2);
-    expect(blocked.stderr).toContain("requires PATCH_WORKSPACE_BACKEND_URL, CODEX_WORKSPACE_MODE=actions, or --allow-local");
+    expect(blocked.stderr).toContain("requires PATCH_WORKSPACE_BACKEND_URL or --allow-local");
 
     const dryRun = await invoke([
       "run",
       "upstream-release",
       "--repo",
-      "peezy-tech/patch-moi-harness",
+      "openai/codex",
       "--tag",
-      "v0.1.3",
+      "rust-v1.2.3",
       "--workspace-root",
       workspaceRoot,
+      "--automation",
+      "peezy-codex-fork",
       "--dry-run",
       "--json",
     ]);
     expect(dryRun.code).toBe(0);
-    expect(JSON.parse(dryRun.stdout).matches).toEqual([
-      { flow: "patch-moi-harness-bindings", step: "generate-bindings", runner: "bun" },
-      { flow: "patch-moi-harness-fork", step: "release-cycle", runner: "bun" },
-    ]);
+    expect(JSON.parse(dryRun.stdout)).toMatchObject({
+      event: {
+        type: "upstream.release",
+        automations: ["peezy-codex-fork"],
+      },
+      automations: ["peezy-codex-fork"],
+    });
   });
 
   test("requires upstream release repo and tag explicitly", async () => {
@@ -164,132 +59,6 @@ describe("patch.moi CLI", () => {
 
     expect(dryRun.code).toBe(2);
     expect(dryRun.stderr).toContain("run upstream-release requires --repo");
-  });
-
-  test("dry-runs upstream branch update matching", async () => {
-    const dryRun = await invoke([
-      "run",
-      "upstream-branch",
-      "--repo",
-      "peezy-tech/patch-moi-harness",
-      "--sha",
-      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "--workspace-root",
-      workspaceRoot,
-      "--dry-run",
-      "--json",
-    ]);
-
-    expect(dryRun.code).toBe(0);
-    expect(JSON.parse(dryRun.stdout)).toMatchObject({
-      event: {
-        type: "upstream.branch_update",
-        payload: {
-          repo: "peezy-tech/patch-moi-harness",
-          ref: "refs/heads/main",
-          sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        },
-      },
-      matches: [
-        { flow: "patch-moi-harness-fork", step: "main-branch-update", runner: "bun" },
-      ],
-    });
-  });
-
-  test("dry-runs downstream release matching for package fork releases", async () => {
-    const dryRun = await invoke([
-      "run",
-      "downstream-release",
-      "--package",
-      "@peezy.tech/patch-moi-harness",
-      "--version",
-      "0.1.3-fork.0",
-      "--repo",
-      "matamune-peezy/patch-moi-harness",
-      "--workspace-root",
-      workspaceRoot,
-      "--dry-run",
-      "--json",
-    ]);
-
-    expect(dryRun.code).toBe(0);
-    expect(JSON.parse(dryRun.stdout)).toMatchObject({
-      event: {
-        type: "downstream.release",
-        payload: {
-          packageName: "@peezy.tech/patch-moi-harness",
-          version: "0.1.3-fork.0",
-          repo: "matamune-peezy/patch-moi-harness",
-        },
-      },
-      matches: [
-        { flow: "patch-moi-harness-flows-fork", step: "release-fork", runner: "bun" },
-      ],
-    });
-  });
-
-  test("syncs a maintenance attempt from workspace run state", async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), "patch-cli-"));
-    const store = new EventStore(dataDir);
-    await store.appendMaintenanceAttempt({
-      id: "attempt-1",
-      eventId: "event-1",
-      eventType: "upstream.release",
-      operation: "dispatch",
-      status: "started",
-      upstreamRepo: "openai/codex",
-      upstreamTag: "rust-v0.130.0",
-      workspaceRunIds: ["run-1"],
-      candidateRefs: [],
-      createdAt: "2026-05-16T00:00:00.000Z",
-      updatedAt: "2026-05-16T00:00:00.000Z",
-    });
-
-    const result = await invoke([
-      "sync",
-      "attempt-1",
-      "--data-dir",
-      dataDir,
-      "--json",
-    ], {
-      env: {
-        PATCH_WORKSPACE_BACKEND_URL: "https://workspace.example",
-      },
-      fetchImpl: async () => Response.json({
-        run: {
-          id: "run-1",
-          eventId: "event-1",
-          status: "completed",
-          completedAt: "2026-05-16T00:01:00.000Z",
-          resultJson: JSON.stringify({
-            status: "changed",
-            message: "candidate branch ready",
-            artifacts: {
-              candidateRefs: [{
-                kind: "branch",
-                repo: "peezy-tech/codex",
-                ref: "refs/heads/candidate",
-                sha: "abc123",
-                pushed: false,
-              }],
-            },
-          }),
-        },
-      }),
-    });
-
-    expect(result.code).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      attempt: {
-        id: "attempt-1",
-        status: "changed",
-        message: "candidate branch ready",
-        candidateRefs: [{ ref: "refs/heads/candidate", sha: "abc123" }],
-      },
-    });
-    expect(await store.listMaintenanceAttempts({ status: "changed" })).toMatchObject([
-      { id: "attempt-1", status: "changed" },
-    ]);
   });
 
   test("sets up an upstream remote when explicitly applied", async () => {

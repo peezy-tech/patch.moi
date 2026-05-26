@@ -42,7 +42,7 @@ patch.moi stores operational state:
 
 - feed cursors
 - normalized upstream signals
-- dispatched flow events
+- dispatched automation events
 - dispatch outcomes
 - workspace run status
 - retry and replay history
