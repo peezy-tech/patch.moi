@@ -10,8 +10,8 @@ maintained fork candidate. patch.moi records the event and attempt state.
 codex-flows and the selected execution surface do the checkout, rebase,
 verification, and optional push.
 
-The safest default is Actions/local mode with pushes disabled. That does not
-require a workspace backend to be running beside patch.moi.
+The safest default is an explicit local rehearsal with pushes disabled. That
+does not require a workspace backend to be running beside patch.moi.
 
 ## 1. Pick the state directory
 
@@ -27,42 +27,43 @@ For a local rehearsal, a temporary directory is fine:
 export DATA_DIR="$(mktemp -d)"
 ```
 
-patch.moi product state goes under `DATA_DIR`. codex-flows Actions/local run
-state goes under `.codex/workspace/actions` in the workspace root.
+patch.moi product state goes under `DATA_DIR`. Repo-native `codex-flows
+workspace` tasks write run state under `.codex/workspace/<mode>` in the
+workspace root. Direct patch.moi `--allow-local` dispatches use the local
+app-server surface and Codex thread state from the active `CODEX_HOME`.
 
 ## 2. Select the execution surface
 
-For no-backend operation:
+For no-backend operation, use the local app-server surface and pass
+`--allow-local` on the dispatch command:
 
 ```bash
-export CODEX_WORKSPACE_MODE=actions
 unset PATCH_WORKSPACE_BACKEND_URL
+unset PATCH_WORKSPACE_SSH_TARGET
 ```
 
-For an explicit workspace backend:
+For an explicit local workspace backend:
 
 ```bash
-export PATCH_WORKSPACE_BACKEND_URL=http://127.0.0.1:3586
-export ```
+export PATCH_WORKSPACE_BACKEND_URL=ws://127.0.0.1:3586
+```
+
+For a remote maintenance checkout, use SSH:
+
+```bash
+export PATCH_WORKSPACE_SSH_TARGET=devbox
+export PATCH_WORKSPACE_REMOTE_CWD=/srv/codex
+```
 
 Do not set both unless you are intentionally testing precedence. A configured
-workspace backend URL wins over Actions/local mode.
+workspace backend URL and an SSH target are mutually exclusive.
 
 ## 3. Keep the first run non-pushing
 
 Leave destructive or externally visible operations off until the candidate is
-understood:
-
-```bash
-```
-
-Automation defaults should also keep pushes and publishing off. For harness-only
-local rehearsals you can also disable network fetches in the automation config:
-
-```bash
-```
-
-already has the release tag and upstream refs.
+understood. Automation defaults should keep pushes and publishing off. For
+harness-only local rehearsals, disable network fetches in the automation config
+when the checkout already has the release tag and upstream refs.
 
 ## 4. Verify matching before dispatch
 
@@ -124,13 +125,13 @@ That event should match the Codex fork `main-branch-update` Bun step.
 
 ## 5. Dispatch the maintenance attempt
 
-Dispatch with Actions/local and pushes still disabled:
+Dispatch locally with pushes still disabled:
 
 ```bash
-CODEX_WORKSPACE_MODE=actions \
 bun run patch.moi -- run upstream-release \
   --repo openai/codex \
   --tag rust-v0.130.0 \
+  --allow-local \
   --json
 ```
 
@@ -140,9 +141,10 @@ patch.moi writes:
 - `workspace-dispatches.jsonl` for the dispatch result
 - `maintenance-attempts.jsonl` for the attempt record
 
-codex-flows writes execution state under `.codex/workspace/actions`.
 The Codex fork maintenance automation decides whether it only runs local code or
-starts a native Codex turn for follow-up work.
+starts a native Codex turn for follow-up work. Direct local dispatch uses the
+active `CODEX_HOME`; repo-native workspace tasks write `.codex/workspace`
+state.
 
 ## 6. Inspect the result
 
@@ -161,7 +163,8 @@ bun run patch.moi -- attempts --status needs_intervention
 bun run patch.moi -- dispatches --status failed
 ```
 
-For Actions/local execution details, inspect the codex-flows state directory:
+For repo-native workspace execution details, inspect the codex-flows state
+directory:
 
 ```bash
 find .codex/workspace/actions -maxdepth 3 -type f | sort
@@ -199,8 +202,8 @@ Retry and replay append new records. They do not mutate old JSONL entries.
 Only enable pushing on a runner that is allowed to update the maintained fork:
 
 ```bash
-CODEX_WORKSPACE_MODE=actions \
-\
+PATCH_WORKSPACE_SSH_TARGET=runner \
+PATCH_WORKSPACE_REMOTE_CWD=/srv/codex \
 bun run patch.moi -- replay '<event-id>' --json
 ```
 
@@ -208,8 +211,6 @@ Automation scripts decide exactly when candidate refs should be pushed. The
 harness automation pushes configured branch refs with `--force-with-lease`. The
 Codex fork automation pushes the maintained `main` branch and, when configured
 to publish, release tags.
-
-release channel.
 
 ## 9. Leave durable state in Git and the forge
 

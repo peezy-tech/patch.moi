@@ -81,14 +81,14 @@ the checkout in the conflicted state for the operator or a Code Mode turn.
 Dispatch the harness release fixture through the patch.moi state path:
 
 ```bash
-\
-bun run patch.moi -- run harness
+bun run patch.moi -- run harness --allow-local
 ```
 
 The command records the automation event, dispatch record, and maintenance attempt
-under `DATA_DIR`. If `PATCH_WORKSPACE_BACKEND_URL` is unset, the dispatch uses
-local flow execution from the workspace root. If it is set, the dispatch goes to
-the configured workspace backend.
+under `DATA_DIR`. Upstream, downstream, and arbitrary event dispatches require
+one explicit execution surface: `PATCH_WORKSPACE_BACKEND_URL`,
+`PATCH_WORKSPACE_SSH_TARGET`, `--allow-local`, or
+`PATCH_ALLOW_LOCAL_APP_SERVER=1`.
 
 Verify upstream release flow matching without executing release work:
 
@@ -119,17 +119,25 @@ bun run patch.moi -- run downstream-release \
 ```
 
 Dispatching an upstream release task requires an explicit execution surface. Use
-Actions/local mode when no workspace backend is running:
+the local app-server surface with `--allow-local` only for intentional
+no-backend runs:
 
 ```bash
-CODEX_WORKSPACE_MODE=actions \
-bun run patch.moi -- run upstream-release --repo owner/project --tag v1.2.3
+bun run patch.moi -- run upstream-release --repo owner/project --tag v1.2.3 --allow-local
 ```
 
 Or point at a workspace backend:
 
 ```bash
 PATCH_WORKSPACE_BACKEND_URL=ws://127.0.0.1:3586 \
+bun run patch.moi -- run upstream-release --repo owner/project --tag v1.2.3
+```
+
+Or target a remote checkout through SSH:
+
+```bash
+PATCH_WORKSPACE_SSH_TARGET=devbox \
+PATCH_WORKSPACE_REMOTE_CWD=/srv/project-fork \
 bun run patch.moi -- run upstream-release --repo owner/project --tag v1.2.3
 ```
 

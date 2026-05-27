@@ -24,7 +24,7 @@ type FeedSourceConfig = {
     webUrl: string;
     defaultBranch?: string;
   };
-  target?: FeedWorkspaceFlowTarget;
+  target?: FeedWorkspaceAutomationTarget;
   pollIntervalSeconds?: number;
   primeOnly?: boolean;
 };
@@ -33,14 +33,16 @@ type FeedSourceConfig = {
 ## Workspace automation target
 
 ```ts
-type FeedWorkspaceFlowTarget = {
-  mode: "workspace_automation" | "workspace_automation";
+type FeedWorkspaceAutomationTarget = {
+  mode: "workspace_automation";
   eventType: string;
+  automations: string[];
   workspaceUrl?: string;
   workspaceUrlEnv?: string;
-  dispatchUrl?: string;
-  dispatchUrlEnv?: string;
-  dispatchSecretEnv?: string;
+  sshTarget?: string;
+  sshTargetEnv?: string;
+  remoteCwd?: string;
+  remoteCwdEnv?: string;
   payload?: Record<string, unknown>;
 };
 ```
@@ -49,6 +51,12 @@ The target creates a generic `AutomationEvent` and hands it to the workspace bac
 adapter. The flow payload includes provider, event, source id, entry id, title,
 URL, author, published time, repository fields, ref, SHA, tag, and raw feed
 metadata. Values from `target.payload` are merged last.
+
+Use `workspaceUrl` or `workspaceUrlEnv` for a local/co-located backend such as
+`ws://127.0.0.1:3586`. Use `sshTarget` or `sshTargetEnv` plus optional
+`remoteCwd` or `remoteCwdEnv` when the maintenance checkout lives on another
+host. Do not configure both a backend URL and an SSH target for the same feed
+target.
 
 For release feeds, patch.moi prefers a tag parsed from release URLs such as
 `/releases/tag/<tag>` before falling back to the feed title. This preserves

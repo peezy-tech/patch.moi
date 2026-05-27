@@ -18,20 +18,34 @@ For patch-stack maintenance, treat the event as an update trigger. The
 authoritative patch state still comes from Git when the local workspace or forge
 runner runs.
 
-## Select a workspace backend
+## Select an execution surface
 
 ```bash
 PATCH_WORKSPACE_BACKEND_URL=ws://127.0.0.1:3586
 ```
 
-The workspace backend URL is a WebSocket URL used as the turn host for
-automation scripts.
+The workspace backend URL is a local or co-located WebSocket URL used as the
+turn host for automation scripts. For a persistent local backend, create a
+Codex Flows profile and service:
+
+```bash
+codex-flows workspace backend init local --global --profile patch-moi --workspace-root /path/to/workspace
+codex-flows workspace backend service install --profile patch-moi
+```
+
+For remote operation, use SSH instead of exposing a backend port:
+
+```bash
+PATCH_WORKSPACE_SSH_TARGET=devbox
+PATCH_WORKSPACE_REMOTE_CWD=/srv/patch-workspace
+```
 
 ## Use local dispatch
 
-Leave `PATCH_WORKSPACE_BACKEND_URL` unset only when an operator explicitly
-allows local app-server execution. Patch runs the configured named automations
-from the app working directory.
+Leave both `PATCH_WORKSPACE_BACKEND_URL` and `PATCH_WORKSPACE_SSH_TARGET` unset
+only when an operator explicitly allows local app-server execution. CLI runs use
+`--allow-local`; service and MCP contexts use `PATCH_ALLOW_LOCAL_APP_SERVER=1`.
+Patch runs the configured named automations from the app working directory.
 
 ## Retry or replay
 

@@ -17,7 +17,7 @@ import type {
 } from "./types";
 import {
   createAutomationHostBackend,
-  targetWorkspaceBackendUrl,
+  selectWorkspaceExecution,
   type WorkspaceBackendConfig,
 } from "./workspace-backend";
 
@@ -328,7 +328,7 @@ async function runAutomationDispatch(
 ): Promise<WorkspaceDispatchOutcome> {
   const env = config.env ?? process.env;
   const automationNames = targetAutomations(event, target, env);
-  const workspaceBackendUrl = targetWorkspaceBackendUrl(target, env);
+  const execution = selectWorkspaceExecution(target, config);
   if (automationNames.length === 0) {
     return {
       result: { eventId: event.id, runIds: [], matched: 0, runs: [] },
@@ -336,9 +336,9 @@ async function runAutomationDispatch(
         eventId: event.id,
         eventType: event.type,
         operation,
-        target: workspaceBackendUrl ? "workspace-backend" : "local",
-        transport: workspaceBackendUrl ? "workspace-ws" : "app-server",
-        workspaceBackendUrl,
+        target: execution.target,
+        transport: execution.transport,
+        ...executionRecordFields(execution),
         status: "skipped",
         matched: 0,
         runIds: [],
@@ -364,9 +364,9 @@ async function runAutomationDispatch(
       eventId: event.id,
       eventType: event.type,
       operation,
-      target: workspaceBackendUrl ? "workspace-backend" : "local",
-      transport: workspaceBackendUrl ? "workspace-ws" : "app-server",
-      workspaceBackendUrl,
+      target: execution.target,
+      transport: execution.transport,
+      ...executionRecordFields(execution),
       status: failed ? "failed" : "dispatched",
       runIds: runs.map((run) => run.id),
       matched: automationNames.length,
@@ -387,7 +387,7 @@ async function runNamedAutomation(
   let backend: Awaited<ReturnType<typeof createAutomationHostBackend>> | undefined;
   try {
     const runTarget = await resolveTurnAutomationTarget(automationName, { cwd: config.cwd ?? process.cwd() });
-    const workspaceBackendUrl = targetWorkspaceBackendUrl(target, config.env ?? process.env);
+    const execution = selectWorkspaceExecution(target, config);
     const getBackend = async () => {
       backend ??= await createAutomationHostBackend(target, config);
       return backend;
@@ -400,9 +400,9 @@ async function runNamedAutomation(
       cwd: runTarget.cwd ?? config.cwd,
       timeoutMs: 90_000,
       host: createTurnAutomationHost({
-        via: workspaceBackendUrl ? "workspace" : "app-server",
+        via: execution.transport === "app-server" ? "app-server" : "workspace",
         appRequest: async (method, params) => await (await getBackend()).appRequest(method, params),
-        workspaceRequest: workspaceBackendUrl
+        workspaceRequest: execution.transport !== "app-server"
           ? async (method, params) => {
             const current = await getBackend();
             if (!current.workspaceRequest) {
@@ -433,6 +433,21 @@ async function runNamedAutomation(
   } finally {
     backend?.close();
   }
+}
+
+function executionRecordFields(
+  execution: ReturnType<typeof selectWorkspaceExecution>,
+): Pick<AutomationDispatchRecord, "workspaceBackendUrl" | "sshTarget" | "remoteCwd"> {
+  if (execution.transport === "workspace-ws") {
+    return { workspaceBackendUrl: execution.workspaceBackendUrl };
+  }
+  if (execution.transport === "ssh-remote-agent") {
+    return {
+      sshTarget: execution.sshTarget,
+      ...(execution.remoteCwd ? { remoteCwd: execution.remoteCwd } : {}),
+    };
+  }
+  return {};
 }
 
 function runViewFromAutomationRun(

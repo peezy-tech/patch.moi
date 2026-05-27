@@ -16,7 +16,7 @@ Responsibilities:
 - Poll configured feeds.
 - Normalize entries into `FeedSignal` records.
 - Store JSONL state.
-- Submit generic `AutomationEvent` triggers through the patch.moi workspace backend
+- Submit generic `AutomationEvent` triggers through the patch.moi execution
   adapter.
 - Provide the `patch.moi` CLI for setup, local maintenance runs, status,
   retry, replay, and sync.
@@ -41,11 +41,15 @@ automation, app-server, and backend commands are available:
 
 ```bash
 codex-flows automation list
-bun run workspace:backend
+bun run workspace:backend:init
+bun run workspace:backend:service
 bun run workspace:doctor
 bun run workspace:tick
 bun run workspace:run:harness
 ```
+
+Use `bun run workspace:backend:dev` for a temporary foreground backend during
+development.
 
 Those commands are operator automation around the repo. They do not replace the
 Patch service package or its `DATA_DIR` state.
@@ -71,7 +75,7 @@ patch.moi uses the consolidated codex-flows package surface:
 
 | Package | Published version | patch.moi use |
 | --- | --- | --- |
-| `@peezy.tech/codex-flows` | `^0.133.2` | turn automation runtime, workspace backend protocol/client, Actions/local automation state, CLI automation, and backend bins |
+| `@peezy.tech/codex-flows` | `^0.133.2` | turn automation runtime, workspace backend protocol/client, SSH remote-agent transport, repo-native workspace automation state, CLI automation, and backend bins |
 
 patch.moi product state still belongs in the Patch service JSONL store by
 default. Generic workspace backend state is execution/run state. It is useful for

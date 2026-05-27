@@ -78,36 +78,49 @@ bun run --cwd patch.moi patch.moi -- run upstream-release \
 ## 3. Pick an execution surface
 
 Patch does not require a Codex workspace backend to be running in this checkout.
-For CI-style no-backend maintenance, select the codex-flows Actions/local
-surface:
+For an intentional no-backend rehearsal, select the local app-server surface and
+allow local execution:
 
 ```bash
-CODEX_WORKSPACE_MODE=actions \
 DATA_DIR=./data \
 bun run --cwd patch.moi patch.moi -- run upstream-release \
   --workspace-root /home/peezy/meta-workspace \
   --repo openai/codex \
-  --tag rust-v0.130.0
+  --tag rust-v0.130.0 \
+  --allow-local
 ```
 
-That writes workspace automation run state under `.codex/workspace/actions` and
-patch.moi product state under `DATA_DIR`.
+That writes patch.moi product state under `DATA_DIR` and uses the local
+app-server surface from the active `CODEX_HOME`.
 
-For a service or host-owned execution surface, point Patch at a workspace
-backend:
+For a persistent local host-owned execution surface, create a Codex Flows
+backend profile and point Patch at its local WebSocket URL:
 
 ```bash
-PATCH_WORKSPACE_BACKEND_URL=http://127.0.0.1:3586 \
+codex-flows workspace backend init local --global --profile codex-maintenance --workspace-root /home/peezy/meta-workspace
+codex-flows workspace backend service install --profile codex-maintenance
+```
+
+```bash
+PATCH_WORKSPACE_BACKEND_URL=ws://127.0.0.1:3586 \
 DATA_DIR=./data \
 FEED_SOURCES_PATH=../feed-sources.json \
 bun run --cwd patch.moi start
 ```
 
-`PATCH_WORKSPACE_BACKEND_URL` points at the Codex workspace backend WebSocket
-URL used as the turn host for workspace automations.
+For a remote checkout, use SSH instead of exposing a backend port:
 
-Leave `PATCH_WORKSPACE_BACKEND_URL` unset only when you intentionally allow
-local app-server execution from the Patch process working directory.
+```bash
+PATCH_WORKSPACE_SSH_TARGET=codex-runner \
+PATCH_WORKSPACE_REMOTE_CWD=/srv/meta-workspace \
+DATA_DIR=./data \
+FEED_SOURCES_PATH=../feed-sources.json \
+bun run --cwd patch.moi start
+```
+
+Leave `PATCH_WORKSPACE_BACKEND_URL` and `PATCH_WORKSPACE_SSH_TARGET` unset only
+when you intentionally allow local app-server execution from the Patch process
+working directory with `--allow-local` or `PATCH_ALLOW_LOCAL_APP_SERVER=1`.
 
 ## 4. Inspect the stored event
 

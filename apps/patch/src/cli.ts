@@ -53,7 +53,7 @@ Usage:
   patch.moi events [--type TYPE] [--limit N] [--data-dir DIR] [--json]
   patch.moi dispatches [--event-id ID] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
   patch.moi attempts [--event-id ID] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
-  patch.moi run harness [--event FILE] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--json]
+  patch.moi run harness [--event FILE] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--allow-local] [--json]
   patch.moi run upstream-release --repo OWNER/NAME --tag TAG [--automation NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run upstream-branch --repo OWNER/NAME [--sha SHA] [--ref refs/heads/main] [--automation NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run downstream-release --package PACKAGE --version VERSION [--repo OWNER/NAME] [--automation NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
@@ -634,19 +634,20 @@ async function appendAutomationEventIfMissing(store: EventStore, event: Automati
 
 function assertDispatchSurfaceAllowed(context: CliContext, command = "upstream-release"): void {
   if (
-    flagBool(context.parsed, "allow-local") ||
-    workspaceBackendConfigured(context.env)
+    localDispatchAllowed(context) ||
+    remoteExecutionConfigured(context.env)
   ) {
     return;
   }
   throw new UsageError(
-    `${command} dispatch requires PATCH_WORKSPACE_BACKEND_URL or --allow-local; use --dry-run to verify configured automations without executing maintenance work`,
+    `${command} dispatch requires PATCH_WORKSPACE_BACKEND_URL, PATCH_WORKSPACE_SSH_TARGET, --allow-local, or PATCH_ALLOW_LOCAL_APP_SERVER=1; use --dry-run to verify configured automations without executing maintenance work`,
   );
 }
 
-function workspaceBackendConfigured(env: Record<string, string | undefined>): boolean {
+function remoteExecutionConfigured(env: Record<string, string | undefined>): boolean {
   return Boolean(
-    env.PATCH_WORKSPACE_BACKEND_URL?.trim(),
+    env.PATCH_WORKSPACE_BACKEND_URL?.trim() ||
+      env.PATCH_WORKSPACE_SSH_TARGET?.trim(),
   );
 }
 
@@ -663,12 +664,23 @@ function commaList(value: string | undefined): string[] {
     : [];
 }
 
+function booleanEnv(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
 function workspaceConfig(context: CliContext): WorkspaceDispatchConfig {
   return {
     env: context.env,
     cwd: context.workspaceRoot,
+    allowLocal: localDispatchAllowed(context),
     progress: progressSink(context),
   };
+}
+
+function localDispatchAllowed(context: CliContext): boolean {
+  return flagBool(context.parsed, "allow-local") ||
+    booleanEnv(context.env.PATCH_ALLOW_LOCAL_APP_SERVER);
 }
 
 async function writeDispatchPlan(context: CliContext, event: AutomationEvent): Promise<void> {

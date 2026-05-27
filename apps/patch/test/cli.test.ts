@@ -21,7 +21,7 @@ describe("patch.moi CLI", () => {
       "peezy-codex-fork",
     ], { env: {} });
     expect(blocked.code).toBe(2);
-    expect(blocked.stderr).toContain("requires PATCH_WORKSPACE_BACKEND_URL or --allow-local");
+    expect(blocked.stderr).toContain("requires PATCH_WORKSPACE_BACKEND_URL, PATCH_WORKSPACE_SSH_TARGET, --allow-local, or PATCH_ALLOW_LOCAL_APP_SERVER=1");
 
     const dryRun = await invoke([
       "run",

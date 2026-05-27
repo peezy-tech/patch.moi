@@ -43,7 +43,7 @@ The current service has these pieces:
 | HTTP server | health, admin listing, retry, replay, sync, and workspace inspection endpoints |
 | feed poller | reads configured upstream feeds and emits normalized signals |
 | JSONL store | writes feed events, automation events, workspace dispatches, and maintenance attempts under `DATA_DIR` |
-| workspace backend adapter | dispatches locally when no backend URL is set, or calls a configured Codex workspace backend |
+| workspace execution adapter | dispatches through explicit local app-server, local workspace backend, or SSH remote-agent surfaces |
 | harness automations | exercise Codex-shaped fork maintenance through `automations/patch-moi-harness-*` |
 | repo workspace config | exposes manual operator tasks through `codex-flows workspace doctor|tick|run` |
 
@@ -60,9 +60,9 @@ patch.moi-owned state lives under `DATA_DIR`:
 - maintenance attempts, outcomes, candidate refs, and intervention state
 
 Codex workspace state lives under `.codex/workspace/<mode>` and describes the
-operator automation surface. Local workspace state is ignored. Actions state is
-reserved for future CI or service use where committing selected state may be
-intentional.
+operator automation surface. Local workspace state is ignored. Runner state is
+disposable unless the runner publishes refs, artifacts, checks, or selected
+state back to the forge.
 
 Neither store contains the patch stack. Patch commits, branches, tags, and
 candidate refs remain in Git and the forge.

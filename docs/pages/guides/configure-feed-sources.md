@@ -32,8 +32,9 @@ feeds. Patch normalizes both into `FeedSignal` records.
 }
 ```
 
-`workspace_automation` creates a generic `AutomationEvent` and submits it to the workspace
-backend adapter:
+`workspace_automation` creates a generic `AutomationEvent` and submits it to
+the selected execution surface. Use a local backend URL for a persistent local
+host:
 
 ```json
 {
@@ -46,6 +47,25 @@ backend adapter:
   }
 }
 ```
+
+Use SSH when the maintenance checkout lives on another host:
+
+```json
+{
+  "mode": "workspace_automation",
+  "eventType": "upstream.release",
+  "sshTargetEnv": "PATCH_WORKSPACE_SSH_TARGET",
+  "remoteCwdEnv": "PATCH_WORKSPACE_REMOTE_CWD",
+  "automations": ["patch-moi-harness-fork"],
+  "payload": {
+    "repo": "owner/project"
+  }
+}
+```
+
+Do not set both a backend URL and SSH target. For service mode, prefer a forge
+runner that owns the disposable checkout and reports candidate refs back to
+patch.moi.
 
 For patch-stack maintenance, prefer `workspace_automation` to create an
 `upstream.release` or `upstream.branch_update` trigger. Let the receiving

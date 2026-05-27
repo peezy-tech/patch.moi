@@ -79,11 +79,13 @@ When the feed later contains an unseen release entry, Patch appends:
   later candidate refs.
 - `data/workspace-dispatches.jsonl` for the workspace dispatch outcome.
 
-If no workspace backend URL is set, Patch uses the local app-server turn host
-from the working directory. If `PATCH_WORKSPACE_BACKEND_URL` is set, Patch sends
-the event to that workspace backend's turn automation host. Old flow dispatch
-URL fallbacks are no longer accepted; use
-`PATCH_WORKSPACE_BACKEND_URL` for the workspace backend WebSocket URL.
+If `PATCH_WORKSPACE_BACKEND_URL` is set, Patch sends the event to that local
+workspace backend's turn automation host. If `PATCH_WORKSPACE_SSH_TARGET` is
+set, Patch uses the Codex Flows SSH remote agent and optional
+`PATCH_WORKSPACE_REMOTE_CWD`. If neither is set, use
+`PATCH_ALLOW_LOCAL_APP_SERVER=1` only for intentional local app-server execution
+from the working directory. Old flow dispatch URL fallbacks are no longer
+accepted.
 
 ## 4. Connect patch work
 

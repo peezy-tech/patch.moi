@@ -46,10 +46,11 @@ runner:
 | Surface | How patch.moi selects it | Run state |
 | --- | --- | --- |
 | local app-server | operator passes `--allow-local` without a backend URL | patch.moi `DATA_DIR` |
-| workspace WebSocket | `PATCH_WORKSPACE_BACKEND_URL` starts with `ws://` or `wss://` | patch.moi `DATA_DIR` plus backend thread state |
+| local workspace WebSocket | `PATCH_WORKSPACE_BACKEND_URL` starts with `ws://` or `wss://` | patch.moi `DATA_DIR` plus backend thread state |
+| SSH remote agent | `PATCH_WORKSPACE_SSH_TARGET` or target `sshTarget` is set | patch.moi `DATA_DIR` plus remote Codex thread state |
 
-A persistent workspace backend remains optional: use it when a host, service,
-or gateway needs app-server pass-through or remote turn control.
+A persistent workspace backend remains optional and local/co-located. Use SSH
+for remote hosts. Use forge runners for service-mode maintenance checkouts.
 
 In every case patch.moi writes its own dispatch and maintenance-attempt records
 under `DATA_DIR`.

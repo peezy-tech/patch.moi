@@ -37,7 +37,9 @@
     "patch.moi": "bun run --filter @peezy.tech/patch patch.moi",
     "start": "bun run --filter @peezy.tech/patch start",
     "test": "bun run --filter @peezy.tech/patch test",
-    "workspace:backend": "codex-workspace-backend-local serve --cwd . --local-app-server",
+    "workspace:backend:init": "codex-flows workspace backend init local --global --profile patch-moi --workspace-root .",
+    "workspace:backend:service": "codex-flows workspace backend service install --profile patch-moi",
+    "workspace:backend:dev": "codex-workspace-backend-local serve --cwd . --local-app-server",
     "workspace:doctor": "codex-flows workspace doctor --workspace-root .",
     "workspace:run:harness": "codex-flows workspace run harness-maintenance-fixture --workspace-root . --mode local",
     "workspace:tick": "codex-flows workspace tick --workspace-root . --mode local"

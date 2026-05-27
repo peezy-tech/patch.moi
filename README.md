@@ -10,7 +10,7 @@ Canonical public host: `https://patch.moi`.
 This is a Bun monorepo:
 
 - `apps/patch`: the Patch service, feed poller, JSONL store, Discord output,
-  and workspace backend adapter.
+  and execution adapter.
 - `docs`: Tome documentation site for patch.moi.
 
 patch.moi treats Git as the source of truth for maintained projects. Upstream
@@ -94,6 +94,9 @@ DISCORD_WEBHOOK_URL=
 DISCORD_NOTIFY_EVENTS=push,release
 FEED_SOURCES_PATH=./feed-sources.json
 PATCH_WORKSPACE_BACKEND_URL=
+PATCH_WORKSPACE_SSH_TARGET=
+PATCH_WORKSPACE_REMOTE_CWD=
+PATCH_ALLOW_LOCAL_APP_SERVER=false
 PATCH_AUTOMATIONS=
 PATCH_ADMIN_TOKEN=
 ```
@@ -123,10 +126,19 @@ append legacy work to `DATA_DIR/feed-jobs.jsonl`. Targets using
 patch.moi-owned `DATA_DIR/maintenance-attempts.jsonl` entry that links the
 upstream update to workspace run ids, final automation outcome, and candidate refs.
 
-Patch can dispatch through a configured WebSocket workspace backend, or through
-the direct app-server surface when an operator explicitly allows local
-execution. The backend does not need to be running in this checkout unless you
-are explicitly testing or operating that surface.
+Patch can dispatch through a configured local WebSocket workspace backend, an
+SSH remote agent, or the direct app-server surface when an operator explicitly
+allows local execution. For a persistent local backend, use the Codex Flows
+profile commands:
+
+```bash
+bun run workspace:backend:init
+bun run workspace:backend:service
+```
+
+Use `PATCH_WORKSPACE_SSH_TARGET` and `PATCH_WORKSPACE_REMOTE_CWD` when the
+maintenance checkout lives on another host. Service mode should prefer forge
+runners over exposing a generic remote backend port.
 
 The harness can also be run through the repo-native workspace task:
 

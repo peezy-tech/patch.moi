@@ -22,7 +22,7 @@ There are two local operator paths:
 
 Both paths exercise the harness. The Patch service path still starts with feed
 intake, writes `DATA_DIR` records, creates a maintenance attempt, and dispatches
-the same kind of event through the workspace backend adapter.
+the same kind of event through the execution adapter.
 
 ## 1. Check out the harness repos
 
@@ -67,12 +67,12 @@ generated local run state. The generated local state is ignored by Git.
 
 ## 4. Try the workspace automation smoke task
 
-The experimental workspace automation task dispatches a generated `upstream.release`
-event through a running Codex workspace backend:
+The manual workspace automation task dispatches a generated `upstream.release`
+event through a running local Codex workspace backend:
 
 ```bash
-cd ../codex-flows
-bun run workspace:backend --cwd /home/peezy/meta-workspace/patch.moi
+bun run workspace:backend:init
+bun run workspace:backend:service
 ```
 
 Then, from the patch.moi repo:
@@ -85,6 +85,8 @@ bun run workspace:run:harness
 Use this only to exercise workspace-owned automation. It is not the product
 path for patch.moi feed intake, and it does not write patch.moi `DATA_DIR`
 maintenance-attempt records unless patch.moi itself dispatches the event.
+For a temporary foreground backend instead of a user service, use
+`bun run workspace:backend:dev`.
 
 ## 5. Rehearse a real upstream release
 

@@ -43,7 +43,8 @@ patch.moi owns product state around the patch stack:
 Execution surfaces own the work itself:
 
 - named codex-flows automations match events and run JavaScript modules
-- Codex workspace backends provide app-server, delegation, and turn transport
+- Codex workspace backends and SSH remote agents provide app-server, delegation,
+  and turn transport
 - local workspaces and forge runners fetch, rebase, verify, and push candidates
 - release channels publish or deploy after review and policy gates
 
@@ -70,7 +71,7 @@ bun run harness:automation
 Run the same harness through the patch.moi CLI and record `DATA_DIR` state:
 
 ```bash
-bun run patch.moi -- run harness
+bun run patch.moi -- run harness --allow-local
 bun run patch.moi -- status
 ```
 
@@ -81,12 +82,11 @@ bun run workspace:doctor
 bun run workspace:run:harness
 ```
 
-Run the manual workspace-owned automation smoke task only when a Codex workspace
-backend is running:
+Run the manual workspace-owned automation smoke task only when a local Codex
+workspace backend is running:
 
 ```bash
 CODEX_WORKSPACE_BACKEND_WS_URL=ws://127.0.0.1:3586 \
-\
 bun run workspace:run:harness
 ```
 
@@ -138,7 +138,7 @@ codex plugin add patch-moi@patch-moi
 ## Repository Layout
 
 - `apps/patch`: Patch service, feed poller, JSONL store, admin API, Discord
-  output, and workspace backend adapter.
+  output, and execution adapter.
 - `automations/patch-moi-harness-*`: source harness automations that mirror the
   Codex fork release, main-update, and downstream-release surfaces.
 - `.codex/workspace.toml`: optional repo-native harness automation config.

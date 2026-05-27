@@ -15,6 +15,10 @@ export type FeedWorkspaceAutomationTarget = {
   automations: string[];
   workspaceUrl?: string;
   workspaceUrlEnv?: string;
+  sshTarget?: string;
+  sshTargetEnv?: string;
+  remoteCwd?: string;
+  remoteCwdEnv?: string;
   payload?: Record<string, unknown>;
 };
 
@@ -80,9 +84,11 @@ export type AutomationDispatchRecord = {
   eventId: string;
   eventType: string;
   operation?: "dispatch" | "replay";
-  target?: "local" | "workspace-backend";
-  transport?: "app-server" | "workspace-ws";
+  target?: "local" | "workspace-backend" | "ssh";
+  transport?: "app-server" | "workspace-ws" | "ssh-remote-agent";
   workspaceBackendUrl?: string;
+  sshTarget?: string;
+  remoteCwd?: string;
   status: "dispatched" | "failed" | "skipped";
   runIds?: string[];
   matched?: number;
