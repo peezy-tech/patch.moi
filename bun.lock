@@ -5,7 +5,7 @@
     "": {
       "name": "@peezy.tech/patch",
       "devDependencies": {
-        "@peezy.tech/codex-flows": "^0.133.0",
+        "@peezy.tech/codex-flows": "^0.133.1",
       },
     },
     "apps/patch": {
@@ -16,7 +16,7 @@
         "patch.moi-mcp": "./src/mcp.ts",
       },
       "dependencies": {
-        "@peezy.tech/codex-flows": "^0.133.0",
+        "@peezy.tech/codex-flows": "^0.133.1",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -146,7 +146,7 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.130.0", "", {}, "sha512-ibD2usx9JRu7f5pu2tMKMI4cpA4NgXJQoYRP4pQ7Pxmn1l6k/53qWtQWZayhYy3X4QZkt90Ot+mJEaeXouio6Q=="],
 
-    "@peezy.tech/codex-flows": ["@peezy.tech/codex-flows@0.133.0", "", { "dependencies": { "smol-toml": "^1.6.1", "tsx": "^4.22.3", "ws": "^8.20.1" }, "bin": { "codex-flows": "dist/cli/index.js", "codex-app": "dist/bin/codex-app.js", "codex-workspace-backend-local": "dist/bin/codex-workspace-backend-local.js" } }, "sha512-7T6f0sFhP1+Kl1lcWdbC1zJSUwD9J5gMaQourysdKRPI+/0w1zrgRkSSytjGqCzAfjiU9B6fgW3JbhhwcpP4lg=="],
+    "@peezy.tech/codex-flows": ["@peezy.tech/codex-flows@0.133.1", "", { "dependencies": { "smol-toml": "^1.6.1", "tsx": "^4.22.3", "ws": "^8.20.1" }, "bin": { "codex-flows": "dist/cli/index.js", "codex-app": "dist/bin/codex-app.js", "codex-workspace-backend-local": "dist/bin/codex-workspace-backend-local.js" } }, "sha512-Sm79KjIi8ii9fpoxQaPOaRkRRdq/DqhcOgrARJ+yCaEp+kea3RKIcXBUhFU3ecTtewnay74kAXQUbsk1+hT+AA=="],
 
     "@peezy.tech/patch": ["@peezy.tech/patch@workspace:apps/patch"],
 

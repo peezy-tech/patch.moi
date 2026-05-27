@@ -43,6 +43,6 @@
     "workspace:tick": "codex-flows workspace tick --workspace-root . --mode local"
   },
   "devDependencies": {
-    "@peezy.tech/codex-flows": "^0.133.0"
+    "@peezy.tech/codex-flows": "^0.133.1"
   }
 }
