@@ -41,6 +41,14 @@ export type PatchRebuildResult = {
   error?: string;
 };
 
+export type PatchWorkBranchResult = {
+  status: "created";
+  repo: string;
+  branch: string;
+  base: string;
+  sha: string;
+};
+
 export async function inspectPatchWorkspace(repoPath: string, options: {
   mainBranch?: string;
   upstreamBranch?: string;
@@ -192,6 +200,23 @@ export async function rebuildPatchMain(repoPath: string, options: {
     beforeSha,
     afterSha,
     applied,
+  };
+}
+
+export async function createPatchWorkBranch(repoPath: string, options: {
+  branch: string;
+  base: string;
+}): Promise<PatchWorkBranchResult> {
+  await requireClean(repoPath);
+  await resolveCommit(repoPath, options.base);
+  await git(repoPath, ["switch", "-c", options.branch, options.base]);
+  const sha = (await git(repoPath, ["rev-parse", "HEAD"])).stdout.trim();
+  return {
+    status: "created",
+    repo: repoPath,
+    branch: options.branch,
+    base: options.base,
+    sha,
   };
 }
 

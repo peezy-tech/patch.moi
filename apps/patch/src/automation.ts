@@ -11,8 +11,10 @@ import type {
   CandidateRefRecord,
   FeedSignal,
   FeedWorkspaceAutomationTarget,
-  MaintenanceAttemptRecord,
-  MaintenanceAttemptStatus,
+  PatchAttemptRecord,
+  PatchAttemptStatus,
+  PatchWorkKind,
+  PatchWorkRecord,
   WorkspaceThreadRefRecord,
 } from "./types";
 import {
@@ -237,19 +239,23 @@ export async function dispatchWorkspaceEventForFeedSignal(
   return { event, ...outcome };
 }
 
-export function maintenanceAttemptForWorkspaceDispatch(
+export function patchAttemptForWorkspaceDispatch(
   event: AutomationEvent,
   record: AutomationDispatchRecord,
   runs: AutomationRunView[] = [],
-): MaintenanceAttemptRecord {
+): PatchAttemptRecord {
   const payload = typeof event.payload === "object" && event.payload !== null
     ? event.payload as Record<string, unknown>
     : {};
   const operation = record.operation ?? "dispatch";
   const createdAt = record.createdAt;
+  const workId = patchWorkIdForEvent(event);
+  const kind = patchWorkKindForEvent(event);
 
-  return maintenanceAttemptWithWorkspaceRuns({
+  return patchAttemptWithWorkspaceRuns({
     id: `${event.id}:${operation}:${record.createdAt}`,
+    workId,
+    kind,
     eventId: event.id,
     eventType: event.type,
     operation,
@@ -258,7 +264,11 @@ export function maintenanceAttemptForWorkspaceDispatch(
     upstreamRef: stringValue(payload.ref),
     upstreamSha: stringValue(payload.sha),
     upstreamTag: stringValue(payload.tag),
+    target: record.target,
+    transport: record.transport,
     workspaceBackendUrl: record.workspaceBackendUrl,
+    sshTarget: record.sshTarget,
+    remoteCwd: record.remoteCwd,
     workspaceRunIds: record.runIds ?? [],
     candidateRefs: [],
     error: record.error,
@@ -267,11 +277,11 @@ export function maintenanceAttemptForWorkspaceDispatch(
   }, runs, createdAt);
 }
 
-export function maintenanceAttemptWithWorkspaceRuns(
-  attempt: MaintenanceAttemptRecord,
+export function patchAttemptWithWorkspaceRuns(
+  attempt: PatchAttemptRecord,
   runs: AutomationRunView[],
   updatedAt = new Date().toISOString(),
-): MaintenanceAttemptRecord {
+): PatchAttemptRecord {
   if (runs.length === 0) {
     return attempt;
   }
@@ -318,6 +328,76 @@ export function maintenanceAttemptWithWorkspaceRuns(
     updatedAt,
     ...(completedAt ? { completedAt } : {}),
   };
+}
+
+export function patchWorkForAutomationEvent(
+  event: AutomationEvent,
+  attempt?: PatchAttemptRecord,
+  now = new Date().toISOString(),
+): PatchWorkRecord {
+  const payload = typeof event.payload === "object" && event.payload !== null
+    ? event.payload as Record<string, unknown>
+    : {};
+  const repo = stringValue(payload.repo) ?? stringValue(payload.packageName);
+  const tag = stringValue(payload.tag) ?? stringValue(payload.version);
+  const ref = stringValue(payload.ref);
+  return {
+    id: patchWorkIdForEvent(event),
+    kind: patchWorkKindForEvent(event),
+    title: patchWorkTitleForEvent(event),
+    ...(repo ? { repo } : {}),
+    ...(tag || ref ? { baseRef: tag ?? ref } : {}),
+    status: attempt ? patchWorkStatusFromAttempt(attempt.status) : "active",
+    candidateRefs: attempt?.candidateRefs ?? [],
+    attemptIds: attempt ? [attempt.id] : [],
+    createdAt: now,
+    updatedAt: now,
+    ...(attempt?.completedAt ? { completedAt: attempt.completedAt } : {}),
+  };
+}
+
+export function mergePatchWorkWithAttempt(
+  work: PatchWorkRecord | undefined,
+  event: AutomationEvent,
+  attempt: PatchAttemptRecord,
+  now = new Date().toISOString(),
+): PatchWorkRecord {
+  const base = work ?? patchWorkForAutomationEvent(event, undefined, attempt.createdAt);
+  const status = patchWorkStatusFromAttempt(attempt.status);
+  return {
+    ...base,
+    status,
+    candidateRefs: uniqueCandidateRefs([
+      ...base.candidateRefs,
+      ...attempt.candidateRefs,
+    ]),
+    attemptIds: uniqueStrings([
+      ...base.attemptIds,
+      attempt.id,
+    ]),
+    updatedAt: now,
+    ...(attempt.completedAt ? { completedAt: attempt.completedAt } : {}),
+  };
+}
+
+export function patchWorkIdForEvent(event: AutomationEvent): string {
+  const payload = typeof event.payload === "object" && event.payload !== null
+    ? event.payload as Record<string, unknown>
+    : {};
+  const repo = stringValue(payload.repo) ?? stringValue(payload.packageName) ?? "unknown";
+  const discriminator = stringValue(payload.tag) ??
+    stringValue(payload.version) ??
+    stringValue(payload.ref) ??
+    stringValue(payload.sha) ??
+    event.id;
+  return `patch-work:${event.type}:${slugValue(repo)}:${slugValue(discriminator)}`;
+}
+
+export function patchWorkKindForEvent(event: AutomationEvent): PatchWorkKind {
+  if (event.type.startsWith("downstream.")) {
+    return "release";
+  }
+  return "maintenance";
 }
 
 async function runAutomationDispatch(
@@ -505,7 +585,38 @@ function automationResultPayload(value: unknown): Record<string, unknown> | unde
   return typeof nested.status === "string" ? nested : undefined;
 }
 
-function statusFromRuns(runs: AutomationRunView[]): MaintenanceAttemptStatus {
+function patchWorkTitleForEvent(event: AutomationEvent): string {
+  const payload = typeof event.payload === "object" && event.payload !== null
+    ? event.payload as Record<string, unknown>
+    : {};
+  const repo = stringValue(payload.repo) ?? stringValue(payload.packageName) ?? "patch stack";
+  if (event.type === "upstream.release") {
+    return `Carry ${repo} to ${stringValue(payload.tag) ?? "upstream release"}`;
+  }
+  if (event.type === "upstream.branch_update") {
+    return `Carry ${repo} to ${stringValue(payload.ref) ?? "upstream branch"}`;
+  }
+  if (event.type === "downstream.release") {
+    return `Prepare ${repo} release ${stringValue(payload.version) ?? stringValue(payload.tag) ?? ""}`.trim();
+  }
+  return `${event.type} patch work for ${repo}`;
+}
+
+function patchWorkStatusFromAttempt(status: PatchAttemptStatus): PatchWorkRecord["status"] {
+  if (status === "started") return "active";
+  return status;
+}
+
+function slugValue(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._/-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replaceAll("/", "-") || "unknown";
+}
+
+function statusFromRuns(runs: AutomationRunView[]): PatchAttemptStatus {
   const statuses = runs.map((run) => resultStatus(run));
   if (statuses.some((status) => status === "needs_intervention")) return "needs_intervention";
   if (statuses.some((status) => status === "blocked")) return "blocked";

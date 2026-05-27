@@ -1,14 +1,14 @@
 ---
 title: patch.moi
-description: Git-first maintenance for custom patches on top of upstream open source software.
+description: Git-first patch-work control plane for custom patches on top of upstream open source software.
 ---
 
 # patch.moi
 
-patch.moi watches upstream projects and keeps the operational record for
-maintained forks. It does not replace Git, CI, or release tooling. It records
-what upstream did, starts or resumes the right maintenance work, and preserves
-enough state to inspect, retry, replay, and review the result.
+patch.moi keeps the operational record for patch-stack product work. It does
+not replace Git, CI, or release tooling. It records feature work, upstream
+movement, downstream release prep, dispatches, attempts, and enough state to
+inspect, retry, replay, and review the result.
 
 The patch stack remains ordinary Git:
 
@@ -22,7 +22,8 @@ The patch stack remains ordinary Git:
 flowchart LR
   Upstream["upstream feed or ref"] --> Patch["patch.moi intake"]
   Patch --> Event["durable update event"]
-  Event --> Attempt["maintenance attempt"]
+  Event --> Work["patch work"]
+  Work --> Attempt["patch attempt"]
   Attempt --> Workspace["local workspace or forge runner"]
   Git["upstream and fork Git refs"] --> Workspace
   Workspace --> Candidate["candidate ref or artifact"]
@@ -36,8 +37,9 @@ patch.moi owns product state around the patch stack:
 
 - feed cursors and normalized update signals
 - deterministic automation events
+- patch work for feature, maintenance, and release lanes
 - workspace dispatch, retry, and replay records
-- maintenance attempts, candidate refs, outcomes, and intervention state
+- patch attempts, candidate refs, outcomes, and intervention state
 - admin inspection APIs for that state
 
 Execution surfaces own the work itself:
@@ -125,7 +127,7 @@ codex plugin add patch-moi@patch-moi
 
 ## Read Next
 
-- First harness run: [Run the harness maintenance automation](tutorials/run-harness-maintenance-flow).
+- First harness run: [Run the harness patch-work automation](tutorials/run-harness-patch-work-flow).
 - Feed intake: [Watch an upstream release](tutorials/watch-upstream-release).
 - Operator runbook: [Maintain a fork](guides/maintain-a-fork).
 - CLI operations: [CLI](reference/cli).
@@ -142,7 +144,7 @@ codex plugin add patch-moi@patch-moi
 - `automations/patch-moi-harness-*`: source harness automations that mirror the
   Codex fork release, main-update, and downstream-release surfaces.
 - `.codex/workspace.toml`: optional repo-native harness automation config.
-  Real installed maintenance automations belong in the workspace repo that uses
+  Real installed patch-work automations belong in the workspace repo that uses
   patch.moi, not in this product repo.
 - `harness`: upstream and maintained fork repositories used for rehearsal.
 - `docs`: this Tome documentation site.

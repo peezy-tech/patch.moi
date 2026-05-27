@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: Local patch.moi commands for setup, maintenance runs, status, retry, replay, and sync.
+description: Local patch.moi commands for setup, feature work, patch runs, status, retry, replay, and sync.
 ---
 
 # CLI
@@ -36,8 +36,30 @@ bun run patch.moi -- setup fork \
 ```
 
 The setup command reports the current branch, `origin`, `upstream`, worktree
-cleanliness, and whether the checkout is ready for an automated maintenance
-run. It does not clean local changes.
+cleanliness, and whether the checkout is ready for automated patch work. It
+does not clean local changes.
+
+## Patch Work
+
+Start feature work and optionally create its branch:
+
+```bash
+bun run patch.moi -- work start feature \
+  --title "Add native replay" \
+  --repo ../project-fork \
+  --branch feature/native-replay \
+  --base main \
+  --patch-branch patch/020-native-replay \
+  --create-branch
+```
+
+List, inspect, and update work records:
+
+```bash
+bun run patch.moi -- work list --kind feature
+bun run patch.moi -- work show '<work-id>'
+bun run patch.moi -- work set-status '<work-id>' --status review
+```
 
 ## Patch Branches
 
@@ -63,7 +85,8 @@ bun run patch.moi -- patch capture patch/010-packaging-build \
   --repo ../project-fork \
   --from packaging-work \
   --base main \
-  --message "patch: packaging and release build"
+  --message "patch: packaging and release build" \
+  --work-id '<work-id>'
 ```
 
 Rebuild the maintained `main` branch from `upstream` plus all ordered
@@ -76,7 +99,7 @@ bun run patch.moi -- patch rebuild --repo ../project-fork --base upstream --to m
 If a cherry-pick conflicts, rebuild stops with `needs_intervention` and leaves
 the checkout in the conflicted state for the operator or a Code Mode turn.
 
-## Run Maintenance
+## Run Patch Work
 
 Dispatch the harness release fixture through the patch.moi state path:
 
@@ -84,9 +107,9 @@ Dispatch the harness release fixture through the patch.moi state path:
 bun run patch.moi -- run harness --allow-local
 ```
 
-The command records the automation event, dispatch record, and maintenance attempt
-under `DATA_DIR`. Upstream, downstream, and arbitrary event dispatches require
-one explicit execution surface: `PATCH_WORKSPACE_BACKEND_URL`,
+The command records the automation event, patch work, dispatch record, and patch
+attempt under `DATA_DIR`. Upstream, downstream, and arbitrary event dispatches
+require one explicit execution surface: `PATCH_WORKSPACE_BACKEND_URL`,
 `PATCH_WORKSPACE_SSH_TARGET`, `--allow-local`, or
 `PATCH_ALLOW_LOCAL_APP_SERVER=1`.
 
@@ -99,7 +122,7 @@ bun run patch.moi -- run upstream-release \
   --dry-run
 ```
 
-Verify upstream branch update matching without executing branch maintenance:
+Verify upstream branch update matching without executing patch work:
 
 ```bash
 bun run patch.moi -- run upstream-branch \
@@ -152,6 +175,8 @@ Read patch.moi-owned state:
 bun run patch.moi -- status
 bun run patch.moi -- events --type upstream.release
 bun run patch.moi -- events --type downstream.release
+bun run patch.moi -- work list --kind feature
+bun run patch.moi -- work list --kind maintenance
 bun run patch.moi -- dispatches --status failed
 bun run patch.moi -- attempts --status needs_intervention
 ```
@@ -174,11 +199,11 @@ bun run patch.moi -- replay '<event-id>'
 ```
 
 Sync the latest workspace run outcome and candidate refs into the patch.moi
-maintenance attempt:
+patch attempt:
 
 ```bash
 bun run patch.moi -- sync '<attempt-id>'
 ```
 
-Retry and replay append new dispatch and maintenance-attempt records. Sync
+Retry and replay append new dispatch and patch-attempt records. Sync
 appends a newer record for the same attempt id when backend run state changes.

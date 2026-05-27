@@ -4,21 +4,24 @@ import path from "node:path";
 import { canonicalUpstreamRef, loadPatchMoiConfig, type PatchMoiConfig } from "./config";
 import {
   dispatchWorkspaceEventDetailed,
-  maintenanceAttemptForWorkspaceDispatch,
+  mergePatchWorkWithAttempt,
+  patchAttemptForWorkspaceDispatch,
   patchDownstreamReleaseEvent,
   patchUpstreamBranchUpdateEvent,
   patchUpstreamReleaseEvent,
   replayWorkspaceEventDetailed,
 } from "./automation";
 import { discoverPatchGitProject, fetchUpstream } from "./git-discovery";
-import { syncMaintenanceAttempt } from "./maintenance";
+import { syncPatchAttempt } from "./patch-attempts";
 import {
   capturePatchBranch,
+  createPatchWorkBranch,
   inspectPatchWorkspace,
   listPatchBranches,
   rebuildPatchMain,
 } from "./patch-workspace";
 import { EventStore } from "./queue";
+import type { CandidateRefRecord, PatchAttemptRecord, PatchWorkKind, PatchWorkRecord, PatchWorkStatus } from "./types";
 import type { AutomationEvent } from "./types";
 
 type McpEnv = Record<string, string | undefined>;
@@ -44,18 +47,39 @@ const commonProperties = {
 };
 
 export const patchMoiTools: ToolDefinition[] = [
-  tool("status", "Show recent patch.moi events, dispatches, and maintenance attempts.", {
+  tool("status", "Show recent patch.moi events, dispatches, patch work, and patch attempts.", {
     limit: { type: "number" },
   }),
   tool("events", "List recorded patch.moi automation events from DATA_DIR.", {
     type: { type: "string" },
     limit: { type: "number" },
   }),
-  tool("attempts", "List recorded maintenance attempts from DATA_DIR.", {
+  tool("attempts", "List recorded patch attempts from DATA_DIR.", {
     eventId: { type: "string" },
+    workId: { type: "string" },
+    kind: { type: "string" },
     status: { type: "string" },
     limit: { type: "number" },
   }),
+  tool("work_list", "List recorded patch work from DATA_DIR.", {
+    kind: { type: "string" },
+    status: { type: "string" },
+    limit: { type: "number" },
+  }),
+  tool("work_show", "Show one patch work record and its linked attempts.", {
+    workId: { type: "string" },
+  }, ["workId"]),
+  tool("work_start_feature", "Start feature patch work and optionally create the feature branch.", {
+    title: { type: "string" },
+    branch: { type: "string" },
+    base: { type: "string" },
+    patchBranch: { type: "string" },
+    createBranch: { type: "boolean" },
+  }, ["title", "branch", "base"]),
+  tool("work_set_status", "Set one patch work record status.", {
+    workId: { type: "string" },
+    status: { type: "string" },
+  }, ["workId", "status"]),
   tool("dispatches", "List recorded workspace dispatches from DATA_DIR.", {
     eventId: { type: "string" },
     status: { type: "string" },
@@ -87,16 +111,16 @@ export const patchMoiTools: ToolDefinition[] = [
     version: { type: "string" },
     repo: { type: "string" },
   }, ["packageName", "version"]),
-  tool("run_upstream_release", "Dispatch an upstream.release maintenance event. Gated by patch.moi safety policy.", {
+  tool("run_upstream_release", "Dispatch an upstream.release patch-work event. Gated by patch.moi safety policy.", {
     tag: { type: "string" },
     upstreamRepo: { type: "string" },
   }, ["upstreamRepo", "tag"]),
-  tool("run_upstream_branch", "Dispatch an upstream.branch_update maintenance event. Gated by patch.moi safety policy.", {
+  tool("run_upstream_branch", "Dispatch an upstream.branch_update patch-work event. Gated by patch.moi safety policy.", {
     sha: { type: "string" },
     upstreamRepo: { type: "string" },
     ref: { type: "string" },
   }, ["upstreamRepo"]),
-  tool("run_downstream_release", "Dispatch a downstream.release maintenance event. Gated by patch.moi safety policy.", {
+  tool("run_downstream_release", "Dispatch a downstream.release patch-work event. Gated by patch.moi safety policy.", {
     packageName: { type: "string" },
     version: { type: "string" },
     repo: { type: "string" },
@@ -107,7 +131,7 @@ export const patchMoiTools: ToolDefinition[] = [
   tool("replay", "Replay a recorded event through the workspace backend. Gated by patch.moi safety policy.", {
     eventId: { type: "string" },
   }, ["eventId"]),
-  tool("sync", "Sync one recorded maintenance attempt from workspace run state. Gated by PATCH_MOI_ALLOW_SYNC.", {
+  tool("sync", "Sync one recorded patch attempt from workspace run state. Gated by PATCH_MOI_ALLOW_SYNC.", {
     attemptId: { type: "string" },
   }, ["attemptId"]),
   tool("patch_capture", "Capture a branch as a patch branch. Gated by patch.moi safety policy.", {
@@ -116,6 +140,7 @@ export const patchMoiTools: ToolDefinition[] = [
     base: { type: "string" },
     message: { type: "string" },
     force: { type: "boolean" },
+    workId: { type: "string" },
   }, ["patchBranch", "from"]),
   tool("patch_rebuild", "Rebuild the target branch from the canonical upstream ref plus patch branches. Gated by patch.moi safety policy.", {
     base: { type: "string" },
@@ -148,15 +173,16 @@ async function callLocalTool(name: string, args: ToolArgs, env: McpEnv): Promise
   switch (name) {
     case "status": {
       const limit = numberArg(args, "limit", 20);
-      const [events, dispatches, attempts] = await Promise.all([
+      const [events, dispatches, attempts, work] = await Promise.all([
         store.listAutomationEvents({ limit }),
         store.listWorkspaceDispatches({ limit }),
-        store.listMaintenanceAttempts({ limit }),
+        store.listPatchAttempts({ limit }),
+        store.listPatchWork({ limit }),
       ]);
       return {
         mode: "local",
         dataDir,
-        latest: { events, dispatches, attempts },
+        latest: { events, dispatches, attempts, work },
         attemptStatusCounts: countBy(attempts, (attempt) => attempt.status),
         dispatchStatusCounts: countBy(dispatches, (record) => record.status),
       };
@@ -174,12 +200,41 @@ async function callLocalTool(name: string, args: ToolArgs, env: McpEnv): Promise
       return {
         mode: "local",
         dataDir,
-        attempts: await store.listMaintenanceAttempts({
+        attempts: await store.listPatchAttempts({
           eventId: stringArg(args, "eventId"),
-          status: maintenanceStatusArg(args),
+          workId: stringArg(args, "workId"),
+          kind: patchWorkKindArg(args),
+          status: patchAttemptStatusArg(args),
           limit: numberArg(args, "limit", 50),
         }),
       };
+    case "work_list":
+      return {
+        mode: "local",
+        dataDir,
+        work: await store.listPatchWork({
+          kind: patchWorkKindArg(args),
+          status: patchWorkStatusArg(args),
+          limit: numberArg(args, "limit", 50),
+        }),
+      };
+    case "work_show": {
+      const workId = requiredStringArg(args, "workId");
+      const work = await store.getPatchWork(workId);
+      if (!work) {
+        throw new Error(`patch work not found: ${workId}`);
+      }
+      return {
+        mode: "local",
+        dataDir,
+        work,
+        attempts: await store.listPatchAttempts({ workId, limit: 100 }),
+      };
+    }
+    case "work_start_feature":
+      return await startFeatureWork(store, repoPath, args);
+    case "work_set_status":
+      return await setPatchWorkStatus(store, args);
     case "dispatches":
       return {
         mode: "local",
@@ -237,7 +292,7 @@ async function callLocalTool(name: string, args: ToolArgs, env: McpEnv): Promise
     case "patch_capture": {
       const config = await configForRepo(repoPath, args);
       assertSafetyAllowed(config, "allowCapture", "PATCH_MOI_ALLOW_CAPTURE", env);
-      return await capturePatchBranch(repoPath, {
+      const result = await capturePatchBranch(repoPath, {
         patchBranch: requiredStringArg(args, "patchBranch"),
         from: requiredStringArg(args, "from"),
         base: stringArg(args, "base") ?? config.git.targetBranch,
@@ -245,6 +300,42 @@ async function callLocalTool(name: string, args: ToolArgs, env: McpEnv): Promise
         force: booleanArg(args, "force"),
         patchPrefix: config.git.patchPrefix,
       });
+      const workId = stringArg(args, "workId");
+      if (!workId) {
+        return result;
+      }
+      const work = await store.getPatchWork(workId);
+      if (!work) {
+        throw new Error(`patch work not found: ${workId}`);
+      }
+      const now = new Date().toISOString();
+      const candidateRefs: CandidateRefRecord[] = result.sha
+        ? [{ kind: "branch", ref: result.patchBranch, sha: result.sha }]
+        : [];
+      const attempt: PatchAttemptRecord = {
+        id: `${work.id}:capture:${now}`,
+        workId: work.id,
+        kind: work.kind,
+        operation: "capture",
+        status: result.status === "changed" ? "changed" : "skipped",
+        workspaceRunIds: [],
+        candidateRefs,
+        message: result.message,
+        createdAt: now,
+        updatedAt: now,
+        completedAt: now,
+      };
+      const nextWork: PatchWorkRecord = {
+        ...work,
+        patchBranch: result.patchBranch,
+        status: result.status === "changed" ? "captured" : work.status,
+        candidateRefs: uniqueCandidateRefs([...work.candidateRefs, ...candidateRefs]),
+        attemptIds: uniqueStrings([...work.attemptIds, attempt.id]),
+        updatedAt: now,
+      };
+      await store.appendPatchAttempt(attempt);
+      await store.appendPatchWork(nextWork);
+      return { result, work: nextWork, attempt };
     }
     case "patch_rebuild": {
       const config = await configForRepo(repoPath, args);
@@ -269,12 +360,13 @@ async function callRemoteTool(name: string, args: ToolArgs, env: McpEnv): Promis
   switch (name) {
     case "status": {
       const limit = numberArg(args, "limit", 20);
-      const [events, dispatches, attempts] = await Promise.all([
+      const [events, dispatches, attempts, work] = await Promise.all([
         remoteGet(baseUrl, `/automation-events?limit=${limit}`, env),
         remoteGet(baseUrl, `/workspace-dispatches?limit=${limit}`, env),
-        remoteGet(baseUrl, `/maintenance-attempts?limit=${limit}`, env),
+        remoteGet(baseUrl, `/patch-attempts?limit=${limit}`, env),
+        remoteGet(baseUrl, `/patch-work?limit=${limit}`, env),
       ]);
-      return { mode: "remote", url: baseUrl, latest: { ...recordValue(events), ...recordValue(dispatches), ...recordValue(attempts) } };
+      return { mode: "remote", url: baseUrl, latest: { ...recordValue(events), ...recordValue(dispatches), ...recordValue(attempts), ...recordValue(work) } };
     }
     case "events":
       return await remoteGet(baseUrl, queryPath("/automation-events", {
@@ -282,11 +374,21 @@ async function callRemoteTool(name: string, args: ToolArgs, env: McpEnv): Promis
         limit: numberArg(args, "limit", 50),
       }), env);
     case "attempts":
-      return await remoteGet(baseUrl, queryPath("/maintenance-attempts", {
+      return await remoteGet(baseUrl, queryPath("/patch-attempts", {
         eventId: stringArg(args, "eventId"),
+        workId: stringArg(args, "workId"),
+        kind: stringArg(args, "kind"),
         status: stringArg(args, "status"),
         limit: numberArg(args, "limit", 50),
       }), env);
+    case "work_list":
+      return await remoteGet(baseUrl, queryPath("/patch-work", {
+        kind: stringArg(args, "kind"),
+        status: stringArg(args, "status"),
+        limit: numberArg(args, "limit", 50),
+      }), env);
+    case "work_show":
+      return await remoteGet(baseUrl, `/patch-work/${encodeURIComponent(requiredStringArg(args, "workId"))}`, env);
     case "dispatches":
       return await remoteGet(baseUrl, queryPath("/workspace-dispatches", {
         eventId: stringArg(args, "eventId"),
@@ -323,9 +425,10 @@ async function dispatchEvent(
     cwd: workspaceRoot,
   });
   await store.appendWorkspaceDispatch(outcome.record);
-  const attempt = maintenanceAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
-  await store.appendMaintenanceAttempt(attempt);
-  return { event, recorded, record: outcome.record, attempt };
+  const attempt = patchAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
+  await store.appendPatchAttempt(attempt);
+  const work = await upsertPatchWorkForAttempt(store, event, attempt);
+  return { event, recorded, record: outcome.record, attempt, work };
 }
 
 async function retryEvent(
@@ -343,9 +446,10 @@ async function retryEvent(
   }
   const outcome = await dispatchWorkspaceEventDetailed(event, {}, { env, cwd: workspaceRoot });
   await store.appendWorkspaceDispatch(outcome.record);
-  const attempt = maintenanceAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
-  await store.appendMaintenanceAttempt(attempt);
-  return { event, record: outcome.record, attempt };
+  const attempt = patchAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
+  await store.appendPatchAttempt(attempt);
+  const work = await upsertPatchWorkForAttempt(store, event, attempt);
+  return { event, record: outcome.record, attempt, work };
 }
 
 async function replayEvent(
@@ -363,9 +467,10 @@ async function replayEvent(
   }
   const outcome = await replayWorkspaceEventDetailed(event, {}, { env, cwd: workspaceRoot });
   await store.appendWorkspaceDispatch(outcome.record);
-  const attempt = maintenanceAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
-  await store.appendMaintenanceAttempt(attempt);
-  return { event, record: outcome.record, attempt };
+  const attempt = patchAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
+  await store.appendPatchAttempt(attempt);
+  const work = await upsertPatchWorkForAttempt(store, event, attempt);
+  return { event, record: outcome.record, attempt, work };
 }
 
 async function syncAttempt(
@@ -377,11 +482,11 @@ async function syncAttempt(
   if (!truthy(env.PATCH_MOI_ALLOW_SYNC)) {
     throw new Error("sync is gated; set PATCH_MOI_ALLOW_SYNC=1 to allow local state writes");
   }
-  const attempt = await store.getMaintenanceAttempt(attemptId);
+  const attempt = await store.getPatchAttempt(attemptId);
   if (!attempt) {
-    throw new Error(`maintenance attempt not found: ${attemptId}`);
+    throw new Error(`patch attempt not found: ${attemptId}`);
   }
-  return { attempt: await syncMaintenanceAttempt(store, attempt, { env, cwd: workspaceRoot }) };
+  return { attempt: await syncPatchAttempt(store, attempt, { env, cwd: workspaceRoot }) };
 }
 
 async function appendAutomationEventIfMissing(store: EventStore, event: AutomationEvent): Promise<boolean> {
@@ -390,6 +495,67 @@ async function appendAutomationEventIfMissing(store: EventStore, event: Automati
   }
   await store.appendAutomationEvent(event);
   return true;
+}
+
+async function upsertPatchWorkForAttempt(
+  store: EventStore,
+  event: AutomationEvent,
+  attempt: PatchAttemptRecord,
+): Promise<PatchWorkRecord> {
+  const work = mergePatchWorkWithAttempt(await store.getPatchWork(attempt.workId), event, attempt);
+  await store.appendPatchWork(work);
+  return work;
+}
+
+async function startFeatureWork(
+  store: EventStore,
+  repoPath: string,
+  args: ToolArgs,
+): Promise<unknown> {
+  const title = requiredStringArg(args, "title");
+  const branch = requiredStringArg(args, "branch");
+  const base = requiredStringArg(args, "base");
+  const now = new Date().toISOString();
+  const branchResult = booleanArg(args, "createBranch")
+    ? await createPatchWorkBranch(repoPath, { branch, base })
+    : undefined;
+  const work: PatchWorkRecord = {
+    id: `patch-work:feature:${slugValue(title)}:${now}`,
+    kind: "feature",
+    title,
+    repo: repoPath,
+    baseRef: base,
+    workBranch: branch,
+    ...(stringArg(args, "patchBranch") ? { patchBranch: stringArg(args, "patchBranch") } : {}),
+    status: "active",
+    candidateRefs: [],
+    attemptIds: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  await store.appendPatchWork(work);
+  return { work, branchResult };
+}
+
+async function setPatchWorkStatus(store: EventStore, args: ToolArgs): Promise<unknown> {
+  const workId = requiredStringArg(args, "workId");
+  const status = patchWorkStatusArg(args);
+  if (!status) {
+    throw new Error("status is required");
+  }
+  const work = await store.getPatchWork(workId);
+  if (!work) {
+    throw new Error(`patch work not found: ${workId}`);
+  }
+  const now = new Date().toISOString();
+  const next: PatchWorkRecord = {
+    ...work,
+    status,
+    updatedAt: now,
+    ...(terminalPatchWorkStatus(status) ? { completedAt: now } : {}),
+  };
+  await store.appendPatchWork(next);
+  return { work: next };
 }
 
 async function configForRepo(repoPath: string, args: ToolArgs): Promise<PatchMoiConfig> {
@@ -576,7 +742,7 @@ function dispatchStatusArg(args: ToolArgs): "dispatched" | "failed" | "skipped" 
   throw new Error("status must be dispatched, failed, or skipped");
 }
 
-function maintenanceStatusArg(args: ToolArgs) {
+function patchAttemptStatusArg(args: ToolArgs): PatchAttemptRecord["status"] | undefined {
   const value = stringArg(args, "status");
   if (!value) return undefined;
   if (
@@ -588,7 +754,67 @@ function maintenanceStatusArg(args: ToolArgs) {
     value === "failed" ||
     value === "skipped"
   ) return value;
-  throw new Error("status is not a valid maintenance attempt status");
+  throw new Error("status is not a valid patch attempt status");
+}
+
+function patchWorkKindArg(args: ToolArgs): PatchWorkKind | undefined {
+  const value = stringArg(args, "kind");
+  if (!value) return undefined;
+  if (value === "feature" || value === "maintenance" || value === "release") return value;
+  throw new Error("kind must be feature, maintenance, or release");
+}
+
+function patchWorkStatusArg(args: ToolArgs): PatchWorkStatus | undefined {
+  const value = stringArg(args, "status");
+  if (!value) return undefined;
+  if (
+    value === "planned" ||
+    value === "active" ||
+    value === "captured" ||
+    value === "changed" ||
+    value === "completed" ||
+    value === "needs_intervention" ||
+    value === "blocked" ||
+    value === "failed" ||
+    value === "skipped" ||
+    value === "review" ||
+    value === "shipped" ||
+    value === "closed"
+  ) return value;
+  throw new Error("status is not a valid patch work status");
+}
+
+function terminalPatchWorkStatus(status: PatchWorkStatus): boolean {
+  return status === "completed" ||
+    status === "failed" ||
+    status === "skipped" ||
+    status === "shipped" ||
+    status === "closed";
+}
+
+function slugValue(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._/-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replaceAll("/", "-") || "work";
+}
+
+function uniqueCandidateRefs(refs: CandidateRefRecord[]): CandidateRefRecord[] {
+  const seen = new Set<string>();
+  const result: CandidateRefRecord[] = [];
+  for (const ref of refs) {
+    const key = `${ref.kind}:${ref.repo ?? ""}:${ref.remote ?? ""}:${ref.ref}:${ref.sha ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(ref);
+  }
+  return result;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function truthy(value: unknown): boolean {

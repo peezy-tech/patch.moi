@@ -123,7 +123,7 @@ bun run patch.moi -- run upstream-branch \
 
 That event should match the Codex fork `main-branch-update` Bun step.
 
-## 5. Dispatch the maintenance attempt
+## 5. Dispatch the patch work
 
 Dispatch locally with pushes still disabled:
 
@@ -138,8 +138,9 @@ bun run patch.moi -- run upstream-release \
 patch.moi writes:
 
 - `automation-events.jsonl` for the normalized upstream event
+- `patch-work.jsonl` for the maintenance patch-work record
 - `workspace-dispatches.jsonl` for the dispatch result
-- `maintenance-attempts.jsonl` for the attempt record
+- `patch-attempts.jsonl` for the attempt record
 
 The Codex fork maintenance automation decides whether it only runs local code or
 starts a native Codex turn for follow-up work. Direct local dispatch uses the
@@ -178,7 +179,7 @@ bun run patch.moi -- sync '<attempt-id>' --json
 ```
 
 `sync` copies the final status, message, and candidate refs from workspace run
-state into patch.moi's maintenance attempt record.
+state into patch.moi's patch attempt record.
 
 ## 7. Retry or replay when needed
 

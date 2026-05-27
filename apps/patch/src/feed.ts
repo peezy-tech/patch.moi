@@ -4,7 +4,8 @@ import { mkdir } from "node:fs/promises";
 import { notifyDiscord, type DiscordConfig } from "./discord";
 import {
   dispatchWorkspaceEventForFeedSignal,
-  maintenanceAttemptForWorkspaceDispatch,
+  mergePatchWorkWithAttempt,
+  patchAttemptForWorkspaceDispatch,
   type WorkspaceDispatchConfig,
 } from "./automation";
 import { EventStore, jobForFeedSignal } from "./queue";
@@ -273,11 +274,17 @@ export async function pollFeedSource(input: {
     if (workspaceDispatch.record) {
       await input.store.appendWorkspaceDispatch(workspaceDispatch.record);
       if (workspaceDispatch.event) {
-        await input.store.appendMaintenanceAttempt(
-          maintenanceAttemptForWorkspaceDispatch(
+        const attempt = patchAttemptForWorkspaceDispatch(
+          workspaceDispatch.event,
+          workspaceDispatch.record,
+          workspaceDispatch.result?.runs,
+        );
+        await input.store.appendPatchAttempt(attempt);
+        await input.store.appendPatchWork(
+          mergePatchWorkWithAttempt(
+            await input.store.getPatchWork(attempt.workId),
             workspaceDispatch.event,
-            workspaceDispatch.record,
-            workspaceDispatch.result?.runs,
+            attempt,
           ),
         );
       }

@@ -1,6 +1,6 @@
 # patch.moi
 
-Git-first maintenance control plane for custom patches on top of upstream open
+Git-first patch-work control plane for custom patches on top of upstream open
 source software.
 
 Canonical public host: `https://patch.moi`.
@@ -17,6 +17,8 @@ patch.moi treats Git as the source of truth for maintained projects. Upstream
 and fork remotes, patch branches, tags, and commits describe the patch stack.
 Patch records update intake, dispatch attempts, and operational history around
 those Git facts.
+It also records intentional feature work so a local branch can become a logical
+`patch/*` branch and then move through review, rebuild, and release channels.
 
 ## Codex Plugin
 
@@ -74,11 +76,13 @@ GET  /automation-events
 GET  /automation-events/:id
 POST /automation-events/:id/retry
 POST /automation-events/:id/replay
-GET  /maintenance-attempts
-GET  /maintenance-attempts/:id
-POST /maintenance-attempts/:id/sync
+GET  /patch-work
+GET  /patch-work/:id
+POST /patch-work
+GET  /patch-attempts
+GET  /patch-attempts/:id
+POST /patch-attempts/:id/sync
 GET  /workspace-dispatches
-GET  /automation-dispatches
 GET  /workspace-events
 GET  /workspace-runs
 ```
@@ -119,12 +123,13 @@ Feed watcher events are configured by `FEED_SOURCES_PATH`. The bundled
 should own their private feed config beside their installed automation capabilities.
 The first poll primes `DATA_DIR/feed-state.json`; later polls append upstream
 activity to `DATA_DIR/feed-events.jsonl`. Targets using `mode: "fork_sync"`
-append legacy work to `DATA_DIR/feed-jobs.jsonl`. Targets using
+append feed jobs to `DATA_DIR/feed-jobs.jsonl`. Targets using
 `mode: "workspace_automation"` append generic automation events to
 `DATA_DIR/automation-events.jsonl`, run the configured named automations, and record dispatch outcomes in
 `DATA_DIR/workspace-dispatches.jsonl`. Each dispatch also creates or updates a
-patch.moi-owned `DATA_DIR/maintenance-attempts.jsonl` entry that links the
-upstream update to workspace run ids, final automation outcome, and candidate refs.
+patch.moi-owned `DATA_DIR/patch-work.jsonl` entry and a
+patch.moi-owned `DATA_DIR/patch-attempts.jsonl` entry that links the
+patch work to workspace run ids, final automation outcome, and candidate refs.
 
 Patch can dispatch through a configured local WebSocket workspace backend, an
 SSH remote agent, or the direct app-server surface when an operator explicitly
@@ -137,7 +142,7 @@ bun run workspace:backend:service
 ```
 
 Use `PATCH_WORKSPACE_SSH_TARGET` and `PATCH_WORKSPACE_REMOTE_CWD` when the
-maintenance checkout lives on another host. Service mode should prefer forge
+patch-work checkout lives on another host. Service mode should prefer forge
 runners over exposing a generic remote backend port.
 
 The harness can also be run through the repo-native workspace task:

@@ -1,13 +1,13 @@
 ---
 title: Watch an upstream release
-description: Configure a release feed and turn an upstream release into patch maintenance input.
+description: Configure a release feed and turn an upstream release into patch-work input.
 ---
 
 # Watch an upstream release
 
 This tutorial creates the smallest useful patch.moi service path: one upstream
-release feed becomes a stored update signal, a deterministic automation event, a
-workspace dispatch, and a maintenance attempt record. The patch application work
+release feed becomes a stored update signal, deterministic automation event,
+patch work record, workspace dispatch, and patch attempt record. The patch application work
 still happens in a local workspace, workspace backend, or forge runner.
 
 Before configuring the feed, make sure the maintained repository has a Git
@@ -75,7 +75,8 @@ When the feed later contains an unseen release entry, Patch appends:
 
 - `data/feed-events.jsonl` for the normalized signal.
 - `data/automation-events.jsonl` for the generic automation event.
-- `data/maintenance-attempts.jsonl` for the patch.moi maintenance attempt and
+- `data/patch-work.jsonl` for the patch work record.
+- `data/patch-attempts.jsonl` for the patch.moi patch attempt and
   later candidate refs.
 - `data/workspace-dispatches.jsonl` for the workspace dispatch outcome.
 

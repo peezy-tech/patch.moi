@@ -129,7 +129,39 @@ export type AutomationRunView = {
   completedAt?: string;
 };
 
-export type MaintenanceAttemptStatus =
+export type PatchWorkKind = "feature" | "maintenance" | "release";
+
+export type PatchWorkStatus =
+  | "planned"
+  | "active"
+  | "captured"
+  | "changed"
+  | "completed"
+  | "needs_intervention"
+  | "blocked"
+  | "failed"
+  | "skipped"
+  | "review"
+  | "shipped"
+  | "closed";
+
+export type PatchWorkRecord = {
+  id: string;
+  kind: PatchWorkKind;
+  title: string;
+  repo?: string;
+  baseRef?: string;
+  workBranch?: string;
+  patchBranch?: string;
+  status: PatchWorkStatus;
+  candidateRefs: CandidateRefRecord[];
+  attemptIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+};
+
+export type PatchAttemptStatus =
   | "started"
   | "completed"
   | "changed"
@@ -138,17 +170,25 @@ export type MaintenanceAttemptStatus =
   | "failed"
   | "skipped";
 
-export type MaintenanceAttemptRecord = {
+export type PatchAttemptOperation = "dispatch" | "replay" | "capture" | "rebuild" | "sync";
+
+export type PatchAttemptRecord = {
   id: string;
-  eventId: string;
-  eventType: string;
-  operation: "dispatch" | "replay";
-  status: MaintenanceAttemptStatus;
+  workId: string;
+  kind: PatchWorkKind;
+  eventId?: string;
+  eventType?: string;
+  operation: PatchAttemptOperation;
+  status: PatchAttemptStatus;
   upstreamRepo?: string;
   upstreamRef?: string;
   upstreamSha?: string;
   upstreamTag?: string;
+  target?: AutomationDispatchRecord["target"];
+  transport?: AutomationDispatchRecord["transport"];
   workspaceBackendUrl?: string;
+  sshTarget?: string;
+  remoteCwd?: string;
   workspaceRunIds: string[];
   workspaceRunStatuses?: Record<string, string>;
   candidateRefs: CandidateRefRecord[];

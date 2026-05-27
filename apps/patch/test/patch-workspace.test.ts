@@ -9,6 +9,7 @@ const workspaceRoot = join(import.meta.dir, "../../..");
 describe("patch workspace CLI", () => {
   test("captures a feature branch as patch/* and rebuilds main from upstream", async () => {
     const repo = await createPatchRepo();
+    const dataDir = join(await mkdtemp(join(tmpdir(), "patch-work-data-")), "data");
 
     const beforeDoctor = await invoke([
       "patch",
@@ -25,6 +26,33 @@ describe("patch workspace CLI", () => {
       ready: false,
     });
 
+    const workStart = await invoke([
+      "work",
+      "start",
+      "feature",
+      "--title",
+      "Feature branch promotion",
+      "--repo",
+      repo,
+      "--branch",
+      "feature",
+      "--base",
+      "main",
+      "--patch-branch",
+      "patch/010-feature",
+      "--data-dir",
+      dataDir,
+      "--json",
+    ]);
+    expect(workStart.code).toBe(0);
+    const work = JSON.parse(workStart.stdout).work;
+    expect(work).toMatchObject({
+      kind: "feature",
+      status: "active",
+      workBranch: "feature",
+      patchBranch: "patch/010-feature",
+    });
+
     const capture = await invoke([
       "patch",
       "capture",
@@ -37,17 +65,47 @@ describe("patch workspace CLI", () => {
       "main",
       "--message",
       "patch: feature",
+      "--work-id",
+      work.id,
+      "--data-dir",
+      dataDir,
       "--json",
     ]);
     expect(capture.code).toBe(0);
     expect(JSON.parse(capture.stdout)).toMatchObject({
-      status: "changed",
-      patchBranch: "patch/010-feature",
-      from: "feature",
-      base: "main",
-      message: "patch: feature",
+      result: {
+        status: "changed",
+        patchBranch: "patch/010-feature",
+        from: "feature",
+        base: "main",
+        message: "patch: feature",
+      },
+      work: {
+        id: work.id,
+        status: "captured",
+        patchBranch: "patch/010-feature",
+      },
+      attempt: {
+        workId: work.id,
+        kind: "feature",
+        operation: "capture",
+        status: "changed",
+      },
     });
     expect((await git(repo, ["rev-list", "--count", "main..patch/010-feature"])).stdout.trim()).toBe("1");
+
+    const attempts = await invoke([
+      "attempts",
+      "--work-id",
+      work.id,
+      "--data-dir",
+      dataDir,
+      "--json",
+    ]);
+    expect(attempts.code).toBe(0);
+    expect(JSON.parse(attempts.stdout)).toMatchObject({
+      attempts: [{ workId: work.id, operation: "capture" }],
+    });
 
     const list = await invoke([
       "patch",
@@ -99,6 +157,44 @@ describe("patch workspace CLI", () => {
       ready: true,
       patchBranches: [{ name: "patch/010-feature" }],
     });
+  });
+
+  test("starts feature patch work and creates the work branch", async () => {
+    const repo = await createPatchRepo();
+    const dataDir = join(await mkdtemp(join(tmpdir(), "patch-work-data-")), "data");
+
+    const result = await invoke([
+      "work",
+      "start",
+      "feature",
+      "--title",
+      "Created feature branch",
+      "--repo",
+      repo,
+      "--branch",
+      "created-feature",
+      "--base",
+      "main",
+      "--create-branch",
+      "--data-dir",
+      dataDir,
+      "--json",
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      work: {
+        kind: "feature",
+        status: "active",
+        workBranch: "created-feature",
+      },
+      branchResult: {
+        status: "created",
+        branch: "created-feature",
+        base: "main",
+      },
+    });
+    expect((await git(repo, ["branch", "--show-current"])).stdout.trim()).toBe("created-feature");
   });
 });
 

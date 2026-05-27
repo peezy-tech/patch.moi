@@ -5,7 +5,7 @@ description: How intake, Git state, workspaces, service mode, and release channe
 
 # Architecture
 
-patch.moi is a maintenance control plane, not a replacement for the maintained
+patch.moi is a patch-work control plane, not a replacement for the maintained
 repository. Its architecture follows one rule: Git and the forge hold patch
 truth; patch.moi holds operational truth.
 
@@ -14,24 +14,25 @@ truth; patch.moi holds operational truth.
 patch.moi has three product responsibilities:
 
 1. Notice upstream movement.
-2. Start or resume the right maintenance workflow.
+2. Start or resume the right feature, maintenance, or release workflow.
 3. Keep durable state for inspection, retry, replay, and review.
 
 ```mermaid
 flowchart TD
   A["upstream release, tag, branch update, or advisory"] --> B["Patch FeedSignal"]
   B --> C["durable AutomationEvent"]
-  C --> D["maintenance attempt"]
-  D --> E{"execution surface"}
-  E -- local --> F["local workspace"]
-  E -- service --> G["forge runner"]
-  F --> H["rebase, merge, or replay patches"]
-  G --> H
-  H --> I{"blocked?"}
-  I -- yes --> J["intervention, PR, issue, or failed run"]
-  I -- no --> K["candidate branch, tag, check, or artifact"]
-  K --> L["internal build channel"]
-  K --> M["public release channel"]
+  C --> D["patch work"]
+  D --> E["patch attempt"]
+  E --> F{"execution surface"}
+  F -- local --> G["local workspace"]
+  F -- service --> H["forge runner"]
+  G --> I["develop, rebase, merge, or replay patches"]
+  H --> I
+  I --> J{"blocked?"}
+  J -- yes --> K["intervention, PR, issue, or failed run"]
+  J -- no --> L["candidate branch, tag, check, or artifact"]
+  L --> M["internal build channel"]
+  L --> N["public release channel"]
 ```
 
 ## Runtime Pieces
@@ -42,7 +43,7 @@ The current service has these pieces:
 | --- | --- |
 | HTTP server | health, admin listing, retry, replay, sync, and workspace inspection endpoints |
 | feed poller | reads configured upstream feeds and emits normalized signals |
-| JSONL store | writes feed events, automation events, workspace dispatches, and maintenance attempts under `DATA_DIR` |
+| JSONL store | writes feed events, automation events, patch work, workspace dispatches, and patch attempts under `DATA_DIR` |
 | workspace execution adapter | dispatches through explicit local app-server, local workspace backend, or SSH remote-agent surfaces |
 | harness automations | exercise Codex-shaped fork maintenance through `automations/patch-moi-harness-*` |
 | repo workspace config | exposes manual operator tasks through `codex-flows workspace doctor|tick|run` |
@@ -56,8 +57,9 @@ patch.moi-owned state lives under `DATA_DIR`:
 
 - feed cursors and feed events
 - deterministic automation events
+- patch work for feature, maintenance, and release lanes
 - workspace dispatch, retry, and replay records
-- maintenance attempts, outcomes, candidate refs, and intervention state
+- patch attempts, outcomes, candidate refs, and intervention state
 
 Codex workspace state lives under `.codex/workspace/<mode>` and describes the
 operator automation surface. Local workspace state is ignored. Runner state is
@@ -92,7 +94,7 @@ host:
 - record workflow run ids, branch names, outcomes, and review links
 
 Runner checkouts are disposable. Durable project state is the remote fork, its
-refs, and forge records around the maintenance attempt.
+refs, and forge records around the patch attempt.
 
 See [Forge service mode](forge-service-mode) for the service shape.
 

@@ -1,6 +1,6 @@
 ---
 name: "patch-moi:triage-attempt"
-description: "Triage patch.moi DATA_DIR events, dispatches, and maintenance attempts before deciding whether retry, replay, sync, or manual Git repair is appropriate."
+description: "Triage patch.moi DATA_DIR events, dispatches, and patch attempts before deciding whether retry, replay, sync, or manual Git repair is appropriate."
 ---
 
 # Triage Attempt

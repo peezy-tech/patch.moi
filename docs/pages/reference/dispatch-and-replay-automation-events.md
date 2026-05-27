@@ -57,17 +57,17 @@ curl -X POST http://127.0.0.1:3000/automation-events/<event-id>/replay
 `retry` dispatches the stored event again. `replay` creates a fresh automation
 attempt for the same stored event.
 
-Each retry or replay writes a maintenance attempt record:
+Each retry or replay writes a patch attempt record:
 
 ```bash
-curl http://127.0.0.1:3000/maintenance-attempts?eventId=<event-id>
+curl http://127.0.0.1:3000/patch-attempts?eventId=<event-id>
 ```
 
 After the workspace run finishes, sync the attempt to record the final
-maintenance outcome and any candidate refs reported by the automation:
+patch-work outcome and any candidate refs reported by the automation:
 
 ```bash
-curl -X POST http://127.0.0.1:3000/maintenance-attempts/<attempt-id>/sync
+curl -X POST http://127.0.0.1:3000/patch-attempts/<attempt-id>/sync
 ```
 
 Use workspace inspection endpoints to read backend-owned run state:

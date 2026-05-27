@@ -18,7 +18,7 @@ Responsibilities:
 - Store JSONL state.
 - Submit generic `AutomationEvent` triggers through the patch.moi execution
   adapter.
-- Provide the `patch.moi` CLI for setup, local maintenance runs, status,
+- Provide the `patch.moi` CLI for setup, feature work, patch runs, status,
   retry, replay, and sync.
 - Serve admin inspection, retry, and replay endpoints.
 
@@ -66,8 +66,8 @@ codex-flows automation list
 ```
 
 Those installed capabilities are workspace state, not patch.moi product state.
-patch.moi still records feed-owned automation events, workspace dispatches, and
-maintenance attempts under `DATA_DIR`.
+patch.moi still records feed-owned automation events, patch work, workspace
+dispatches, and patch attempts under `DATA_DIR`.
 
 ## Related Runtime Package
 
@@ -80,4 +80,4 @@ patch.moi uses the consolidated codex-flows package surface:
 patch.moi product state still belongs in the Patch service JSONL store by
 default. Generic workspace backend state is execution/run state. It is useful for
 inspection and sync, but it is not the default home for feed signals, workspace
-dispatch records, or maintenance attempts.
+dispatch records, patch work, or patch attempts.

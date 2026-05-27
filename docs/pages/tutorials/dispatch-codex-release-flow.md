@@ -143,9 +143,9 @@ workspace owns the work that happens next:
 - run the configured checks
 - optionally push a candidate ref
 
-Patch remains responsible for maintenance-attempt state: it stores the dispatch,
-can retry or replay the event, and can sync workspace run results back into the
-attempt record.
+Patch remains responsible for patch-work state: it stores the work record,
+dispatch, and attempt; it can retry or replay the event; and it can sync
+workspace run results back into the attempt record.
 
 That candidate can be used for an internal build/link workflow before a public
 release exists: build the local native binary, place it in the npm wrapper's

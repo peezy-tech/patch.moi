@@ -111,4 +111,4 @@ patch.moi should record the relationship between those outcomes without forcing
 one channel to depend on another.
 
 See [Flow boundary](flow-boundary) for how feed events, workspace runs, and
-maintenance attempts stay separate.
+patch attempts stay separate.

@@ -6,12 +6,14 @@ import {
   getWorkspaceRun,
   listWorkspaceEvents,
   listWorkspaceRuns,
-  maintenanceAttemptForWorkspaceDispatch,
+  mergePatchWorkWithAttempt,
+  patchAttemptForWorkspaceDispatch,
   replayWorkspaceEventDetailed,
 } from "./automation";
 import { jsonResponse, methodNotAllowed, textResponse } from "./http";
-import { syncMaintenanceAttempt } from "./maintenance";
+import { syncPatchAttempt } from "./patch-attempts";
 import { EventStore } from "./queue";
+import type { PatchAttemptRecord, PatchWorkKind, PatchWorkRecord, PatchWorkStatus } from "./types";
 
 export type ServerConfig = {
   dataDir: string;
@@ -44,7 +46,7 @@ function dispatchStatus(value: string | null) {
   throw new Error("workspace dispatch status must be dispatched, failed, or skipped");
 }
 
-function maintenanceStatus(value: string | null) {
+function patchAttemptStatus(value: string | null): PatchAttemptRecord["status"] | undefined {
   if (!value) return undefined;
   if (
     value === "started" ||
@@ -55,7 +57,7 @@ function maintenanceStatus(value: string | null) {
     value === "failed" ||
     value === "skipped"
   ) return value;
-  throw new Error("maintenance attempt status is invalid");
+  throw new Error("patch attempt status is invalid");
 }
 
 async function handleAutomationEvents(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
@@ -89,13 +91,17 @@ async function handleAutomationEvents(request: Request, config: ServerConfig, st
   if (request.method === "POST" && eventMatch[2] === "retry") {
     const { record, result } = await dispatchWorkspaceEventDetailed(event, {}, { env: process.env });
     await store.appendWorkspaceDispatch(record);
-    await store.appendMaintenanceAttempt(maintenanceAttemptForWorkspaceDispatch(event, record, result?.runs));
+    const attempt = patchAttemptForWorkspaceDispatch(event, record, result?.runs);
+    await store.appendPatchAttempt(attempt);
+    await upsertPatchWorkForAttempt(store, event, attempt);
     return jsonResponse({ event, record }, { status: record.status === "failed" ? 502 : 202 });
   }
   if (request.method === "POST" && eventMatch[2] === "replay") {
     const { record, result } = await replayWorkspaceEventDetailed(event, {}, { env: process.env });
     await store.appendWorkspaceDispatch(record);
-    await store.appendMaintenanceAttempt(maintenanceAttemptForWorkspaceDispatch(event, record, result?.runs));
+    const attempt = patchAttemptForWorkspaceDispatch(event, record, result?.runs);
+    await store.appendPatchAttempt(attempt);
+    await upsertPatchWorkForAttempt(store, event, attempt);
     return jsonResponse({ event, record }, { status: record.status === "failed" ? 502 : 202 });
   }
   return methodNotAllowed();
@@ -115,32 +121,85 @@ async function handleAutomationDispatches(request: Request, config: ServerConfig
   });
 }
 
-async function handleMaintenanceAttempts(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
+async function handlePatchWork(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
   const unauthorized = requireAdmin(request, config);
   if (unauthorized) return unauthorized;
   const url = new URL(request.url);
-  if (request.method === "GET" && url.pathname === "/maintenance-attempts") {
+  if (request.method === "GET" && url.pathname === "/patch-work") {
     return jsonResponse({
-      attempts: await store.listMaintenanceAttempts({
+      work: await store.listPatchWork({
+        kind: patchWorkKind(url.searchParams.get("kind")),
+        status: patchWorkStatus(url.searchParams.get("status")),
+        limit: numberParam(url.searchParams.get("limit")),
+      }),
+    });
+  }
+  if (request.method === "POST" && url.pathname === "/patch-work") {
+    const body = await request.json().catch(() => undefined) as Partial<PatchWorkRecord> | undefined;
+    const now = new Date().toISOString();
+    const kind = patchWorkKind(body?.kind ?? null);
+    if (!kind || !body?.title) {
+      return jsonResponse({ error: "patch_work_requires_kind_and_title" }, { status: 400 });
+    }
+    const work: PatchWorkRecord = {
+      id: body.id ?? `patch-work:${kind}:${slugValue(body.title)}:${now}`,
+      kind,
+      title: body.title,
+      ...(body.repo ? { repo: body.repo } : {}),
+      ...(body.baseRef ? { baseRef: body.baseRef } : {}),
+      ...(body.workBranch ? { workBranch: body.workBranch } : {}),
+      ...(body.patchBranch ? { patchBranch: body.patchBranch } : {}),
+      status: patchWorkStatus(body.status) ?? "active",
+      candidateRefs: body.candidateRefs ?? [],
+      attemptIds: body.attemptIds ?? [],
+      createdAt: body.createdAt ?? now,
+      updatedAt: now,
+      ...(body.completedAt ? { completedAt: body.completedAt } : {}),
+    };
+    await store.appendPatchWork(work);
+    return jsonResponse({ work }, { status: 201 });
+  }
+
+  const workMatch = url.pathname.match(/^\/patch-work\/([^/]+)$/);
+  if (!workMatch?.[1]) return jsonResponse({ error: "not_found" }, { status: 404 });
+  const work = await store.getPatchWork(decodeURIComponent(workMatch[1]));
+  if (!work) {
+    return jsonResponse({ error: "patch_work_not_found" }, { status: 404 });
+  }
+  if (request.method === "GET") {
+    return jsonResponse({ work });
+  }
+  return methodNotAllowed();
+}
+
+async function handlePatchAttempts(request: Request, config: ServerConfig, store: EventStore): Promise<Response> {
+  const unauthorized = requireAdmin(request, config);
+  if (unauthorized) return unauthorized;
+  const url = new URL(request.url);
+  if (request.method === "GET" && url.pathname === "/patch-attempts") {
+    return jsonResponse({
+      attempts: await store.listPatchAttempts({
         eventId: url.searchParams.get("eventId") ?? undefined,
-        status: maintenanceStatus(url.searchParams.get("status")),
+        workId: url.searchParams.get("workId") ?? undefined,
+        kind: patchWorkKind(url.searchParams.get("kind")),
+        status: patchAttemptStatus(url.searchParams.get("status")),
         limit: numberParam(url.searchParams.get("limit")),
       }),
     });
   }
 
-  const attemptMatch = url.pathname.match(/^\/maintenance-attempts\/([^/]+)(?:\/(sync))?$/);
+  const attemptMatch = url.pathname.match(/^\/patch-attempts\/([^/]+)(?:\/(sync))?$/);
   if (!attemptMatch?.[1]) return jsonResponse({ error: "not_found" }, { status: 404 });
   const attemptId = decodeURIComponent(attemptMatch[1]);
-  const attempt = await store.getMaintenanceAttempt(attemptId);
+  const attempt = await store.getPatchAttempt(attemptId);
   if (!attempt) {
-    return jsonResponse({ error: "maintenance_attempt_not_found" }, { status: 404 });
+    return jsonResponse({ error: "patch_attempt_not_found" }, { status: 404 });
   }
   if (request.method === "GET" && !attemptMatch[2]) {
     return jsonResponse({ attempt });
   }
   if (request.method === "POST" && attemptMatch[2] === "sync") {
-    const next = await syncMaintenanceAttempt(store, attempt);
+    const next = await syncPatchAttempt(store, attempt);
     return jsonResponse({ attempt: next }, { status: 202 });
   }
   return methodNotAllowed();
@@ -187,6 +246,49 @@ async function handleWorkspaceEvents(request: Request, config: ServerConfig): Pr
   return methodNotAllowed();
 }
 
+async function upsertPatchWorkForAttempt(
+  store: EventStore,
+  event: Parameters<typeof mergePatchWorkWithAttempt>[1],
+  attempt: PatchAttemptRecord,
+): Promise<void> {
+  const existing = await store.getPatchWork(attempt.workId);
+  await store.appendPatchWork(mergePatchWorkWithAttempt(existing, event, attempt));
+}
+
+function patchWorkKind(value: string | null | undefined): PatchWorkKind | undefined {
+  if (!value) return undefined;
+  if (value === "feature" || value === "maintenance" || value === "release") return value;
+  throw new Error("patch work kind must be feature, maintenance, or release");
+}
+
+function patchWorkStatus(value: string | null | undefined): PatchWorkStatus | undefined {
+  if (!value) return undefined;
+  if (
+    value === "planned" ||
+    value === "active" ||
+    value === "captured" ||
+    value === "changed" ||
+    value === "completed" ||
+    value === "needs_intervention" ||
+    value === "blocked" ||
+    value === "failed" ||
+    value === "skipped" ||
+    value === "review" ||
+    value === "shipped" ||
+    value === "closed"
+  ) return value;
+  throw new Error("patch work status is invalid");
+}
+
+function slugValue(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._/-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replaceAll("/", "-") || "work";
+}
+
 export function createHandler(config: ServerConfig): (request: Request) => Promise<Response> | Response {
   const store = new EventStore(config.dataDir);
 
@@ -198,11 +300,14 @@ export function createHandler(config: ServerConfig): (request: Request) => Promi
     if (url.pathname === "/automation-events" || url.pathname.startsWith("/automation-events/")) {
       return handleAutomationEvents(request, config, store);
     }
-    if (url.pathname === "/workspace-dispatches" || url.pathname === "/automation-dispatches") {
+    if (url.pathname === "/workspace-dispatches") {
       return handleAutomationDispatches(request, config, store);
     }
-    if (url.pathname === "/maintenance-attempts" || url.pathname.startsWith("/maintenance-attempts/")) {
-      return handleMaintenanceAttempts(request, config, store);
+    if (url.pathname === "/patch-work" || url.pathname.startsWith("/patch-work/")) {
+      return handlePatchWork(request, config, store);
+    }
+    if (url.pathname === "/patch-attempts" || url.pathname.startsWith("/patch-attempts/")) {
+      return handlePatchAttempts(request, config, store);
     }
     if (url.pathname === "/workspace-runs" || url.pathname.startsWith("/workspace-runs/")) {
       return handleWorkspaceRuns(request, config);

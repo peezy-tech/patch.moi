@@ -13,19 +13,19 @@ operational state. They are not the patch stack.
 | `feed-state.json` | Per-source last seen entry and last checked timestamp. |
 | `feed-events.jsonl` | Normalized `FeedSignal` records. |
 | `automation-events.jsonl` | Generic `AutomationEvent` records emitted by automation targets. |
-| `maintenance-attempts.jsonl` | patch.moi-owned attempt records linking update events to workspace run ids, outcomes, and candidate refs. |
+| `patch-work.jsonl` | patch.moi-owned work records for feature, maintenance, and release patch-stack work. |
+| `patch-attempts.jsonl` | patch.moi-owned attempt records linking patch work to workspace run ids, outcomes, and candidate refs. |
 | `workspace-dispatches.jsonl` | Workspace dispatch, retry, replay, and failure records. |
-| `automation-dispatches.jsonl` | Legacy dispatch record file read for compatibility. |
 
-Admin endpoints read `automation-events.jsonl`, `maintenance-attempts.jsonl`,
-`workspace-dispatches.jsonl`, and the legacy `automation-dispatches.jsonl` file. The
-feed poller appends to all relevant files as it accepts new feed entries.
-Maintenance attempt sync also appends updated records; admin list endpoints show
-the latest record for each attempt id.
+Admin endpoints read `automation-events.jsonl`, `patch-work.jsonl`,
+`patch-attempts.jsonl`, and `workspace-dispatches.jsonl`. The feed poller
+appends to all relevant files as it accepts new feed entries. Patch work and
+patch attempt sync append updated records; admin list endpoints show the latest
+record for each id.
 
 If a runner checkout is lost, patch.moi should be able to recreate the
-maintenance context from remote Git refs and forge records. JSONL state explains
-feed, attempt, and dispatch history; Git and the forge remain the source of
+patch-work context from remote Git refs and forge records. JSONL state explains
+feed, work, attempt, and dispatch history; Git and the forge remain the source of
 truth for patch contents and review state.
 
 ## Codex Workspace State

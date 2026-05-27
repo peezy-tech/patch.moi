@@ -64,8 +64,8 @@ operator explicitly allows it. That makes `--allow-local` useful for testing a
 patch application workspace before sending the same event to a configured local
 backend, SSH target, or service runner.
 
-The CLI uses the same dispatch and state path as the service. To record a local
-harness maintenance attempt:
+The CLI uses the same dispatch and state path as the service. To record local
+harness patch work and its attempt:
 
 ```bash
 bun run patch.moi -- run harness --allow-local
@@ -98,9 +98,9 @@ bun run workspace:run:harness
 ```
 
 That path requires a running local Codex workspace backend. Use it to inspect
-backend event and run records; keep patch.moi feed-owned maintenance attempts on
-the Patch dispatch path. Use `PATCH_WORKSPACE_SSH_TARGET` and
-`PATCH_WORKSPACE_REMOTE_CWD` when the maintenance checkout is remote.
+backend event and run records; keep patch.moi feed-owned patch work and patch
+attempts on the Patch dispatch path. Use `PATCH_WORKSPACE_SSH_TARGET` and
+`PATCH_WORKSPACE_REMOTE_CWD` when the patch-work checkout is remote.
 
 Local mode is checkout-oriented. Service mode is forge-oriented: patch.moi
 should talk to the remote forge, trigger a runner, and let that runner perform

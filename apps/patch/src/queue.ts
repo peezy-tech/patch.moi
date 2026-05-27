@@ -5,7 +5,8 @@ import type {
   FeedSignal,
   AutomationDispatchRecord,
   AutomationEvent,
-  MaintenanceAttemptRecord,
+  PatchAttemptRecord,
+  PatchWorkRecord,
   WorkspaceDispatchRecord,
 } from "./types";
 
@@ -41,14 +42,16 @@ export class EventStore {
   readonly feedJobsPath: string;
   readonly automationEventsPath: string;
   readonly workspaceDispatchesPath: string;
-  readonly maintenanceAttemptsPath: string;
+  readonly patchAttemptsPath: string;
+  readonly patchWorkPath: string;
 
   constructor(dataDir: string) {
     this.feedEventsPath = join(dataDir, "feed-events.jsonl");
     this.feedJobsPath = join(dataDir, "feed-jobs.jsonl");
     this.automationEventsPath = join(dataDir, "automation-events.jsonl");
     this.workspaceDispatchesPath = join(dataDir, "workspace-dispatches.jsonl");
-    this.maintenanceAttemptsPath = join(dataDir, "maintenance-attempts.jsonl");
+    this.patchAttemptsPath = join(dataDir, "patch-attempts.jsonl");
+    this.patchWorkPath = join(dataDir, "patch-work.jsonl");
   }
 
   async appendFeedSignal(signal: FeedSignal): Promise<void> {
@@ -67,8 +70,12 @@ export class EventStore {
     await appendJsonLine(this.workspaceDispatchesPath, record);
   }
 
-  async appendMaintenanceAttempt(record: MaintenanceAttemptRecord): Promise<void> {
-    await appendJsonLine(this.maintenanceAttemptsPath, record);
+  async appendPatchAttempt(record: PatchAttemptRecord): Promise<void> {
+    await appendJsonLine(this.patchAttemptsPath, record);
+  }
+
+  async appendPatchWork(record: PatchWorkRecord): Promise<void> {
+    await appendJsonLine(this.patchWorkPath, record);
   }
 
   async listAutomationEvents(options: { limit?: number; type?: string } = {}): Promise<AutomationEvent[]> {
@@ -100,23 +107,52 @@ export class EventStore {
     );
   }
 
-  async listMaintenanceAttempts(options: {
+  async listPatchAttempts(options: {
     limit?: number;
     eventId?: string;
-    status?: MaintenanceAttemptRecord["status"];
-  } = {}): Promise<MaintenanceAttemptRecord[]> {
-    const records = latestRecordsById(await readJsonLines<MaintenanceAttemptRecord>(this.maintenanceAttemptsPath));
+    workId?: string;
+    status?: PatchAttemptRecord["status"];
+    kind?: PatchAttemptRecord["kind"];
+  } = {}): Promise<PatchAttemptRecord[]> {
+    const records = latestRecordsById(await readJsonLines<PatchAttemptRecord>(this.patchAttemptsPath));
     return limitNewest(
       records.filter((record) =>
         (!options.eventId || record.eventId === options.eventId) &&
+        (!options.workId || record.workId === options.workId) &&
+        (!options.kind || record.kind === options.kind) &&
         (!options.status || record.status === options.status),
       ),
       options.limit,
     );
   }
 
-  async getMaintenanceAttempt(id: string): Promise<MaintenanceAttemptRecord | undefined> {
-    const records = await readJsonLines<MaintenanceAttemptRecord>(this.maintenanceAttemptsPath);
+  async getPatchAttempt(id: string): Promise<PatchAttemptRecord | undefined> {
+    const records = await readJsonLines<PatchAttemptRecord>(this.patchAttemptsPath);
+    for (let index = records.length - 1; index >= 0; index -= 1) {
+      if (records[index]?.id === id) {
+        return records[index];
+      }
+    }
+    return undefined;
+  }
+
+  async listPatchWork(options: {
+    limit?: number;
+    kind?: PatchWorkRecord["kind"];
+    status?: PatchWorkRecord["status"];
+  } = {}): Promise<PatchWorkRecord[]> {
+    const records = latestRecordsById(await readJsonLines<PatchWorkRecord>(this.patchWorkPath));
+    return limitNewest(
+      records.filter((record) =>
+        (!options.kind || record.kind === options.kind) &&
+        (!options.status || record.status === options.status),
+      ),
+      options.limit,
+    );
+  }
+
+  async getPatchWork(id: string): Promise<PatchWorkRecord | undefined> {
+    const records = await readJsonLines<PatchWorkRecord>(this.patchWorkPath);
     for (let index = records.length - 1; index >= 0; index -= 1) {
       if (records[index]?.id === id) {
         return records[index];

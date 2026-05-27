@@ -1,11 +1,11 @@
 ---
-title: Run the harness maintenance automation
+title: Run the harness patch-work automation
 description: Use the patch.moi harness repos to rehearse an upstream release and maintained fork update.
 ---
 
-# Run the harness maintenance automation
+# Run the harness patch-work automation
 
-This tutorial runs the smallest real patch.moi maintenance loop. The upstream
+This tutorial runs the smallest real patch.moi patch-work loop. The upstream
 repo is `harness/upstream`. The maintained fork is `harness/fork`. The source
 automations mirror the Codex fork structure:
 
@@ -21,8 +21,8 @@ There are two local operator paths:
 - run the same flow through the repo-native command workspace task
 
 Both paths exercise the harness. The Patch service path still starts with feed
-intake, writes `DATA_DIR` records, creates a maintenance attempt, and dispatches
-the same kind of event through the execution adapter.
+intake, writes `DATA_DIR` records, creates patch work plus a patch attempt, and
+dispatches the same kind of event through the execution adapter.
 
 ## 1. Check out the harness repos
 
@@ -84,7 +84,7 @@ bun run workspace:run:harness
 
 Use this only to exercise workspace-owned automation. It is not the product
 path for patch.moi feed intake, and it does not write patch.moi `DATA_DIR`
-maintenance-attempt records unless patch.moi itself dispatches the event.
+patch-work or patch-attempt records unless patch.moi itself dispatches the event.
 For a temporary foreground backend instead of a user service, use
 `bun run workspace:backend:dev`.
 

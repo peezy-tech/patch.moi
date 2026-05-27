@@ -47,6 +47,38 @@ describe("patch.moi MCP tools", () => {
   test("remote mode reports missing PATCH_MOI_URL cleanly", async () => {
     await expect(callPatchMoiTool("status", { mode: "remote" }, {})).rejects.toThrow("remote mode requires PATCH_MOI_URL");
   });
+
+  test("tracks feature patch work through MCP", async () => {
+    const repo = await createRepo();
+    const dataDir = join(await mkdtemp(join(tmpdir(), "patch-mcp-work-")), "data");
+    const started = await callPatchMoiTool("work_start_feature", {
+      repo,
+      dataDir,
+      title: "MCP feature",
+      branch: "mcp-feature",
+      base: "main",
+      createBranch: true,
+    }, {});
+
+    expect(started).toMatchObject({
+      work: {
+        kind: "feature",
+        status: "active",
+        workBranch: "mcp-feature",
+      },
+      branchResult: {
+        status: "created",
+        branch: "mcp-feature",
+      },
+    });
+
+    const workId = (started as { work: { id: string } }).work.id;
+    const listed = await callPatchMoiTool("work_list", { dataDir }, {});
+    expect(listed).toMatchObject({ work: [{ id: workId, kind: "feature" }] });
+
+    const shown = await callPatchMoiTool("work_show", { dataDir, workId }, {});
+    expect(shown).toMatchObject({ work: { id: workId, title: "MCP feature" }, attempts: [] });
+  });
 });
 
 async function createRepo(): Promise<string> {

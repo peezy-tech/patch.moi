@@ -6,22 +6,33 @@ import path from "node:path";
 import { loadPatchMoiConfig } from "./config";
 import {
   dispatchWorkspaceEventDetailed,
-  maintenanceAttemptForWorkspaceDispatch,
+  mergePatchWorkWithAttempt,
+  patchAttemptForWorkspaceDispatch,
   patchDownstreamReleaseEvent,
+  patchWorkForAutomationEvent,
   patchUpstreamBranchUpdateEvent,
   patchUpstreamReleaseEvent,
   replayWorkspaceEventDetailed,
   type WorkspaceDispatchConfig,
 } from "./automation";
-import { syncMaintenanceAttempt } from "./maintenance";
+import { syncPatchAttempt } from "./patch-attempts";
 import {
   capturePatchBranch,
+  createPatchWorkBranch,
   inspectPatchWorkspace,
   listPatchBranches,
   rebuildPatchMain,
 } from "./patch-workspace";
 import { EventStore } from "./queue";
-import type { AutomationDispatchRecord, AutomationEvent, MaintenanceAttemptRecord } from "./types";
+import type {
+  AutomationDispatchRecord,
+  AutomationEvent,
+  CandidateRefRecord,
+  PatchAttemptRecord,
+  PatchWorkKind,
+  PatchWorkRecord,
+  PatchWorkStatus,
+} from "./types";
 import type { WorkspaceBackendFetch } from "./workspace-backend";
 
 type CliOptions = {
@@ -52,7 +63,11 @@ Usage:
   patch.moi status [--data-dir DIR] [--json]
   patch.moi events [--type TYPE] [--limit N] [--data-dir DIR] [--json]
   patch.moi dispatches [--event-id ID] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
-  patch.moi attempts [--event-id ID] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
+  patch.moi attempts [--event-id ID] [--work-id ID] [--kind KIND] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
+  patch.moi work start feature --title TITLE --repo DIR --branch BRANCH --base REF [--patch-branch patch/NAME] [--create-branch] [--data-dir DIR] [--json]
+  patch.moi work list [--kind KIND] [--status STATUS] [--limit N] [--data-dir DIR] [--json]
+  patch.moi work show WORK_ID [--data-dir DIR] [--json]
+  patch.moi work set-status WORK_ID --status STATUS [--data-dir DIR] [--json]
   patch.moi run harness [--event FILE] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--allow-local] [--json]
   patch.moi run upstream-release --repo OWNER/NAME --tag TAG [--automation NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
   patch.moi run upstream-branch --repo OWNER/NAME [--sha SHA] [--ref refs/heads/main] [--automation NAME] [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--allow-local] [--json]
@@ -60,7 +75,7 @@ Usage:
   patch.moi run event --file FILE [--workspace-root DIR] [--data-dir DIR] [--dry-run] [--record-only] [--json]
   patch.moi patch doctor [--repo DIR] [--main BRANCH] [--upstream-remote REMOTE] [--upstream-branch BRANCH] [--fork-remote REMOTE] [--json]
   patch.moi patch list [--repo DIR] [--prefix patch/] [--json]
-  patch.moi patch capture patch/NAME --from BRANCH [--base BRANCH] [--repo DIR] [--message MSG] [--force] [--json]
+  patch.moi patch capture patch/NAME --from BRANCH [--base BRANCH] [--repo DIR] [--message MSG] [--force] [--work-id ID] [--json]
   patch.moi patch rebuild [--base BRANCH] [--to BRANCH] [--repo DIR] [--prefix patch/] [--json]
   patch.moi retry EVENT_ID [--workspace-root DIR] [--data-dir DIR] [--json]
   patch.moi replay EVENT_ID [--workspace-root DIR] [--data-dir DIR] [--json]
@@ -92,6 +107,8 @@ export async function runCli(args = Bun.argv.slice(2), options: CliOptions = {})
         return await handleDispatches(context);
       case "attempts":
         return await handleAttempts(context);
+      case "work":
+        return await handleWork(parsed.positionals.slice(1), context);
       case "run":
         return await handleRun(parsed.positionals.slice(1), context);
       case "patch":
@@ -159,7 +176,7 @@ async function handleStatus(context: CliContext): Promise<number> {
   const [events, dispatches, attempts] = await Promise.all([
     context.store.listAutomationEvents({ limit }),
     context.store.listWorkspaceDispatches({ limit }),
-    context.store.listMaintenanceAttempts({ limit }),
+    context.store.listPatchAttempts({ limit }),
   ]);
   const payload = {
     dataDir: context.dataDir,
@@ -221,9 +238,11 @@ async function handleDispatches(context: CliContext): Promise<number> {
 }
 
 async function handleAttempts(context: CliContext): Promise<number> {
-  const attempts = await context.store.listMaintenanceAttempts({
+  const attempts = await context.store.listPatchAttempts({
     eventId: flagValue(context.parsed, "event-id"),
-    status: maintenanceStatus(flagValue(context.parsed, "status")),
+    workId: flagValue(context.parsed, "work-id"),
+    kind: patchWorkKind(flagValue(context.parsed, "kind")),
+    status: patchAttemptStatus(flagValue(context.parsed, "status")),
     limit: numberFlag(context.parsed, "limit", 50),
   });
   if (context.json) {
@@ -234,6 +253,90 @@ async function handleAttempts(context: CliContext): Promise<number> {
     }
   }
   return 0;
+}
+
+async function handleWork(positionals: string[], context: CliContext): Promise<number> {
+  const action = positionals[0];
+  if (!action) {
+    throw new UsageError("work requires start, list, show, or set-status");
+  }
+  if (action === "start") {
+    const kind = patchWorkKind(positionals[1]);
+    if (kind !== "feature") {
+      throw new UsageError("work start currently requires feature");
+    }
+    const title = flagValue(context.parsed, "title");
+    const branch = flagValue(context.parsed, "branch");
+    const base = flagValue(context.parsed, "base");
+    if (!title) throw new UsageError("work start feature requires --title");
+    if (!branch) throw new UsageError("work start feature requires --branch");
+    if (!base) throw new UsageError("work start feature requires --base");
+    const repo = patchRepoPath(context);
+    const now = new Date().toISOString();
+    const branchResult = flagBool(context.parsed, "create-branch")
+      ? await createPatchWorkBranch(repo, { branch, base })
+      : undefined;
+    const work: PatchWorkRecord = {
+      id: `patch-work:feature:${slugValue(title)}:${now}`,
+      kind,
+      title,
+      repo,
+      baseRef: base,
+      workBranch: branch,
+      ...(flagValue(context.parsed, "patch-branch") ? { patchBranch: flagValue(context.parsed, "patch-branch") } : {}),
+      status: "active",
+      candidateRefs: [],
+      attemptIds: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    await context.store.appendPatchWork(work);
+    writeOutput(context, { work, branchResult });
+    return 0;
+  }
+  if (action === "list") {
+    const work = await context.store.listPatchWork({
+      kind: patchWorkKind(flagValue(context.parsed, "kind")),
+      status: patchWorkStatus(flagValue(context.parsed, "status")),
+      limit: numberFlag(context.parsed, "limit", 50),
+    });
+    if (context.json) {
+      writeJson(context, { work });
+    } else {
+      for (const item of work) {
+        writeLine(context, `${item.updatedAt} ${item.status} ${item.kind} ${item.id} ${item.title}`);
+      }
+    }
+    return 0;
+  }
+  if (action === "show") {
+    const id = positionals[1];
+    if (!id) throw new UsageError("work show requires WORK_ID");
+    const work = await context.store.getPatchWork(id);
+    if (!work) throw new UsageError(`patch work not found: ${id}`, 1);
+    const attempts = await context.store.listPatchAttempts({ workId: id, limit: 100 });
+    writeOutput(context, { work, attempts });
+    return 0;
+  }
+  if (action === "set-status") {
+    const id = positionals[1];
+    if (!id) throw new UsageError("work set-status requires WORK_ID");
+    const status = patchWorkStatus(flagValue(context.parsed, "status"));
+    if (!status) throw new UsageError("work set-status requires --status");
+    const work = await context.store.getPatchWork(id);
+    if (!work) throw new UsageError(`patch work not found: ${id}`, 1);
+    const now = new Date().toISOString();
+    const next: PatchWorkRecord = {
+      ...work,
+      status,
+      updatedAt: now,
+      ...(terminalPatchWorkStatus(status) ? { completedAt: now } : {}),
+    };
+    await context.store.appendPatchWork(next);
+    writeOutput(context, { work: next });
+    return 0;
+  }
+  throw new UsageError(`unknown work action: ${action}`);
 }
 
 async function handleRun(positionals: string[], context: CliContext): Promise<number> {
@@ -385,6 +488,44 @@ async function handlePatch(positionals: string[], context: CliContext): Promise<
       force: flagBool(context.parsed, "force"),
       patchPrefix,
     });
+    const workId = flagValue(context.parsed, "work-id");
+    if (workId) {
+      const work = await context.store.getPatchWork(workId);
+      if (!work) {
+        throw new UsageError(`patch work not found: ${workId}`, 1);
+      }
+      const now = new Date().toISOString();
+      const candidateRefs: CandidateRefRecord[] = result.sha
+        ? [{ kind: "branch", ref: result.patchBranch, sha: result.sha }]
+        : [];
+      const attempt: PatchAttemptRecord = {
+        id: `${work.id}:capture:${now}`,
+        workId: work.id,
+        kind: work.kind,
+        operation: "capture",
+        status: result.status === "changed" ? "changed" : "skipped",
+        workspaceRunIds: [],
+        candidateRefs,
+        message: result.message,
+        createdAt: now,
+        updatedAt: now,
+        completedAt: now,
+      };
+      const nextWork: PatchWorkRecord = {
+        ...work,
+        patchBranch: result.patchBranch,
+        status: result.status === "changed" ? "captured" : work.status,
+        candidateRefs: uniqueCandidateRefs([...work.candidateRefs, ...candidateRefs]),
+        attemptIds: uniqueStrings([...work.attemptIds, attempt.id]),
+        updatedAt: now,
+      };
+      await context.store.appendPatchAttempt(attempt);
+      await context.store.appendPatchWork(nextWork);
+      if (context.json) {
+        writeJson(context, { result, work: nextWork, attempt });
+        return 0;
+      }
+    }
     if (context.json) {
       writeJson(context, result);
     } else {
@@ -439,14 +580,17 @@ async function runEvent(event: AutomationEvent, context: CliContext): Promise<nu
   await writeDispatchPlan(context, event);
   const recorded = await appendAutomationEventIfMissing(context.store, event);
   if (flagBool(context.parsed, "record-only")) {
-    writeOutput(context, { event, recorded });
+    const work = patchWorkForAutomationEvent(event);
+    await context.store.appendPatchWork(work);
+    writeOutput(context, { event, recorded, work });
     return 0;
   }
 
   const { record, result } = await dispatchWorkspaceEventDetailed(event, {}, workspaceConfig(context));
   await context.store.appendWorkspaceDispatch(record);
-  const attempt = maintenanceAttemptForWorkspaceDispatch(event, record, result?.runs);
-  await context.store.appendMaintenanceAttempt(attempt);
+  const attempt = patchAttemptForWorkspaceDispatch(event, record, result?.runs);
+  await context.store.appendPatchAttempt(attempt);
+  await upsertPatchWorkForAttempt(context, event, attempt);
   writeAttemptProgress(context, attempt);
   writeOutput(context, { event, recorded, record, attempt });
   return attemptFailed(attempt) ? 1 : 0;
@@ -468,8 +612,9 @@ async function handleDispatchOperation(
     ? await dispatchWorkspaceEventDetailed(event, {}, workspaceConfig(context))
     : await replayWorkspaceEventDetailed(event, {}, workspaceConfig(context));
   await context.store.appendWorkspaceDispatch(outcome.record);
-  const attempt = maintenanceAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
-  await context.store.appendMaintenanceAttempt(attempt);
+  const attempt = patchAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
+  await context.store.appendPatchAttempt(attempt);
+  await upsertPatchWorkForAttempt(context, event, attempt);
   writeAttemptProgress(context, attempt);
   writeOutput(context, { event, record: outcome.record, attempt });
   return attemptFailed(attempt) ? 1 : 0;
@@ -479,11 +624,11 @@ async function handleSync(attemptId: string | undefined, context: CliContext): P
   if (!attemptId) {
     throw new UsageError("sync requires ATTEMPT_ID");
   }
-  const attempt = await context.store.getMaintenanceAttempt(attemptId);
+  const attempt = await context.store.getPatchAttempt(attemptId);
   if (!attempt) {
-    throw new UsageError(`maintenance attempt not found: ${attemptId}`, 1);
+    throw new UsageError(`patch attempt not found: ${attemptId}`, 1);
   }
-  const next = await syncMaintenanceAttempt(context.store, attempt, workspaceConfig(context));
+  const next = await syncPatchAttempt(context.store, attempt, workspaceConfig(context));
   writeOutput(context, { attempt: next });
   return 0;
 }
@@ -640,7 +785,7 @@ function assertDispatchSurfaceAllowed(context: CliContext, command = "upstream-r
     return;
   }
   throw new UsageError(
-    `${command} dispatch requires PATCH_WORKSPACE_BACKEND_URL, PATCH_WORKSPACE_SSH_TARGET, --allow-local, or PATCH_ALLOW_LOCAL_APP_SERVER=1; use --dry-run to verify configured automations without executing maintenance work`,
+    `${command} dispatch requires PATCH_WORKSPACE_BACKEND_URL, PATCH_WORKSPACE_SSH_TARGET, --allow-local, or PATCH_ALLOW_LOCAL_APP_SERVER=1; use --dry-run to verify configured automations without executing patch work`,
   );
 }
 
@@ -691,7 +836,18 @@ async function writeDispatchPlan(context: CliContext, event: AutomationEvent): P
   }
 }
 
-function writeAttemptProgress(context: CliContext, attempt: MaintenanceAttemptRecord): void {
+async function upsertPatchWorkForAttempt(
+  context: CliContext,
+  event: AutomationEvent,
+  attempt: PatchAttemptRecord,
+): Promise<PatchWorkRecord> {
+  const existing = await context.store.getPatchWork(attempt.workId);
+  const work = mergePatchWorkWithAttempt(existing, event, attempt);
+  await context.store.appendPatchWork(work);
+  return work;
+}
+
+function writeAttemptProgress(context: CliContext, attempt: PatchAttemptRecord): void {
   writeProgress(context, `[automation] attempt ${attempt.status} ${attempt.id}\n`);
   for (const thread of attempt.workspaceThreadRefs ?? []) {
     const owner = thread.automationName;
@@ -727,7 +883,7 @@ function writeProgress(context: CliContext, text: string): void {
   context.stderr(text);
 }
 
-function attemptFailed(attempt: MaintenanceAttemptRecord): boolean {
+function attemptFailed(attempt: PatchAttemptRecord): boolean {
   return ["failed", "blocked", "needs_intervention"].includes(attempt.status);
 }
 
@@ -739,7 +895,10 @@ function writeOutput(context: CliContext, payload: {
   event?: AutomationEvent;
   recorded?: boolean;
   record?: AutomationDispatchRecord;
-  attempt?: MaintenanceAttemptRecord;
+  attempt?: PatchAttemptRecord;
+  attempts?: PatchAttemptRecord[];
+  work?: PatchWorkRecord;
+  branchResult?: unknown;
 }): void {
   if (context.json) {
     writeJson(context, payload);
@@ -754,6 +913,10 @@ function writeOutput(context: CliContext, payload: {
       writeLine(context, `error: ${payload.record.error}`);
     }
   }
+  if (payload.work) {
+    writeLine(context, `work: ${payload.work.status} ${payload.work.id}`);
+    writeLine(context, `title: ${payload.work.title}`);
+  }
   if (payload.attempt) {
     writeLine(context, `attempt: ${payload.attempt.status} ${payload.attempt.id}`);
     for (const thread of payload.attempt.workspaceThreadRefs ?? []) {
@@ -763,6 +926,15 @@ function writeOutput(context: CliContext, payload: {
         `thread: ${owner || thread.label || "codex"} ${thread.threadId}${thread.turnId ? ` turn=${thread.turnId}` : ""}`,
       );
     }
+  }
+  if (payload.attempts) {
+    for (const attempt of payload.attempts) {
+      writeLine(context, `attempt: ${attempt.status} ${attempt.operation} ${attempt.id}`);
+    }
+  }
+  if (payload.branchResult) {
+    const result = payload.branchResult as { status?: string; branch?: string; base?: string };
+    writeLine(context, `branch: ${result.status ?? "updated"} ${result.branch ?? ""}${result.base ? ` from ${result.base}` : ""}`.trim());
   }
 }
 
@@ -867,7 +1039,7 @@ function dispatchStatus(value: string | undefined): AutomationDispatchRecord["st
   throw new UsageError("--status must be dispatched, failed, or skipped");
 }
 
-function maintenanceStatus(value: string | undefined): MaintenanceAttemptRecord["status"] | undefined {
+function patchAttemptStatus(value: string | undefined): PatchAttemptRecord["status"] | undefined {
   if (!value) return undefined;
   if (
     value === "started" ||
@@ -878,7 +1050,65 @@ function maintenanceStatus(value: string | undefined): MaintenanceAttemptRecord[
     value === "failed" ||
     value === "skipped"
   ) return value;
-  throw new UsageError("--status is not a valid maintenance attempt status");
+  throw new UsageError("--status is not a valid patch attempt status");
+}
+
+function patchWorkKind(value: string | undefined): PatchWorkKind | undefined {
+  if (!value) return undefined;
+  if (value === "feature" || value === "maintenance" || value === "release") return value;
+  throw new UsageError("--kind must be feature, maintenance, or release");
+}
+
+function patchWorkStatus(value: string | undefined): PatchWorkStatus | undefined {
+  if (!value) return undefined;
+  if (
+    value === "planned" ||
+    value === "active" ||
+    value === "captured" ||
+    value === "changed" ||
+    value === "completed" ||
+    value === "needs_intervention" ||
+    value === "blocked" ||
+    value === "failed" ||
+    value === "skipped" ||
+    value === "review" ||
+    value === "shipped" ||
+    value === "closed"
+  ) return value;
+  throw new UsageError("--status is not a valid patch work status");
+}
+
+function terminalPatchWorkStatus(status: PatchWorkStatus): boolean {
+  return status === "completed" ||
+    status === "failed" ||
+    status === "skipped" ||
+    status === "shipped" ||
+    status === "closed";
+}
+
+function slugValue(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._/-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replaceAll("/", "-") || "work";
+}
+
+function uniqueCandidateRefs(refs: CandidateRefRecord[]): CandidateRefRecord[] {
+  const seen = new Set<string>();
+  const result: CandidateRefRecord[] = [];
+  for (const ref of refs) {
+    const key = `${ref.kind}:${ref.repo ?? ""}:${ref.remote ?? ""}:${ref.ref}:${ref.sha ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(ref);
+  }
+  return result;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
