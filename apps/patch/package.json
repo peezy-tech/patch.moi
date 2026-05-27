@@ -19,7 +19,7 @@
     "check": "bun run check:types && bun run test"
   },
   "dependencies": {
-    "@peezy.tech/codex-flows": "^0.133.1"
+    "@peezy.tech/codex-flows": "^0.133.2"
   },
   "devDependencies": {
     "@types/bun": "catalog:",
