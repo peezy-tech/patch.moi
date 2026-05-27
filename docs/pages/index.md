@@ -42,8 +42,8 @@ patch.moi owns product state around the patch stack:
 
 Execution surfaces own the work itself:
 
-- codex-flow packages match events and run portable Bun or Code Mode steps
-- Codex workspace backends provide app-server, delegation, and flow transport
+- named codex-flows automations match events and run JavaScript modules
+- Codex workspace backends provide app-server, delegation, and turn transport
 - local workspaces and forge runners fetch, rebase, verify, and push candidates
 - release channels publish or deploy after review and policy gates
 
@@ -81,7 +81,7 @@ bun run workspace:doctor
 bun run workspace:run:harness
 ```
 
-Run the manual workspace-owned flow smoke task only when a Codex workspace
+Run the manual workspace-owned automation smoke task only when a Codex workspace
 backend is running:
 
 ```bash
@@ -125,7 +125,7 @@ codex plugin add patch-moi@patch-moi
 
 ## Read Next
 
-- First harness run: [Run the harness maintenance flow](tutorials/run-harness-maintenance-flow).
+- First harness run: [Run the harness maintenance automation](tutorials/run-harness-maintenance-flow).
 - Feed intake: [Watch an upstream release](tutorials/watch-upstream-release).
 - Operator runbook: [Maintain a fork](guides/maintain-a-fork).
 - CLI operations: [CLI](reference/cli).
@@ -139,10 +139,10 @@ codex plugin add patch-moi@patch-moi
 
 - `apps/patch`: Patch service, feed poller, JSONL store, admin API, Discord
   output, and workspace backend adapter.
-- `flows/patch-moi-harness-*`: source harness flows that mirror the Codex
-  fork release, main-update, and downstream-release surfaces.
+- `automations/patch-moi-harness-*`: source harness automations that mirror the
+  Codex fork release, main-update, and downstream-release surfaces.
 - `.codex/workspace.toml`: optional repo-native harness automation config.
-  Real installed maintenance flows belong in the workspace repo that uses
+  Real installed maintenance automations belong in the workspace repo that uses
   patch.moi, not in this product repo.
 - `harness`: upstream and maintained fork repositories used for rehearsal.
 - `docs`: this Tome documentation site.

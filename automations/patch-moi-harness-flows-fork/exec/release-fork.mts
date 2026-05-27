@@ -1,15 +1,18 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import path from "node:path";
 
-type FlowContext = {
-  flow: {
+type AutomationContext = {
+  automation: {
     config?: Record<string, unknown>;
-    event: {
-      id: string;
-      payload?: Record<string, unknown>;
-    };
   };
+  event?: {
+    id?: string;
+    type?: string;
+    payload?: Record<string, unknown>;
+  };
+  cwd?: string;
 };
 
 type CommandResult = {
@@ -18,16 +21,24 @@ type CommandResult = {
   stderr: string;
 };
 
-const context = JSON.parse(await Bun.stdin.text()) as FlowContext;
-const config = context.flow.config ?? {};
-const payload = context.flow.event.payload ?? {};
+let config: Record<string, unknown> = {};
+let payload: Record<string, unknown> = {};
 
-function finish(value: Record<string, unknown>): never {
-  process.stdout.write(`FLOW_RESULT ${JSON.stringify(value)}\n`);
-  process.exit(0);
+class Finished extends Error {
+  constructor(readonly value: Record<string, unknown>) {
+    super("automation finished");
+  }
 }
 
-try {
+function finish(value: Record<string, unknown>): never {
+  throw new Finished(value);
+}
+
+export default async function releaseFork(context: AutomationContext) {
+  config = context.automation.config ?? {};
+  payload = context.event?.payload ?? {};
+
+  try {
   const packageName = stringValue(payload.packageName);
   const version = stringValue(payload.version);
   if (!packageName || !version) {
@@ -41,12 +52,12 @@ try {
     finish({ status: "skipped", message: `Harness fork release ignores ${packageName}.` });
   }
 
-  const workspaceRoot = process.cwd();
+  const workspaceRoot = context.cwd ?? process.cwd();
   const forkRepo = path.resolve(workspaceRoot, stringConfig("fork_repo", "harness/fork"));
   const forkRepoFullName = stringConfig("fork_repo_full_name", "matamune-peezy/patch-moi-harness");
   const sourceBranch = stringConfig("source_branch", "main");
-  const worktreeDir = path.resolve(workspaceRoot, stringConfig("worktree_dir", ".codex/flow-artifacts/patch-moi-harness-flows-fork-worktree"));
-  const artifactDir = path.resolve(workspaceRoot, stringConfig("artifact_dir", ".codex/flow-artifacts/patch-moi-harness-flows-fork-release"));
+  const worktreeDir = path.resolve(workspaceRoot, stringConfig("worktree_dir", ".codex/automation-artifacts/patch-moi-harness-flows-fork-worktree"));
+  const artifactDir = path.resolve(workspaceRoot, stringConfig("artifact_dir", ".codex/automation-artifacts/patch-moi-harness-flows-fork-release"));
 
   await requireCleanRepo(forkRepo);
   const sourceSha = (await runChecked("resolve harness fork branch", ["git", "rev-parse", "--verify", `${sourceBranch}^{commit}`], forkRepo)).stdout.trim();
@@ -74,7 +85,7 @@ try {
     status: "changed",
     message: `Prepared harness fork package ${forkVersion} from ${packageName}@${version}.`,
     artifacts: {
-      eventId: context.flow.event.id,
+      eventId: context.event?.id,
       sourcePackage: packageName,
       sourceVersion: version,
       forkRepo,
@@ -97,10 +108,14 @@ try {
     },
   });
 } catch (error) {
-  finish({
+  if (error instanceof Finished) {
+    return error.value;
+  }
+  return {
     status: "failed",
     message: error instanceof Error ? error.message : String(error),
-  });
+  };
+}
 }
 
 async function requireCleanRepo(repoRoot: string): Promise<void> {
@@ -133,19 +148,37 @@ async function runChecked(label: string, command: string[], cwd: string): Promis
 
 async function run(label: string, command: string[], cwd: string): Promise<CommandResult> {
   process.stderr.write(`+ ${label}: ${command.join(" ")}\n`);
-  const proc = Bun.spawn(command, {
+  const proc = spawn(command[0] ?? "", command.slice(1), {
     cwd,
-    stdout: "pipe",
-    stderr: "pipe",
+    stdio: ["ignore", "pipe", "pipe"],
   });
   const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
+    collectText(proc.stdout),
+    collectText(proc.stderr),
+    exitCode(proc),
   ]);
   if (stdout) process.stderr.write(stdout);
   if (stderr) process.stderr.write(stderr);
   return { code, stdout, stderr };
+}
+
+function collectText(stream: NodeJS.ReadableStream | null): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let output = "";
+    stream?.setEncoding("utf8");
+    stream?.on("data", (chunk) => {
+      output += String(chunk);
+    });
+    stream?.on("error", reject);
+    stream?.on("end", () => resolve(output));
+    if (!stream) resolve("");
+  });
+}
+
+function exitCode(proc: ReturnType<typeof spawn>): Promise<number> {
+  return new Promise((resolve) => {
+    proc.on("exit", (code) => resolve(code ?? 1));
+  });
 }
 
 function forkPackageVersion(baseVersion: string, sourceVersion: string): string {

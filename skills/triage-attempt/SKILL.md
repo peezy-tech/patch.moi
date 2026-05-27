@@ -13,6 +13,6 @@ Use this workflow when a patch.moi run is failed, blocked, stale, or unclear.
 2. Inspect the associated Git checkout with `git_discover` and `patch_doctor`.
 3. If workspace run state may have moved since the last DATA_DIR record, use `sync` only when `PATCH_MOI_ALLOW_SYNC=1` is explicitly present.
 4. Use `retry` for a new dispatch attempt after fixing configuration or transient backend issues.
-5. Use `replay` only when the original event should be reprocessed with the current flow/runtime behavior.
+5. Use `replay` only when the original event should be reprocessed with the current automation/runtime behavior.
 
 Mutation tools fail closed unless the matching safety policy or env gate is enabled.

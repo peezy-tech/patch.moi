@@ -42,7 +42,9 @@ Create or edit a workspace-owned feed file, for example
       "target": {
         "mode": "workspace_automation",
         "eventType": "upstream.release",
-        "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",        "payload": {
+        "workspaceUrlEnv": "PATCH_WORKSPACE_BACKEND_URL",
+        "automations": ["patch-moi-harness-fork"],
+        "payload": {
           "provider": "github",
           "repo": "openai/codex"
         }
@@ -77,16 +79,16 @@ When the feed later contains an unseen release entry, Patch appends:
   later candidate refs.
 - `data/workspace-dispatches.jsonl` for the workspace dispatch outcome.
 
-If no workspace backend URL is set, Patch uses local flow execution from the
-working directory. If `PATCH_WORKSPACE_BACKEND_URL` is set, Patch sends the
-event to that workspace backend's flow capability. Legacy
-Old flow dispatch URL fallbacks are no longer accepted; use
+If no workspace backend URL is set, Patch uses the local app-server turn host
+from the working directory. If `PATCH_WORKSPACE_BACKEND_URL` is set, Patch sends
+the event to that workspace backend's turn automation host. Old flow dispatch
+URL fallbacks are no longer accepted; use
 `PATCH_WORKSPACE_BACKEND_URL` for the workspace backend WebSocket URL.
 
 ## 4. Connect patch work
 
-A matching codex-flow package or backend workspace can consume the
-`upstream.release` event and run the maintenance loop:
+A matching named automation can consume the `upstream.release` event and run the
+maintenance loop:
 
 1. fetch upstream tags
 2. resolve the release tag

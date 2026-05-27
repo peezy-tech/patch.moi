@@ -5,10 +5,9 @@ coverage
 .env
 /.codex/workspace/local/
 /.codex/workspace/actions/
-/.codex/flows/
 /.codex/pack-lock.json
 /.codex/pack-backups/
-/.codex/flow-artifacts/
+/.codex/automation-artifacts/
 data/
 apps/*/data/
 docs/out/

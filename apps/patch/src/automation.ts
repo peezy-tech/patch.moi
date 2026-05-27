@@ -387,7 +387,11 @@ async function runNamedAutomation(
   let backend: Awaited<ReturnType<typeof createAutomationHostBackend>> | undefined;
   try {
     const runTarget = await resolveTurnAutomationTarget(automationName, { cwd: config.cwd ?? process.cwd() });
-    backend = await createAutomationHostBackend(target, config);
+    const workspaceBackendUrl = targetWorkspaceBackendUrl(target, config.env ?? process.env);
+    const getBackend = async () => {
+      backend ??= await createAutomationHostBackend(target, config);
+      return backend;
+    };
     const run = await runTurnAutomationScript({
       scriptPath: runTarget.scriptPath,
       automation: runTarget.automation,
@@ -396,9 +400,17 @@ async function runNamedAutomation(
       cwd: runTarget.cwd ?? config.cwd,
       timeoutMs: 90_000,
       host: createTurnAutomationHost({
-        via: backend.mode === "workspace-ws" ? "workspace" : "app-server",
-        appRequest: backend.appRequest,
-        workspaceRequest: backend.workspaceRequest,
+        via: workspaceBackendUrl ? "workspace" : "app-server",
+        appRequest: async (method, params) => await (await getBackend()).appRequest(method, params),
+        workspaceRequest: workspaceBackendUrl
+          ? async (method, params) => {
+            const current = await getBackend();
+            if (!current.workspaceRequest) {
+              throw new Error("Workspace backend did not expose workspace requests");
+            }
+            return await current.workspaceRequest(method, params);
+          }
+          : undefined,
         defaults: {
           prompt: runTarget.prompt,
           cwd: runTarget.cwd ?? config.cwd,

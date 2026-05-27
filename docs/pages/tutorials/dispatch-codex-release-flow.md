@@ -1,9 +1,9 @@
 ---
-title: Dispatch a Codex release flow
+title: Dispatch a Codex release automation
 description: Connect the OpenAI Codex release feed to a Codex patch-stack maintenance workspace.
 ---
 
-# Dispatch a Codex release flow
+# Dispatch a Codex release automation
 
 This tutorial connects upstream OpenAI Codex releases to Codex fork
 maintenance. Patch records the upstream release and dispatches a deterministic
@@ -15,7 +15,7 @@ verifies the candidate.
 
 The patch.moi product repo does not bundle the private Codex feed source. Put a
 `github-openai-codex-releases` source in the workspace repo that owns the
-installed Codex maintenance flows. Its target should emit `upstream.release`
+installed Codex maintenance automations. Its target should emit `upstream.release`
 events with the upstream repository and release tag in the payload.
 
 The maintained Codex fork should still be modeled in Git. In the neighboring
@@ -49,25 +49,21 @@ repo that uses patch.moi. In a meta-workspace where `codex-flows/` and
 `patch.moi/` are sibling checkouts, run this from the workspace root:
 
 ```bash
-codex-flows pack add codex-flows \
-  --include openai-codex-bindings \
-  --include peezy-codex-fork \
-  --include peezy-codex-flows-fork \
-  --apply
-codex-flows pack doctor --json
+codex-flows automation list
 ```
 
 The workspace install pins `openai-codex-bindings`, `peezy-codex-fork`, and
-`peezy-codex-flows-fork` in the workspace `.codex/pack-lock.json`. The
-codex-flows runtime discovers installed `.codex/flows/*` before source-owned
-`flows/*`, so the installed Codex capabilities are visible when patch.moi is
-run with the workspace root while the harness remains source-owned inside the
-patch.moi product repo.
+`openai-codex-bindings`, `peezy-codex-fork`, and
+`peezy-codex-flows-fork` should be visible from the workspace root. The
+codex-flows runtime discovers installed `.codex/automations/*` before
+source-owned `automations/*`, so the installed Codex capabilities are visible
+when patch.moi is run with the workspace root while the harness remains
+source-owned inside the patch.moi product repo.
 
 Safe local verification stops at event matching and runner gating. The test
 suite confirms that a stored `upstream.release` event for `openai/codex`
-selects both installed release steps. Do not fabricate a full `openai/codex`
-release lifecycle just to exercise the flow.
+selects the installed release automations. Do not fabricate a full
+`openai/codex` release lifecycle just to exercise the automation.
 
 You can run the same safe match check through the CLI:
 
@@ -94,7 +90,7 @@ bun run --cwd patch.moi patch.moi -- run upstream-release \
   --tag rust-v0.130.0
 ```
 
-That writes flow run state under `.codex/workspace/actions/flow-client` and
+That writes workspace automation run state under `.codex/workspace/actions` and
 patch.moi product state under `DATA_DIR`.
 
 For a service or host-owned execution surface, point Patch at a workspace
@@ -124,7 +120,7 @@ or `X-Patch-Admin-Token: <token>`.
 
 ## 5. Keep completion workspace-owned, state app-owned
 
-Patch dispatches the generic event. The installed Codex release flow or
+Patch dispatches the generic event. The installed Codex release automation or
 workspace owns the work that happens next:
 
 - fetch upstream main and tags

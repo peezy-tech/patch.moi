@@ -1,14 +1,16 @@
 import path from "node:path";
+import { spawn } from "node:child_process";
 
-type FlowContext = {
-  flow: {
+type AutomationContext = {
+  automation: {
     config?: Record<string, unknown>;
-    event: {
-      id: string;
-      type: string;
-      payload?: Record<string, unknown>;
-    };
   };
+  event?: {
+    id?: string;
+    type?: string;
+    payload?: Record<string, unknown>;
+  };
+  cwd?: string;
 };
 
 type CommandResult = {
@@ -26,32 +28,53 @@ type PatchBranch = {
   subject: string;
 };
 
-const context = JSON.parse(await Bun.stdin.text()) as FlowContext;
-const config = context.flow.config ?? {};
-const payload = context.flow.event.payload ?? {};
-const commands: CommandResult[] = [];
+let context: AutomationContext;
+let config: Record<string, unknown> = {};
+let payload: Record<string, unknown> = {};
+let commands: CommandResult[] = [];
 
-const workspaceRoot = process.cwd();
-const forkRepo = path.resolve(workspaceRoot, stringConfig("fork_repo", "harness/fork"));
-const forkRepoFullName = stringConfig("fork_repo_full_name", "matamune-peezy/patch-moi-harness");
-const targetBranch = stringConfig("target_branch", "main");
-const upstreamBranch = stringConfig("upstream_branch", "upstream");
-const patchPrefix = stringConfig("patch_prefix", "patch/");
-const upstreamRemote = stringConfig("upstream_remote", "upstream");
-const upstreamRepoUrl = stringConfig("upstream_repo_url", "https://github.com/peezy-tech/patch-moi-harness.git");
-const verifyCommands = stringArrayConfig("verify_commands", ["npm test", "npm run pack:dry-run"]);
-const pushRemotes = stringArrayConfig("push_remotes", ["origin", "jojo"]);
+let workspaceRoot = "";
+let forkRepo = "";
+let forkRepoFullName = "";
+let targetBranch = "";
+let upstreamBranch = "";
+let patchPrefix = "";
+let upstreamRemote = "";
+let upstreamRepoUrl = "";
+let verifyCommands: string[] = [];
+let pushRemotes: string[] = [];
 
-function finish(value: Record<string, unknown>): never {
-  process.stdout.write(`FLOW_RESULT ${JSON.stringify(value)}\n`);
-  process.exit(0);
+class Finished extends Error {
+  constructor(readonly value: Record<string, unknown>) {
+    super("automation finished");
+  }
 }
 
-try {
+function finish(value: Record<string, unknown>): never {
+  throw new Finished(value);
+}
+
+export default async function updateFork(input: AutomationContext) {
+  context = input;
+  config = context.automation.config ?? {};
+  payload = context.event?.payload ?? {};
+  commands = [];
+  workspaceRoot = context.cwd ?? process.cwd();
+  forkRepo = path.resolve(workspaceRoot, stringConfig("fork_repo", "harness/fork"));
+  forkRepoFullName = stringConfig("fork_repo_full_name", "matamune-peezy/patch-moi-harness");
+  targetBranch = stringConfig("target_branch", "main");
+  upstreamBranch = stringConfig("upstream_branch", "upstream");
+  patchPrefix = stringConfig("patch_prefix", "patch/");
+  upstreamRemote = stringConfig("upstream_remote", "upstream");
+  upstreamRepoUrl = stringConfig("upstream_repo_url", "https://github.com/peezy-tech/patch-moi-harness.git");
+  verifyCommands = stringArrayConfig("verify_commands", ["npm test", "npm run pack:dry-run"]);
+  pushRemotes = stringArrayConfig("push_remotes", ["origin", "jojo"]);
+
+  try {
   const expectedRepo = stringConfig("expected_repo", "peezy-tech/patch-moi-harness");
   const repo = stringValue(payload.repo);
   if (repo !== expectedRepo) {
-    finish({ status: "skipped", message: `Harness fork flow ignores ${repo}.` });
+    finish({ status: "skipped", message: `Harness fork automation ignores ${repo}.` });
   }
 
   await requireGitRepo();
@@ -152,7 +175,7 @@ try {
       : `Harness fork already matches ${base.label} plus ${patchBranches.length} patches.`,
     artifacts: {
       ...baseArtifacts(base),
-      eventId: context.flow.event.id,
+      eventId: context.event?.id,
       forkRepo,
       forkRepoFullName,
       targetBranch,
@@ -167,11 +190,15 @@ try {
     },
   });
 } catch (error) {
-  finish({
+  if (error instanceof Finished) {
+    return error.value;
+  }
+  return {
     status: "failed",
     message: error instanceof Error ? error.message : String(error),
     artifacts: { commands: commandArtifacts() },
-  });
+  };
+}
 }
 
 async function requireGitRepo(): Promise<void> {
@@ -218,14 +245,14 @@ async function requireCleanWorktree(stage: string): Promise<void> {
 }
 
 async function resolveBase(): Promise<{ kind: "release" | "branch"; label: string; sha: string }> {
-  if (context.flow.event.type === "upstream.release") {
+  if (context.event?.type === "upstream.release") {
     const tag = stringValue(payload.tag) || shortTag(stringValue(payload.ref) ?? "");
     if (!tag) {
       finish({ status: "failed", message: "upstream.release requires payload.tag." });
     }
     return { kind: "release", label: tag, sha: await resolveCommit(`refs/tags/${tag}`).catch(() => resolveCommit(tag)) };
   }
-  if (context.flow.event.type === "upstream.branch_update") {
+  if (context.event?.type === "upstream.branch_update") {
     const ref = stringValue(payload.ref) ?? "refs/heads/main";
     const sha = stringValue(payload.sha);
     if (!sha) {
@@ -233,7 +260,7 @@ async function resolveBase(): Promise<{ kind: "release" | "branch"; label: strin
     }
     return { kind: "branch", label: `${ref}@${sha}`, sha: await resolveCommit(sha) };
   }
-  finish({ status: "skipped", message: `Unsupported harness fork event ${context.flow.event.type}.` });
+  finish({ status: "skipped", message: `Unsupported harness fork event ${context.event?.type ?? "(missing)"}.` });
 }
 
 async function ensureSeedPatchBranches(): Promise<void> {
@@ -287,20 +314,19 @@ async function runChecked(label: string, cmd: string[]): Promise<CommandResult> 
 
 async function run(label: string, cmd: string[], options: { allowFailure?: boolean } = {}): Promise<CommandResult> {
   process.stderr.write(`+ ${label}: ${cmd.join(" ")}\n`);
-  const child = Bun.spawn(cmd, {
+  const child = spawn(cmd[0] ?? "", cmd.slice(1), {
     cwd: forkRepo,
     env: {
       ...process.env,
       GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME || "patch.moi harness",
       GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL || "patch.moi@example.invalid",
     },
-    stdout: "pipe",
-    stderr: "pipe",
+    stdio: ["ignore", "pipe", "pipe"],
   });
   const [stdout, stderr, code] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
+    collectText(child.stdout),
+    collectText(child.stderr),
+    exitCode(child),
   ]);
   if (stdout) process.stderr.write(stdout);
   if (stderr) process.stderr.write(stderr);
@@ -310,6 +336,25 @@ async function run(label: string, cmd: string[], options: { allowFailure?: boole
     throw new Error(`${label} failed with exit ${code}:\n${stderr || stdout}`);
   }
   return result;
+}
+
+function collectText(stream: NodeJS.ReadableStream | null): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let output = "";
+    stream?.setEncoding("utf8");
+    stream?.on("data", (chunk) => {
+      output += String(chunk);
+    });
+    stream?.on("error", reject);
+    stream?.on("end", () => resolve(output));
+    if (!stream) resolve("");
+  });
+}
+
+function exitCode(proc: ReturnType<typeof spawn>): Promise<number> {
+  return new Promise((resolve) => {
+    proc.on("exit", (code) => resolve(code ?? 1));
+  });
 }
 
 function baseArtifacts(base: { kind: string; label: string; sha: string }): Record<string, unknown> {
@@ -342,10 +387,6 @@ function commandArtifacts(): Array<Record<string, unknown>> {
 }
 
 function enabled(name: string, fallback: boolean): boolean {
-  const envValue = process.env[`CODEX_FLOW_${name.toUpperCase()}`];
-  if (envValue !== undefined) {
-    return ["1", "true", "yes", "on"].includes(envValue.trim().toLowerCase());
-  }
   const value = config[name];
   return typeof value === "boolean" ? value : fallback;
 }

@@ -13,7 +13,7 @@ GET /healthz
 
 Returns `ok`.
 
-## Flow events
+## Automation Events
 
 ```text
 GET /automation-events?type=<type>&limit=<n>
@@ -63,13 +63,13 @@ GET /workspace-runs?eventId=<id>&status=<status>&limit=<n>
 GET /workspace-runs/:id
 ```
 
-These endpoints proxy the configured workspace backend flow capability. They
+These endpoints proxy configured workspace backend run state when available. They
 inspect backend-owned event and run state; patch.moi still owns update intake
 and maintenance attempt records.
 
 ## Admin auth
 
-When `PATCH_ADMIN_TOKEN` is set, flow and workspace endpoints require one of:
+When `PATCH_ADMIN_TOKEN` is set, automation and workspace endpoints require one of:
 
 ```text
 Authorization: Bearer <token>

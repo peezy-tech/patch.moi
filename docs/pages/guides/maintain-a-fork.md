@@ -28,7 +28,7 @@ export DATA_DIR="$(mktemp -d)"
 ```
 
 patch.moi product state goes under `DATA_DIR`. codex-flows Actions/local run
-state goes under `.codex/workspace/actions/flow-client` in the workspace root.
+state goes under `.codex/workspace/actions` in the workspace root.
 
 ## 2. Select the execution surface
 
@@ -56,9 +56,8 @@ understood:
 ```bash
 ```
 
-Flow package defaults should also keep pushes and publishing off, but exporting
-the flags makes the operator intent explicit. For harness-only local rehearsals
-you can also disable network fetches:
+Automation defaults should also keep pushes and publishing off. For harness-only
+local rehearsals you can also disable network fetches in the automation config:
 
 ```bash
 ```
@@ -92,10 +91,10 @@ bun run patch.moi -- run upstream-release \
   --json
 ```
 
-The output should show the flow steps that will receive the event. For the
-private Codex workspace, the expected fanout is the bindings update flow and
-the Codex fork release-cycle flow. Product workspaces should pass the repo and
-tag explicitly; patch.moi does not carry private release lookup policy.
+The output should show the automations that will receive the event. For the
+private Codex workspace, the expected fanout is the bindings update automation
+and the Codex fork release-cycle automation. Product workspaces should pass the
+repo and tag explicitly; patch.moi does not carry private release lookup policy.
 
 When a Peezy downstream package release needs to refresh the codex-flows fork
 release candidate, dry-run the downstream release event:
@@ -108,8 +107,8 @@ bun run patch.moi -- run downstream-release \
   --dry-run
 ```
 
-That event should match the `peezy-codex-flows-fork/release-fork` Bun step. The
-same flow also accepts `@peezy.tech/codex-flows` releases.
+That event should match the `peezy-codex-flows-fork` automation. The same
+automation also accepts `@peezy.tech/codex-flows` releases.
 
 Dry-run the upstream main branch update path separately:
 
@@ -141,9 +140,9 @@ patch.moi writes:
 - `workspace-dispatches.jsonl` for the dispatch result
 - `maintenance-attempts.jsonl` for the attempt record
 
-codex-flows writes the execution run state under `.codex/workspace/actions`.
-The Codex fork maintenance step is a deterministic Bun step; it does not need
-the Code Mode runner gate.
+codex-flows writes execution state under `.codex/workspace/actions`.
+The Codex fork maintenance automation decides whether it only runs local code or
+starts a native Codex turn for follow-up work.
 
 ## 6. Inspect the result
 
@@ -165,7 +164,7 @@ bun run patch.moi -- dispatches --status failed
 For Actions/local execution details, inspect the codex-flows state directory:
 
 ```bash
-find .codex/workspace/actions/flow-client -maxdepth 2 -type f | sort
+find .codex/workspace/actions -maxdepth 3 -type f | sort
 ```
 
 For a workspace backend run, use `sync` after the backend has a terminal run
@@ -186,7 +185,7 @@ Retry a transport failure for the same event:
 bun run patch.moi -- retry '<event-id>' --json
 ```
 
-Replay an accepted event when the flow package or execution surface changed and
+Replay an accepted event when the automation package or execution surface changed and
 you want a fresh attempt:
 
 ```bash
@@ -205,10 +204,10 @@ CODEX_WORKSPACE_MODE=actions \
 bun run patch.moi -- replay '<event-id>' --json
 ```
 
-Automation scripts decide exactly when candidate refs should be pushed. The harness automation
-pushes configured branch refs with `--force-with-lease`. The Codex fork flow
-pushes the maintained `main` branch and, when configured to publish, release
-tags.
+Automation scripts decide exactly when candidate refs should be pushed. The
+harness automation pushes configured branch refs with `--force-with-lease`. The
+Codex fork automation pushes the maintained `main` branch and, when configured
+to publish, release tags.
 
 release channel.
 
@@ -218,7 +217,7 @@ Treat runner checkouts as disposable. The durable outputs are:
 
 - patch.moi JSONL state under `DATA_DIR`
 - candidate branches, tags, pull requests, checks, and artifacts in the forge
-- flow run state under the selected codex-flows workspace mode
+- automation run state under the selected codex-flows workspace mode
 - release-channel records when a candidate is published or deployed
 
 If a checkout disappears, patch.moi should still be able to replay the event or

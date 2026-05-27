@@ -1,0 +1,25 @@
+{
+  "name": "patch-moi-harness-fork",
+  "description": "Maintain the harness fork patch workspace from upstream releases and main updates.",
+  "script": "exec/update-fork.mts",
+  "cwd": "../..",
+  "config": {
+    "expected_repo": "peezy-tech/patch-moi-harness",
+    "fork_repo": "harness/fork",
+    "fork_repo_full_name": "matamune-peezy/patch-moi-harness",
+    "target_branch": "main",
+    "upstream_branch": "upstream",
+    "patch_prefix": "patch/",
+    "upstream_remote": "upstream",
+    "upstream_repo_url": "https://github.com/peezy-tech/patch-moi-harness.git",
+    "fetch": true,
+    "push": false,
+    "push_remotes": ["origin", "jojo"],
+    "verify_commands": ["npm test", "npm run pack:dry-run"],
+    "seed_patch_refs": [
+      "patch/010-maintained-greeting=e8e54070d4465b509b07d9d718ed693a75b6f870",
+      "patch/020-shout-mode=5a06a998390b0b835adcad134f8055a2c2eb5b02",
+      "patch/030-package-identity=9fd9d8c31a004059e16f769453d75afba29959be"
+    ]
+  }
+}

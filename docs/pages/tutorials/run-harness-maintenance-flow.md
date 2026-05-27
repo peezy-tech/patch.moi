@@ -1,23 +1,23 @@
 ---
-title: Run the harness maintenance flow
+title: Run the harness maintenance automation
 description: Use the patch.moi harness repos to rehearse an upstream release and maintained fork update.
 ---
 
-# Run the harness maintenance flow
+# Run the harness maintenance automation
 
 This tutorial runs the smallest real patch.moi maintenance loop. The upstream
 repo is `harness/upstream`. The maintained fork is `harness/fork`. The source
-flow packages mirror the Codex fork structure:
+automations mirror the Codex fork structure:
 
-- `flows/patch-moi-harness-bindings` handles upstream release metadata.
-- `flows/patch-moi-harness-fork` rebuilds the maintained fork from
+- `automations/patch-moi-harness-bindings` handles upstream release metadata.
+- `automations/patch-moi-harness-fork` rebuilds the maintained fork from
   `upstream` plus ordered `patch/*` branches.
-- `flows/patch-moi-harness-flows-fork` prepares a downstream fork package
+- `automations/patch-moi-harness-flows-fork` prepares a downstream fork package
   artifact.
 
 There are two local operator paths:
 
-- run the flow directly with `bun run harness:automation`
+- run the automation dispatch directly with `bun run harness:automation`
 - run the same flow through the repo-native command workspace task
 
 Both paths exercise the harness. The Patch service path still starts with feed
@@ -32,7 +32,7 @@ git -C harness/fork remote -v
 git -C harness/fork status --short --branch
 ```
 
-The fork should have `origin`, `upstream`, and `jojo` remotes. The flow can add
+The fork should have `origin`, `upstream`, and `jojo` remotes. The automation can add
 the configured upstream remote when it is missing, but it will not invent the
 fork or service remotes.
 
@@ -43,7 +43,7 @@ bun run harness:automation
 ```
 
 The fixture event is `v0.1.3`, which the current fork already contains. The
-release event fans out to the bindings flow and the fork flow. The fork flow
+release event fans out to the bindings automation and the fork automation. The fork automation
 seeds the local `upstream` and `patch/*` branches when needed, verifies that
 `main` already equals `upstream + patches`, runs `npm test` and
 `npm run pack:dry-run`, reports `candidateRefs` for the maintained fork branch,
@@ -102,14 +102,14 @@ git tag "v${version}"
 git push origin main "v${version}"
 ```
 
-Run the harness flow again without disabling fetch:
+Run the harness automation again without disabling fetch:
 
 ```bash
 bun run harness:automation <event-file>
 ```
 
 Use an event file whose `id`, `occurredAt`, `receivedAt`, and `payload.tag`
-identify the new upstream tag. The fork flow updates the local `upstream`
+identify the new upstream tag. The fork automation updates the local `upstream`
 branch to that tag, rebuilds `main` by cherry-picking ordered `patch/*` branch
 tips, verifies the fork package, reports the local candidate branch, and keeps
 pushes off.

@@ -3,6 +3,7 @@
   "type": "upstream.release",
   "source": "patch",
   "receivedAt": "2026-05-16T00:00:00.000Z",
+  "automations": ["patch-moi-harness-bindings", "patch-moi-harness-fork"],
   "payload": {
     "repo": "peezy-tech/patch-moi-harness",
     "tag": "v0.1.3",

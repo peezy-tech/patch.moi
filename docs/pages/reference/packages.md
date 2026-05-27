@@ -37,7 +37,7 @@ bun run docs:build
 
 The repository root owns shared scripts and dev dependencies. It installs the
 current `@peezy.tech/codex-flows` package surface so repo-native workspace,
-flow, app-server, and backend commands are available:
+automation, app-server, and backend commands are available:
 
 ```bash
 codex-flows automation list
@@ -50,16 +50,15 @@ bun run workspace:run:harness
 Those commands are operator automation around the repo. They do not replace the
 Patch service package or its `DATA_DIR` state.
 
-## External Flow Capabilities
+## External Automations
 
-patch.moi does not track private installed flow capabilities in this product
-repo. A workspace that uses patch.moi should install its real operational flows
-under its own `.codex/flows` directory and track its own `.codex/pack-lock.json`.
-For example, the private meta workspace can install Codex maintenance flows from
-its sibling `codex-flows` checkout:
+patch.moi does not track private installed automation capabilities in this
+product repo. A workspace that uses patch.moi should install its real
+operational automations under its own `.codex/automations` directory and track
+its own `.codex/pack-lock.json` when using packs.
 
 ```bash
-codex-flows pack doctor --json
+codex-flows automation list
 ```
 
 Those installed capabilities are workspace state, not patch.moi product state.
@@ -72,9 +71,9 @@ patch.moi uses the consolidated codex-flows package surface:
 
 | Package | Published version | patch.moi use |
 | --- | --- | --- |
-| `@peezy.tech/codex-flows` | `^0.4.0` | flow runtime, Bun flow helpers, workspace backend protocol/client, Actions/local flow state, CLI automation, and backend bins |
+| `@peezy.tech/codex-flows` | `^0.133.2` | turn automation runtime, workspace backend protocol/client, Actions/local automation state, CLI automation, and backend bins |
 
 patch.moi product state still belongs in the Patch service JSONL store by
-default. Generic flow backend state is execution/run state. It is useful for
+default. Generic workspace backend state is execution/run state. It is useful for
 inspection and sync, but it is not the default home for feed signals, workspace
 dispatch records, or maintenance attempts.

@@ -1,15 +1,17 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import path from "node:path";
 
-type FlowContext = {
-  flow: {
+type AutomationContext = {
+  automation: {
     config?: Record<string, unknown>;
-    event: {
-      id: string;
-      type: string;
-      payload?: Record<string, unknown>;
-    };
   };
+  event?: {
+    id?: string;
+    type?: string;
+    payload?: Record<string, unknown>;
+  };
+  cwd?: string;
 };
 
 type CommandResult = {
@@ -18,16 +20,24 @@ type CommandResult = {
   stderr: string;
 };
 
-const context = JSON.parse(await Bun.stdin.text()) as FlowContext;
-const config = context.flow.config ?? {};
-const payload = context.flow.event.payload ?? {};
+let config: Record<string, unknown> = {};
+let payload: Record<string, unknown> = {};
 
-function finish(value: Record<string, unknown>): never {
-  process.stdout.write(`FLOW_RESULT ${JSON.stringify(value)}\n`);
-  process.exit(0);
+class Finished extends Error {
+  constructor(readonly value: Record<string, unknown>) {
+    super("automation finished");
+  }
 }
 
-try {
+function finish(value: Record<string, unknown>): never {
+  throw new Finished(value);
+}
+
+export default async function generateBindings(context: AutomationContext) {
+  config = context.automation.config ?? {};
+  payload = context.event?.payload ?? {};
+
+  try {
   const expectedRepo = stringConfig("expected_repo", "peezy-tech/patch-moi-harness");
   const repo = stringValue(payload.repo);
   const tag = stringValue(payload.tag) || shortTag(stringValue(payload.ref) ?? "");
@@ -38,9 +48,9 @@ try {
     finish({ status: "failed", message: "upstream.release requires payload.tag." });
   }
 
-  const workspaceRoot = process.cwd();
+  const workspaceRoot = context.cwd ?? process.cwd();
   const upstreamRepo = path.resolve(workspaceRoot, stringConfig("upstream_repo", "harness/upstream"));
-  const artifactDir = path.resolve(workspaceRoot, stringConfig("artifact_dir", ".codex/flow-artifacts/patch-moi-harness-bindings"));
+  const artifactDir = path.resolve(workspaceRoot, stringConfig("artifact_dir", ".codex/automation-artifacts/patch-moi-harness-bindings"));
   const packageJsonPath = path.join(upstreamRepo, "package.json");
   const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as {
     name?: string;
@@ -51,7 +61,7 @@ try {
   const releaseSha = (await runChecked(["git", "rev-parse", "--verify", `${tag}^{commit}`], upstreamRepo)).stdout.trim();
   const bindings = {
     generatedBy: "patch-moi-harness-bindings",
-    eventId: context.flow.event.id,
+    eventId: context.event?.id,
     repo,
     tag,
     releaseSha,
@@ -67,7 +77,7 @@ try {
   await writeFile(artifactPath, artifactJson, "utf8");
   const changed = previous !== artifactJson;
 
-  finish({
+  return {
     status: changed ? "changed" : "completed",
     message: changed
       ? `Regenerated harness bindings for ${repo}@${tag}.`
@@ -85,29 +95,51 @@ try {
         pushed: false,
       }],
     },
-  });
+  };
 } catch (error) {
-  finish({
+  if (error instanceof Finished) {
+    return error.value;
+  }
+  return {
     status: "failed",
     message: error instanceof Error ? error.message : String(error),
-  });
+  };
+}
 }
 
 async function runChecked(command: string[], cwd: string): Promise<CommandResult> {
-  const proc = Bun.spawn(command, {
+  const proc = spawn(command[0] ?? "", command.slice(1), {
     cwd,
-    stdout: "pipe",
-    stderr: "pipe",
+    stdio: ["ignore", "pipe", "pipe"],
   });
   const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
+    collectText(proc.stdout),
+    collectText(proc.stderr),
+    exitCode(proc),
   ]);
   if (code !== 0) {
     throw new Error(`${command.join(" ")} failed with exit ${code}:\n${stderr || stdout}`);
   }
   return { code, stdout, stderr };
+}
+
+function collectText(stream: NodeJS.ReadableStream | null): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let output = "";
+    stream?.setEncoding("utf8");
+    stream?.on("data", (chunk) => {
+      output += String(chunk);
+    });
+    stream?.on("error", reject);
+    stream?.on("end", () => resolve(output));
+    if (!stream) resolve("");
+  });
+}
+
+function exitCode(proc: ReturnType<typeof spawn>): Promise<number> {
+  return new Promise((resolve) => {
+    proc.on("exit", (code) => resolve(code ?? 1));
+  });
 }
 
 function stringConfig(name: string, fallback: string): string {

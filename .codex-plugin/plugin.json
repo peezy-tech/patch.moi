@@ -14,7 +14,7 @@
     "git",
     "fork-maintenance",
     "patch-stack",
-    "codex-flow",
+    "turn-automation",
     "mcp"
   ],
   "skills": "./skills/",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "patch.moi",
     "shortDescription": "Maintain Git patch stacks on upstream forks with safe local inspection and dry-runs.",
-    "longDescription": "patch.moi helps operators inspect upstream remotes, local patch branches, DATA_DIR state, and codex-flow matching before dispatching fork maintenance work. Local mode is read-mostly by default, with fetch and mutation tools gated by explicit policy.",
+    "longDescription": "patch.moi helps operators inspect upstream remotes, local patch branches, DATA_DIR state, and named workspace automation dispatch before maintenance work begins. Local mode is read-mostly by default, with fetch and mutation tools gated by explicit policy.",
     "developerName": "Peezy",
     "category": "Coding",
     "capabilities": [
@@ -35,7 +35,7 @@
     "termsOfServiceURL": "https://peezy.tech/terms",
     "defaultPrompt": [
       "Inspect this fork's patch.moi readiness.",
-      "Dry-run the latest upstream release flow.",
+      "Dry-run the latest upstream release automation.",
       "Triage a failed patch.moi maintenance attempt."
     ],
     "brandColor": "#2563EB"

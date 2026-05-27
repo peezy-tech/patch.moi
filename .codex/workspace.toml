@@ -4,14 +4,15 @@ name = "patch.moi"
 [[workspace.tasks]]
 id = "harness-maintenance-fixture"
 kind = "command"
-command = ["bun", "run", "harness:flow"]
+command = ["bun", "run", "harness:automation"]
 
 [[workspace.tasks]]
-id = "harness-maintenance-flow-smoke"
-kind = "flow"
-flow = "upstream.release"
+id = "harness-maintenance-automation-smoke"
+kind = "automation"
+automation = "patch-moi-harness-fork"
 
 [workspace.tasks.event]
+type = "upstream.release"
 source = "patch.moi.workspace"
 
 [workspace.tasks.event.payload]

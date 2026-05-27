@@ -73,7 +73,7 @@ bun run patch.moi -- attempts
 ```
 
 The repo-native workspace task runs the harness fixture through the same direct
-flow command:
+automation command:
 
 ```bash
 bun run workspace:run:harness
@@ -82,7 +82,7 @@ bun run workspace:run:harness
 That task writes local run state under `.codex/workspace/local/`, which is
 ignored by Git.
 
-There is also a manual workspace-owned flow smoke task:
+There is also a manual workspace-owned automation smoke task:
 
 ```bash
 cd ../codex-flows
