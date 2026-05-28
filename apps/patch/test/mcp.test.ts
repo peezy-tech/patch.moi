@@ -1,14 +1,29 @@
-import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
-import { callPatchMoiTool } from "../src/mcp";
-
-const workspaceRoot = join(import.meta.dir, "../../..");
+import { callPatchMoiTool, patchMoiTools } from "../src/mcp";
 
 describe("patch.moi MCP tools", () => {
-  test("read tools return structured local JSON", async () => {
+  test("ships only local Git-first tools", () => {
+    const names = patchMoiTools.map((tool) => tool.name).sort();
+    expect(names).toEqual([
+      "fetch_upstream",
+      "git_discover",
+      "patch_candidates",
+      "patch_capture",
+      "patch_doctor",
+      "patch_list",
+      "patch_pull",
+      "patch_rebuild",
+      "work_start_feature",
+    ]);
+    for (const removed of ["status", "events", "attempts", "dispatches", "retry", "replay", "sync"]) {
+      expect(names).not.toContain(removed);
+    }
+  });
+
+  test("read tools return structured local Git JSON", async () => {
     const repo = await createRepo();
     const result = await callPatchMoiTool("git_discover", { repo }, {});
 
@@ -19,41 +34,24 @@ describe("patch.moi MCP tools", () => {
     });
   });
 
-  test("dry-run tools do not write DATA_DIR", async () => {
-    const dataDir = join(await mkdtemp(join(tmpdir(), "patch-mcp-dry-run-")), "data");
-    const result = await callPatchMoiTool("run_upstream_release_dry_run", {
-      workspaceRoot,
-      dataDir,
-      upstreamRepo: "peezy-tech/patch-moi-harness",
-      tag: "v0.1.3",
-      automation: "patch-moi-harness-fork",
-    }, {});
-
-    expect(result).toMatchObject({
-      dryRun: true,
-      event: { type: "upstream.release" },
-      automations: ["patch-moi-harness-fork"],
-    });
-    expect(existsSync(dataDir)).toBe(false);
-  });
-
   test("gated mutation tools fail closed without policy", async () => {
     const repo = await createRepo();
 
     await expect(callPatchMoiTool("patch_rebuild", { repo }, {})).rejects.toThrow("allowRebuild is gated");
+    await expect(callPatchMoiTool("patch_pull", { repo, remote: "origin", branch: "candidate/test" }, {})).rejects.toThrow("allowPull is gated");
     await expect(callPatchMoiTool("fetch_upstream", { repo }, {})).rejects.toThrow("fetch_upstream is gated");
   });
 
-  test("remote mode reports missing PATCH_MOI_URL cleanly", async () => {
-    await expect(callPatchMoiTool("status", { mode: "remote" }, {})).rejects.toThrow("remote mode requires PATCH_MOI_URL");
+  test("removed state and remote tools are unknown", async () => {
+    for (const name of ["status", "events", "attempts", "dispatches", "retry", "replay", "sync", "run_upstream_release"]) {
+      await expect(callPatchMoiTool(name, {}, {})).rejects.toThrow(`unknown patch.moi tool: ${name}`);
+    }
   });
 
-  test("tracks feature patch work through MCP", async () => {
+  test("starts feature work through MCP without durable records", async () => {
     const repo = await createRepo();
-    const dataDir = join(await mkdtemp(join(tmpdir(), "patch-mcp-work-")), "data");
     const started = await callPatchMoiTool("work_start_feature", {
       repo,
-      dataDir,
       title: "MCP feature",
       branch: "mcp-feature",
       base: "main",
@@ -61,23 +59,14 @@ describe("patch.moi MCP tools", () => {
     }, {});
 
     expect(started).toMatchObject({
-      work: {
-        kind: "feature",
-        status: "active",
-        workBranch: "mcp-feature",
-      },
-      branchResult: {
-        status: "created",
-        branch: "mcp-feature",
-      },
+      kind: "feature",
+      title: "MCP feature",
+      repo,
+      baseRef: "main",
+      workBranch: "mcp-feature",
+      createdBranch: true,
     });
-
-    const workId = (started as { work: { id: string } }).work.id;
-    const listed = await callPatchMoiTool("work_list", { dataDir }, {});
-    expect(listed).toMatchObject({ work: [{ id: workId, kind: "feature" }] });
-
-    const shown = await callPatchMoiTool("work_show", { dataDir, workId }, {});
-    expect(shown).toMatchObject({ work: { id: workId, title: "MCP feature" }, attempts: [] });
+    expect((started as { workBranchSha?: string }).workBranchSha).toMatch(/^[0-9a-f]{40}$/);
   });
 });
 

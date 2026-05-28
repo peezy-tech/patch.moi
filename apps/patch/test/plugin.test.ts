@@ -43,13 +43,11 @@ describe("patch.moi Codex plugin package", () => {
     const skills = await Promise.all([
       readFile(join(repoRoot, "skills/develop-feature/SKILL.md"), "utf8"),
       readFile(join(repoRoot, "skills/maintain-fork/SKILL.md"), "utf8"),
-      readFile(join(repoRoot, "skills/triage-attempt/SKILL.md"), "utf8"),
       readFile(join(repoRoot, "skills/inspect-upstream-release/SKILL.md"), "utf8"),
     ]);
 
     expect(skills[0]).toContain('name: "patch-moi:develop-feature"');
     expect(skills[1]).toContain('name: "patch-moi:maintain-fork"');
-    expect(skills[2]).toContain('name: "patch-moi:triage-attempt"');
-    expect(skills[3]).toContain('name: "patch-moi:inspect-upstream-release"');
+    expect(skills[2]).toContain('name: "patch-moi:inspect-upstream-release"');
   });
 });

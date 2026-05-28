@@ -12,7 +12,6 @@ prune = true
 pruneTags = false
 
 [safety]
-allowDispatch = false
-allowReplay = false
 allowRebuild = false
 allowCapture = false
+allowPull = false

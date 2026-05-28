@@ -3,12 +3,5 @@ dist
 coverage
 *.log
 .env
-/.codex/workspace/local/
-/.codex/workspace/actions/
-/.codex/pack-lock.json
-/.codex/pack-backups/
-/.codex/automation-artifacts/
-data/
-apps/*/data/
 docs/out/
 .DS_Store

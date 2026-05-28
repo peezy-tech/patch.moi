@@ -1,107 +1,24 @@
 ---
 title: Architecture
-description: How intake, Git state, workspaces, service mode, and release channels fit together.
+description: patch.moi as stateless Git-first patch-stack porcelain.
 ---
 
 # Architecture
 
-patch.moi is a patch-work control plane, not a replacement for the maintained
-repository. Its architecture follows one rule: Git and the forge hold patch
-truth; patch.moi holds operational truth.
+patch.moi is intentionally small:
 
-## Product Loop
+- Git is the source of truth.
+- patch.moi is local CLI/MCP porcelain over Git.
+- codex-flows and the forge own execution state.
 
-patch.moi has three product responsibilities:
+## Responsibilities
 
-1. Notice upstream movement.
-2. Start or resume the right feature, maintenance, or release workflow.
-3. Keep durable state for inspection, retry, replay, and review.
-
-```mermaid
-flowchart TD
-  A["upstream release, tag, branch update, or advisory"] --> B["Patch FeedSignal"]
-  B --> C["durable AutomationEvent"]
-  C --> D["patch work"]
-  D --> E["patch attempt"]
-  E --> F{"execution surface"}
-  F -- local --> G["local workspace"]
-  F -- service --> H["forge runner"]
-  G --> I["develop, rebase, merge, or replay patches"]
-  H --> I
-  I --> J{"blocked?"}
-  J -- yes --> K["intervention, PR, issue, or failed run"]
-  J -- no --> L["candidate branch, tag, check, or artifact"]
-  L --> M["internal build channel"]
-  L --> N["public release channel"]
-```
-
-## Runtime Pieces
-
-The current service has these pieces:
-
-| Piece | Role |
+| Layer | Owns |
 | --- | --- |
-| HTTP server | health, admin listing, retry, replay, sync, and workspace inspection endpoints |
-| feed poller | reads configured upstream feeds and emits normalized signals |
-| JSONL store | writes feed events, automation events, patch work, workspace dispatches, and patch attempts under `DATA_DIR` |
-| workspace execution adapter | dispatches through explicit local app-server, local workspace backend, or SSH remote-agent surfaces |
-| harness automations | exercise Codex-shaped fork maintenance through `automations/patch-moi-harness-*` |
-| repo workspace config | exposes manual operator tasks through `codex-flows workspace doctor|tick|run` |
+| Git | upstream refs, fork refs, patch branches, candidate branches, commits |
+| patch.moi | inspect, capture, rebuild, candidate ref listing, fast-forward pickup |
+| codex-flows | runner execution, retry/replay, thread transplant, local/SSH/app-server control |
+| forge | workflow runs, checks, artifacts, PRs, review state |
 
-Those pieces are intentionally narrow. The service coordinates and records; the
-workspace or runner performs the patch application work.
-
-## State Boundaries
-
-patch.moi-owned state lives under `DATA_DIR`:
-
-- feed cursors and feed events
-- deterministic automation events
-- patch work for feature, maintenance, and release lanes
-- workspace dispatch, retry, and replay records
-- patch attempts, outcomes, candidate refs, and intervention state
-
-Codex workspace state lives under `.codex/workspace/<mode>` and describes the
-operator automation surface. Local workspace state is ignored. Runner state is
-disposable unless the runner publishes refs, artifacts, checks, or selected
-state back to the forge.
-
-Neither store contains the patch stack. Patch commits, branches, tags, and
-candidate refs remain in Git and the forge.
-
-## Local Mode
-
-Local mode is checkout-oriented. The operator has a real repository nearby,
-with remotes and branches that describe the project:
-
-- `upstream` or another configured remote points at the source project
-- `origin` or another fork remote points at the maintained fork
-- branch names identify the patch stack and candidate refs
-- tags identify upstream release points and downstream release candidates
-
-No `.patchmoi` project file is required. Repo-native files such as
-`package.json`, `automation.json`, CI workflows, and `.codex/workspace.toml` can
-describe automation, but Git still describes the patch stack.
-
-## Service Mode
-
-Service mode is forge-oriented. patch.moi should interact with the remote fork
-host:
-
-- create or update maintenance branches
-- trigger forge workflows or runners
-- open or update pull requests, issues, checks, comments, and artifacts
-- record workflow run ids, branch names, outcomes, and review links
-
-Runner checkouts are disposable. Durable project state is the remote fork, its
-refs, and forge records around the patch attempt.
-
-See [Forge service mode](forge-service-mode) for the service shape.
-
-## Boundary Rule
-
-Use automation events for portable automation triggers. Use patch.moi state for the
-product lifecycle around those triggers: feed history, dispatch attempts,
-workspace run ids, candidate refs, review status, and intervention state.
-
-See [Flow boundary](flow-boundary) for the layer-by-layer contract.
+patch.moi may be called by a runner, but it does not decide when runners run or
+store what they did.

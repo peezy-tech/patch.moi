@@ -14,8 +14,6 @@ export default {
       pages: [
         "tutorials/develop-feature-patch-work",
         "tutorials/watch-upstream-release",
-        "tutorials/run-harness-patch-work-flow",
-        "tutorials/dispatch-codex-release-flow",
       ],
     },
     {
@@ -23,7 +21,6 @@ export default {
       pages: [
         "guides/run-patch-locally",
         "guides/maintain-a-fork",
-        "guides/configure-feed-sources",
       ],
     },
     {
@@ -31,10 +28,6 @@ export default {
       pages: [
         "reference/cli",
         "reference/environment",
-        "reference/feed-sources",
-        "reference/http-api",
-        "reference/dispatch-and-replay-automation-events",
-        "reference/jsonl-state",
         "reference/packages",
       ],
     },
@@ -44,8 +37,6 @@ export default {
         "concepts/architecture",
         "concepts/git-source-of-truth",
         "concepts/codex-fork-model",
-        "concepts/forge-service-mode",
-        "concepts/workspaces-and-channels",
         "concepts/flow-boundary",
         "concepts/codex-use-case",
       ],

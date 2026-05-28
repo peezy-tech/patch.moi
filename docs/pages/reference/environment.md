@@ -1,35 +1,20 @@
 ---
 title: Environment
-description: Runtime environment variables used by patch.moi.
+description: Environment variables understood by patch.moi.
 ---
 
 # Environment
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `HOST` | `0.0.0.0` | Server bind host. |
-| `PORT` | `3000` | Server port. |
-| `DATA_DIR` | `./data` | Directory for JSONL state files. |
-| `FEED_SOURCES_PATH` | unset | Enables feed polling from the configured JSON file. |
-| `PATCH_ADMIN_TOKEN` | unset | Protects admin automation endpoints when set. |
-| `PATCH_WORKSPACE_BACKEND_URL` | unset | Local/co-located workspace backend WebSocket URL used as the turn host. |
-| `PATCH_WORKSPACE_SSH_TARGET` | unset | SSH target for remote-agent execution. Mutually exclusive with `PATCH_WORKSPACE_BACKEND_URL`. |
-| `PATCH_WORKSPACE_REMOTE_CWD` | unset | Remote checkout directory for SSH remote-agent execution. |
-| `PATCH_ALLOW_LOCAL_APP_SERVER` | unset | Enables direct local app-server dispatch for service/MCP contexts when set to `1`, `true`, `yes`, or `on`. |
-| `PATCH_AUTOMATIONS` | unset | Comma-separated default automation names for manual dispatch and replay. |
-| `PATCH_MOI_PATCH_REPO` | unset | Optional default Git checkout path for patch inspection, rebuild, and setup commands. |
-| `PATCH_MOI_UPSTREAM_URL` | unset | Optional default upstream remote URL for `patch.moi setup fork`. |
-| `CODEX_APP_SERVER_CODEX_COMMAND` | unset | Passed to local app-server execution. |
-| `CODEX_HOME` | unset | Passed to local app-server execution. |
+| `PATCH_MOI_PATCH_REPO` | current workspace | Default repo path for CLI and MCP calls. |
+| `PATCH_MOI_WORKSPACE_ROOT` | process cwd | Default workspace root for MCP calls. |
+| `PATCH_MOI_UPSTREAM_URL` | unset | Default upstream URL for `setup fork`. |
+| `PATCH_MOI_ALLOW_FETCH` | unset | Allows `fetch_upstream`. |
+| `PATCH_MOI_ALLOW_CAPTURE` | unset | Allows MCP `patch_capture`. |
+| `PATCH_MOI_ALLOW_REBUILD` | unset | Allows MCP `patch_rebuild`. |
+| `PATCH_MOI_ALLOW_PULL` | unset | Allows `patch pull` and MCP `patch_pull`. |
 
-Feed target fields can override execution settings with `workspaceUrl`,
-`workspaceUrlEnv`, `sshTarget`, `sshTargetEnv`, `remoteCwd`, and
-`remoteCwdEnv`. Backend URLs are for local or co-located processes; use SSH for
-remote hosts.
-
-Git topology is intentionally not represented here. Local mode should read
-upstream, fork, branch, and tag state from Git. Service mode should read remote
-repository, branch, workflow, and review state from the forge. Environment
-variables should stay limited to runtime concerns such as workspace backend
-URLs, SSH targets, data directories, workspace mode, and Codex execution
-settings.
+There is no `DATA_DIR`, `PATCH_MOI_URL`, feed watcher, admin token, workspace
+backend URL, or local app-server flag in patch.moi. Runner and thread execution
+configuration belongs to codex-flows or the forge.

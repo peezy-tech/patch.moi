@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const hasInstalledDependencies =
   existsSync(resolve(pluginRoot, "node_modules", ".bun")) ||
-  existsSync(resolve(pluginRoot, "node_modules", "@peezy.tech", "codex-flows"));
+  existsSync(resolve(pluginRoot, "node_modules", "typescript"));
 
 if (!hasInstalledDependencies) {
   const install = Bun.spawnSync(["bun", "install", "--frozen-lockfile"], {

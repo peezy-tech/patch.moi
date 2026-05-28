@@ -2,27 +2,17 @@
 
 import path from "node:path";
 import { canonicalUpstreamRef, loadPatchMoiConfig, type PatchMoiConfig } from "./config";
-import {
-  dispatchWorkspaceEventDetailed,
-  mergePatchWorkWithAttempt,
-  patchAttemptForWorkspaceDispatch,
-  patchDownstreamReleaseEvent,
-  patchUpstreamBranchUpdateEvent,
-  patchUpstreamReleaseEvent,
-  replayWorkspaceEventDetailed,
-} from "./automation";
 import { discoverPatchGitProject, fetchUpstream } from "./git-discovery";
-import { syncPatchAttempt } from "./patch-attempts";
 import {
   capturePatchBranch,
   createPatchWorkBranch,
   inspectPatchWorkspace,
   listPatchBranches,
+  listPatchCandidates,
+  pullPatchCandidate,
   rebuildPatchMain,
+  resolvePatchRef,
 } from "./patch-workspace";
-import { EventStore } from "./queue";
-import type { CandidateRefRecord, PatchAttemptRecord, PatchWorkKind, PatchWorkRecord, PatchWorkStatus } from "./types";
-import type { AutomationEvent } from "./types";
 
 type McpEnv = Record<string, string | undefined>;
 type ToolArgs = Record<string, unknown>;
@@ -39,52 +29,21 @@ const jsonObjectSchema = {
 };
 
 const commonProperties = {
-  cwd: { type: "string", description: "Workspace root for automation discovery. Defaults to process cwd." },
-  workspaceRoot: { type: "string", description: "Explicit workspace root for automation discovery and relative DATA_DIR." },
+  cwd: { type: "string", description: "Workspace root for resolving relative paths. Defaults to process cwd." },
+  workspaceRoot: { type: "string", description: "Explicit workspace root for relative paths." },
   repo: { type: "string", description: "Git repository to inspect or mutate. Defaults to cwd, PATCH_MOI_PATCH_REPO, or the workspace root." },
-  dataDir: { type: "string", description: "patch.moi DATA_DIR. Defaults to DATA_DIR or ./data under the workspace root." },
-  mode: { type: "string", enum: ["local", "remote"], description: "Override PATCH_MOI_MODE for this call." },
 };
 
 export const patchMoiTools: ToolDefinition[] = [
-  tool("status", "Show recent patch.moi events, dispatches, patch work, and patch attempts.", {
-    limit: { type: "number" },
-  }),
-  tool("events", "List recorded patch.moi automation events from DATA_DIR.", {
-    type: { type: "string" },
-    limit: { type: "number" },
-  }),
-  tool("attempts", "List recorded patch attempts from DATA_DIR.", {
-    eventId: { type: "string" },
-    workId: { type: "string" },
-    kind: { type: "string" },
-    status: { type: "string" },
-    limit: { type: "number" },
-  }),
-  tool("work_list", "List recorded patch work from DATA_DIR.", {
-    kind: { type: "string" },
-    status: { type: "string" },
-    limit: { type: "number" },
-  }),
-  tool("work_show", "Show one patch work record and its linked attempts.", {
-    workId: { type: "string" },
-  }, ["workId"]),
-  tool("work_start_feature", "Start feature patch work and optionally create the feature branch.", {
+  tool("git_discover", "Discover the local Git patch-stack model and readiness issues.", {}),
+  tool("fetch_upstream", "Fetch the configured upstream branch and tags when fetch policy explicitly allows it.", {}),
+  tool("work_start_feature", "Start feature patch work locally and optionally create the feature branch. Does not write patch.moi state.", {
     title: { type: "string" },
     branch: { type: "string" },
     base: { type: "string" },
     patchBranch: { type: "string" },
     createBranch: { type: "boolean" },
   }, ["title", "branch", "base"]),
-  tool("work_set_status", "Set one patch work record status.", {
-    workId: { type: "string" },
-    status: { type: "string" },
-  }, ["workId", "status"]),
-  tool("dispatches", "List recorded workspace dispatches from DATA_DIR.", {
-    eventId: { type: "string" },
-    status: { type: "string" },
-    limit: { type: "number" },
-  }),
   tool("patch_doctor", "Inspect patch stack readiness using Git remotes, remote-tracking upstream refs, target branch, and patch branches.", {
     main: { type: "string" },
     upstreamBranch: { type: "string" },
@@ -95,58 +54,27 @@ export const patchMoiTools: ToolDefinition[] = [
   tool("patch_list", "List local patch branches ordered by branch name.", {
     prefix: { type: "string" },
   }),
-  tool("git_discover", "Discover the Git-first patch.moi project model and local readiness issues.", {}),
-  tool("fetch_upstream", "Fetch the configured upstream branch and tags when fetch policy explicitly allows it.", {}),
-  tool("run_upstream_release_dry_run", "Build an upstream.release event and report configured automations without writing DATA_DIR.", {
-    tag: { type: "string" },
-    upstreamRepo: { type: "string" },
-  }, ["upstreamRepo", "tag"]),
-  tool("run_upstream_branch_dry_run", "Build an upstream.branch_update event and report configured automations without writing DATA_DIR.", {
-    sha: { type: "string" },
-    upstreamRepo: { type: "string" },
-    ref: { type: "string" },
-  }, ["upstreamRepo"]),
-  tool("run_downstream_release_dry_run", "Build a downstream.release event and report configured automations without writing DATA_DIR.", {
-    packageName: { type: "string" },
-    version: { type: "string" },
-    repo: { type: "string" },
-  }, ["packageName", "version"]),
-  tool("run_upstream_release", "Dispatch an upstream.release patch-work event. Gated by patch.moi safety policy.", {
-    tag: { type: "string" },
-    upstreamRepo: { type: "string" },
-  }, ["upstreamRepo", "tag"]),
-  tool("run_upstream_branch", "Dispatch an upstream.branch_update patch-work event. Gated by patch.moi safety policy.", {
-    sha: { type: "string" },
-    upstreamRepo: { type: "string" },
-    ref: { type: "string" },
-  }, ["upstreamRepo"]),
-  tool("run_downstream_release", "Dispatch a downstream.release patch-work event. Gated by patch.moi safety policy.", {
-    packageName: { type: "string" },
-    version: { type: "string" },
-    repo: { type: "string" },
-  }, ["packageName", "version"]),
-  tool("retry", "Retry a recorded event through the workspace backend. Gated by patch.moi safety policy.", {
-    eventId: { type: "string" },
-  }, ["eventId"]),
-  tool("replay", "Replay a recorded event through the workspace backend. Gated by patch.moi safety policy.", {
-    eventId: { type: "string" },
-  }, ["eventId"]),
-  tool("sync", "Sync one recorded patch attempt from workspace run state. Gated by PATCH_MOI_ALLOW_SYNC.", {
-    attemptId: { type: "string" },
-  }, ["attemptId"]),
+  tool("patch_candidates", "List local or remote-tracking runner candidate refs from Git.", {
+    remote: { type: "string" },
+    pattern: { type: "string" },
+  }),
   tool("patch_capture", "Capture a branch as a patch branch. Gated by patch.moi safety policy.", {
     patchBranch: { type: "string" },
     from: { type: "string" },
     base: { type: "string" },
     message: { type: "string" },
     force: { type: "boolean" },
-    workId: { type: "string" },
   }, ["patchBranch", "from"]),
   tool("patch_rebuild", "Rebuild the target branch from the canonical upstream ref plus patch branches. Gated by patch.moi safety policy.", {
     base: { type: "string" },
     to: { type: "string" },
     prefix: { type: "string" },
   }),
+  tool("patch_pull", "Fetch and fast-forward a local branch from a runner candidate branch. Gated by patch.moi safety policy.", {
+    remote: { type: "string" },
+    branch: { type: "string" },
+    ffOnly: { type: "boolean" },
+  }, ["remote", "branch"]),
 ];
 
 export async function callPatchMoiTool(
@@ -154,97 +82,19 @@ export async function callPatchMoiTool(
   args: ToolArgs = {},
   env: McpEnv = process.env,
 ): Promise<unknown> {
-  const mode = stringArg(args, "mode") ?? env.PATCH_MOI_MODE ?? "local";
-  if (mode === "remote") {
-    return await callRemoteTool(name, args, env);
-  }
-  if (mode !== "local") {
-    throw new Error(`unsupported PATCH_MOI_MODE: ${mode}`);
-  }
-  return await callLocalTool(name, args, env);
-}
-
-async function callLocalTool(name: string, args: ToolArgs, env: McpEnv): Promise<unknown> {
   const workspaceRoot = workspaceRootArg(args, env);
-  const dataDir = dataDirArg(args, workspaceRoot, env);
   const repoPath = repoArg(args, workspaceRoot, env);
-  const store = new EventStore(dataDir);
 
   switch (name) {
-    case "status": {
-      const limit = numberArg(args, "limit", 20);
-      const [events, dispatches, attempts, work] = await Promise.all([
-        store.listAutomationEvents({ limit }),
-        store.listWorkspaceDispatches({ limit }),
-        store.listPatchAttempts({ limit }),
-        store.listPatchWork({ limit }),
-      ]);
-      return {
-        mode: "local",
-        dataDir,
-        latest: { events, dispatches, attempts, work },
-        attemptStatusCounts: countBy(attempts, (attempt) => attempt.status),
-        dispatchStatusCounts: countBy(dispatches, (record) => record.status),
-      };
-    }
-    case "events":
-      return {
-        mode: "local",
-        dataDir,
-        events: await store.listAutomationEvents({
-          type: stringArg(args, "type"),
-          limit: numberArg(args, "limit", 50),
-        }),
-      };
-    case "attempts":
-      return {
-        mode: "local",
-        dataDir,
-        attempts: await store.listPatchAttempts({
-          eventId: stringArg(args, "eventId"),
-          workId: stringArg(args, "workId"),
-          kind: patchWorkKindArg(args),
-          status: patchAttemptStatusArg(args),
-          limit: numberArg(args, "limit", 50),
-        }),
-      };
-    case "work_list":
-      return {
-        mode: "local",
-        dataDir,
-        work: await store.listPatchWork({
-          kind: patchWorkKindArg(args),
-          status: patchWorkStatusArg(args),
-          limit: numberArg(args, "limit", 50),
-        }),
-      };
-    case "work_show": {
-      const workId = requiredStringArg(args, "workId");
-      const work = await store.getPatchWork(workId);
-      if (!work) {
-        throw new Error(`patch work not found: ${workId}`);
-      }
-      return {
-        mode: "local",
-        dataDir,
-        work,
-        attempts: await store.listPatchAttempts({ workId, limit: 100 }),
-      };
+    case "git_discover":
+      return await discoverPatchGitProject(repoPath, await configForRepo(repoPath, args));
+    case "fetch_upstream": {
+      const config = await configForRepo(repoPath, args);
+      assertFetchAllowed(config, env);
+      return await fetchUpstream(repoPath, config);
     }
     case "work_start_feature":
-      return await startFeatureWork(store, repoPath, args);
-    case "work_set_status":
-      return await setPatchWorkStatus(store, args);
-    case "dispatches":
-      return {
-        mode: "local",
-        dataDir,
-        dispatches: await store.listWorkspaceDispatches({
-          eventId: stringArg(args, "eventId"),
-          status: dispatchStatusArg(args),
-          limit: numberArg(args, "limit", 50),
-        }),
-      };
+      return await startFeatureWork(repoPath, args);
     case "patch_doctor": {
       const config = await configForRepo(repoPath, args);
       return await inspectPatchWorkspace(repoPath, {
@@ -264,35 +114,15 @@ async function callLocalTool(name: string, args: ToolArgs, env: McpEnv): Promise
         patchBranches: await listPatchBranches(repoPath, stringArg(args, "prefix") ?? config.git.patchPrefix),
       };
     }
-    case "git_discover":
-      return await discoverPatchGitProject(repoPath, await configForRepo(repoPath, args));
-    case "fetch_upstream": {
-      const config = await configForRepo(repoPath, args);
-      assertFetchAllowed(config, env);
-      return await fetchUpstream(repoPath, config);
-    }
-    case "run_upstream_release_dry_run":
-      return await dryRunEvent(upstreamReleaseEvent(args), workspaceRoot);
-    case "run_upstream_branch_dry_run":
-      return await dryRunEvent(upstreamBranchEvent(args), workspaceRoot);
-    case "run_downstream_release_dry_run":
-      return await dryRunEvent(downstreamReleaseEvent(args), workspaceRoot);
-    case "run_upstream_release":
-      return await dispatchEvent(upstreamReleaseEvent(args), store, workspaceRoot, args, env, await configForRepo(repoPath, args));
-    case "run_upstream_branch":
-      return await dispatchEvent(upstreamBranchEvent(args), store, workspaceRoot, args, env, await configForRepo(repoPath, args));
-    case "run_downstream_release":
-      return await dispatchEvent(downstreamReleaseEvent(args), store, workspaceRoot, args, env, await configForRepo(repoPath, args));
-    case "retry":
-      return await retryEvent(requiredStringArg(args, "eventId"), store, workspaceRoot, args, env, await configForRepo(repoPath, args));
-    case "replay":
-      return await replayEvent(requiredStringArg(args, "eventId"), store, workspaceRoot, args, env, await configForRepo(repoPath, args));
-    case "sync":
-      return await syncAttempt(requiredStringArg(args, "attemptId"), store, workspaceRoot, env);
+    case "patch_candidates":
+      return await listPatchCandidates(repoPath, {
+        remote: stringArg(args, "remote"),
+        pattern: stringArg(args, "pattern"),
+      });
     case "patch_capture": {
       const config = await configForRepo(repoPath, args);
       assertSafetyAllowed(config, "allowCapture", "PATCH_MOI_ALLOW_CAPTURE", env);
-      const result = await capturePatchBranch(repoPath, {
+      return await capturePatchBranch(repoPath, {
         patchBranch: requiredStringArg(args, "patchBranch"),
         from: requiredStringArg(args, "from"),
         base: stringArg(args, "base") ?? config.git.targetBranch,
@@ -300,42 +130,6 @@ async function callLocalTool(name: string, args: ToolArgs, env: McpEnv): Promise
         force: booleanArg(args, "force"),
         patchPrefix: config.git.patchPrefix,
       });
-      const workId = stringArg(args, "workId");
-      if (!workId) {
-        return result;
-      }
-      const work = await store.getPatchWork(workId);
-      if (!work) {
-        throw new Error(`patch work not found: ${workId}`);
-      }
-      const now = new Date().toISOString();
-      const candidateRefs: CandidateRefRecord[] = result.sha
-        ? [{ kind: "branch", ref: result.patchBranch, sha: result.sha }]
-        : [];
-      const attempt: PatchAttemptRecord = {
-        id: `${work.id}:capture:${now}`,
-        workId: work.id,
-        kind: work.kind,
-        operation: "capture",
-        status: result.status === "changed" ? "changed" : "skipped",
-        workspaceRunIds: [],
-        candidateRefs,
-        message: result.message,
-        createdAt: now,
-        updatedAt: now,
-        completedAt: now,
-      };
-      const nextWork: PatchWorkRecord = {
-        ...work,
-        patchBranch: result.patchBranch,
-        status: result.status === "changed" ? "captured" : work.status,
-        candidateRefs: uniqueCandidateRefs([...work.candidateRefs, ...candidateRefs]),
-        attemptIds: uniqueStrings([...work.attemptIds, attempt.id]),
-        updatedAt: now,
-      };
-      await store.appendPatchAttempt(attempt);
-      await store.appendPatchWork(nextWork);
-      return { result, work: nextWork, attempt };
     }
     case "patch_rebuild": {
       const config = await configForRepo(repoPath, args);
@@ -347,215 +141,40 @@ async function callLocalTool(name: string, args: ToolArgs, env: McpEnv): Promise
         patchPrefix: stringArg(args, "prefix") ?? config.git.patchPrefix,
       });
     }
+    case "patch_pull": {
+      const config = await configForRepo(repoPath, args);
+      assertSafetyAllowed(config, "allowPull", "PATCH_MOI_ALLOW_PULL", env);
+      return await pullPatchCandidate(repoPath, {
+        remote: requiredStringArg(args, "remote"),
+        branch: requiredStringArg(args, "branch"),
+        ffOnly: booleanArg(args, "ffOnly"),
+      });
+    }
     default:
       throw new Error(`unknown patch.moi tool: ${name}`);
   }
 }
 
-async function callRemoteTool(name: string, args: ToolArgs, env: McpEnv): Promise<unknown> {
-  const baseUrl = env.PATCH_MOI_URL?.trim();
-  if (!baseUrl) {
-    throw new Error("remote mode requires PATCH_MOI_URL");
-  }
-  switch (name) {
-    case "status": {
-      const limit = numberArg(args, "limit", 20);
-      const [events, dispatches, attempts, work] = await Promise.all([
-        remoteGet(baseUrl, `/automation-events?limit=${limit}`, env),
-        remoteGet(baseUrl, `/workspace-dispatches?limit=${limit}`, env),
-        remoteGet(baseUrl, `/patch-attempts?limit=${limit}`, env),
-        remoteGet(baseUrl, `/patch-work?limit=${limit}`, env),
-      ]);
-      return { mode: "remote", url: baseUrl, latest: { ...recordValue(events), ...recordValue(dispatches), ...recordValue(attempts), ...recordValue(work) } };
-    }
-    case "events":
-      return await remoteGet(baseUrl, queryPath("/automation-events", {
-        type: stringArg(args, "type"),
-        limit: numberArg(args, "limit", 50),
-      }), env);
-    case "attempts":
-      return await remoteGet(baseUrl, queryPath("/patch-attempts", {
-        eventId: stringArg(args, "eventId"),
-        workId: stringArg(args, "workId"),
-        kind: stringArg(args, "kind"),
-        status: stringArg(args, "status"),
-        limit: numberArg(args, "limit", 50),
-      }), env);
-    case "work_list":
-      return await remoteGet(baseUrl, queryPath("/patch-work", {
-        kind: stringArg(args, "kind"),
-        status: stringArg(args, "status"),
-        limit: numberArg(args, "limit", 50),
-      }), env);
-    case "work_show":
-      return await remoteGet(baseUrl, `/patch-work/${encodeURIComponent(requiredStringArg(args, "workId"))}`, env);
-    case "dispatches":
-      return await remoteGet(baseUrl, queryPath("/workspace-dispatches", {
-        eventId: stringArg(args, "eventId"),
-        status: stringArg(args, "status"),
-        limit: numberArg(args, "limit", 50),
-      }), env);
-    default:
-      throw new Error(`remote mode has only read-only status/events/attempts/dispatches wired in V1; ${name} is local-only`);
-  }
-}
-
-async function dryRunEvent(event: AutomationEvent, workspaceRoot: string): Promise<unknown> {
-  const automations = automationsForEvent(event, {});
-  return {
-    dryRun: true,
-    event,
-    workspaceRoot,
-    automations,
-  };
-}
-
-async function dispatchEvent(
-  event: AutomationEvent,
-  store: EventStore,
-  workspaceRoot: string,
-  args: ToolArgs,
-  env: McpEnv,
-  config: PatchMoiConfig,
-): Promise<unknown> {
-  assertSafetyAllowed(config, "allowDispatch", "PATCH_MOI_ALLOW_DISPATCH", env);
-  const recorded = await appendAutomationEventIfMissing(store, event);
-  const outcome = await dispatchWorkspaceEventDetailed(event, {}, {
-    env,
-    cwd: workspaceRoot,
-  });
-  await store.appendWorkspaceDispatch(outcome.record);
-  const attempt = patchAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
-  await store.appendPatchAttempt(attempt);
-  const work = await upsertPatchWorkForAttempt(store, event, attempt);
-  return { event, recorded, record: outcome.record, attempt, work };
-}
-
-async function retryEvent(
-  eventId: string,
-  store: EventStore,
-  workspaceRoot: string,
-  args: ToolArgs,
-  env: McpEnv,
-  config: PatchMoiConfig,
-): Promise<unknown> {
-  assertSafetyAllowed(config, "allowDispatch", "PATCH_MOI_ALLOW_DISPATCH", env);
-  const event = await store.getAutomationEvent(eventId);
-  if (!event) {
-    throw new Error(`automation event not found: ${eventId}`);
-  }
-  const outcome = await dispatchWorkspaceEventDetailed(event, {}, { env, cwd: workspaceRoot });
-  await store.appendWorkspaceDispatch(outcome.record);
-  const attempt = patchAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
-  await store.appendPatchAttempt(attempt);
-  const work = await upsertPatchWorkForAttempt(store, event, attempt);
-  return { event, record: outcome.record, attempt, work };
-}
-
-async function replayEvent(
-  eventId: string,
-  store: EventStore,
-  workspaceRoot: string,
-  args: ToolArgs,
-  env: McpEnv,
-  config: PatchMoiConfig,
-): Promise<unknown> {
-  assertSafetyAllowed(config, "allowReplay", "PATCH_MOI_ALLOW_REPLAY", env);
-  const event = await store.getAutomationEvent(eventId);
-  if (!event) {
-    throw new Error(`automation event not found: ${eventId}`);
-  }
-  const outcome = await replayWorkspaceEventDetailed(event, {}, { env, cwd: workspaceRoot });
-  await store.appendWorkspaceDispatch(outcome.record);
-  const attempt = patchAttemptForWorkspaceDispatch(event, outcome.record, outcome.result?.runs);
-  await store.appendPatchAttempt(attempt);
-  const work = await upsertPatchWorkForAttempt(store, event, attempt);
-  return { event, record: outcome.record, attempt, work };
-}
-
-async function syncAttempt(
-  attemptId: string,
-  store: EventStore,
-  workspaceRoot: string,
-  env: McpEnv,
-): Promise<unknown> {
-  if (!truthy(env.PATCH_MOI_ALLOW_SYNC)) {
-    throw new Error("sync is gated; set PATCH_MOI_ALLOW_SYNC=1 to allow local state writes");
-  }
-  const attempt = await store.getPatchAttempt(attemptId);
-  if (!attempt) {
-    throw new Error(`patch attempt not found: ${attemptId}`);
-  }
-  return { attempt: await syncPatchAttempt(store, attempt, { env, cwd: workspaceRoot }) };
-}
-
-async function appendAutomationEventIfMissing(store: EventStore, event: AutomationEvent): Promise<boolean> {
-  if (await store.getAutomationEvent(event.id)) {
-    return false;
-  }
-  await store.appendAutomationEvent(event);
-  return true;
-}
-
-async function upsertPatchWorkForAttempt(
-  store: EventStore,
-  event: AutomationEvent,
-  attempt: PatchAttemptRecord,
-): Promise<PatchWorkRecord> {
-  const work = mergePatchWorkWithAttempt(await store.getPatchWork(attempt.workId), event, attempt);
-  await store.appendPatchWork(work);
-  return work;
-}
-
-async function startFeatureWork(
-  store: EventStore,
-  repoPath: string,
-  args: ToolArgs,
-): Promise<unknown> {
+async function startFeatureWork(repoPath: string, args: ToolArgs): Promise<unknown> {
   const title = requiredStringArg(args, "title");
   const branch = requiredStringArg(args, "branch");
   const base = requiredStringArg(args, "base");
-  const now = new Date().toISOString();
+  const baseSha = await resolvePatchRef(repoPath, base);
   const branchResult = booleanArg(args, "createBranch")
     ? await createPatchWorkBranch(repoPath, { branch, base })
     : undefined;
-  const work: PatchWorkRecord = {
-    id: `patch-work:feature:${slugValue(title)}:${now}`,
+  const workBranchSha = branchResult?.sha ?? await resolvePatchRef(repoPath, branch);
+  return {
     kind: "feature",
     title,
     repo: repoPath,
     baseRef: base,
+    baseSha,
     workBranch: branch,
+    workBranchSha,
     ...(stringArg(args, "patchBranch") ? { patchBranch: stringArg(args, "patchBranch") } : {}),
-    status: "active",
-    candidateRefs: [],
-    attemptIds: [],
-    createdAt: now,
-    updatedAt: now,
+    createdBranch: Boolean(branchResult),
   };
-  await store.appendPatchWork(work);
-  return { work, branchResult };
-}
-
-async function setPatchWorkStatus(store: EventStore, args: ToolArgs): Promise<unknown> {
-  const workId = requiredStringArg(args, "workId");
-  const status = patchWorkStatusArg(args);
-  if (!status) {
-    throw new Error("status is required");
-  }
-  const work = await store.getPatchWork(workId);
-  if (!work) {
-    throw new Error(`patch work not found: ${workId}`);
-  }
-  const now = new Date().toISOString();
-  const next: PatchWorkRecord = {
-    ...work,
-    status,
-    updatedAt: now,
-    ...(terminalPatchWorkStatus(status) ? { completedAt: now } : {}),
-  };
-  await store.appendPatchWork(next);
-  return { work: next };
 }
 
 async function configForRepo(repoPath: string, args: ToolArgs): Promise<PatchMoiConfig> {
@@ -572,32 +191,6 @@ async function configForRepo(repoPath: string, args: ToolArgs): Promise<PatchMoi
     fetch: { ...config.fetch },
     safety: { ...config.safety },
   };
-}
-
-function upstreamReleaseEvent(args: ToolArgs): AutomationEvent<Record<string, unknown>> {
-  return patchUpstreamReleaseEvent({
-    repo: requiredStringArg(args, "upstreamRepo"),
-    tag: requiredStringArg(args, "tag"),
-    automations: automationsArg(args),
-  });
-}
-
-function upstreamBranchEvent(args: ToolArgs): AutomationEvent<Record<string, unknown>> {
-  return patchUpstreamBranchUpdateEvent({
-    repo: requiredStringArg(args, "upstreamRepo"),
-    ref: stringArg(args, "ref") ?? "refs/heads/main",
-    sha: stringArg(args, "sha"),
-    automations: automationsArg(args),
-  });
-}
-
-function downstreamReleaseEvent(args: ToolArgs): AutomationEvent<Record<string, unknown>> {
-  return patchDownstreamReleaseEvent({
-    packageName: requiredStringArg(args, "packageName"),
-    version: requiredStringArg(args, "version"),
-    repo: stringArg(args, "repo"),
-    automations: automationsArg(args),
-  });
 }
 
 function assertFetchAllowed(config: PatchMoiConfig, env: McpEnv): void {
@@ -619,44 +212,8 @@ function assertSafetyAllowed(
   throw new Error(`${field} is gated; set [safety].${field}=true in .patchmoi.toml or ${envName}=1`);
 }
 
-async function remoteGet(baseUrl: string, pathName: string, env: McpEnv): Promise<unknown> {
-  const response = await fetch(new URL(pathName, baseUrl), {
-    headers: remoteHeaders(env),
-  });
-  if (!response.ok) {
-    throw new Error(`PATCH_MOI_URL request failed with ${response.status}: ${await response.text()}`);
-  }
-  return await response.json();
-}
-
-function remoteHeaders(env: McpEnv): HeadersInit {
-  const token = env.PATCH_ADMIN_TOKEN?.trim();
-  return token
-    ? {
-      authorization: `Bearer ${token}`,
-      "x-patch-admin-token": token,
-    }
-    : {};
-}
-
-function queryPath(pathName: string, params: Record<string, string | number | undefined>): string {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) {
-      search.set(key, String(value));
-    }
-  }
-  const query = search.toString();
-  return query ? `${pathName}?${query}` : pathName;
-}
-
 function workspaceRootArg(args: ToolArgs, env: McpEnv): string {
   return path.resolve(stringArg(args, "workspaceRoot") ?? stringArg(args, "cwd") ?? env.PATCH_MOI_WORKSPACE_ROOT ?? process.cwd());
-}
-
-function dataDirArg(args: ToolArgs, workspaceRoot: string, env: McpEnv): string {
-  const value = stringArg(args, "dataDir") ?? env.DATA_DIR ?? "./data";
-  return path.isAbsolute(value) ? value : path.resolve(workspaceRoot, value);
 }
 
 function repoArg(args: ToolArgs, workspaceRoot: string, env: McpEnv): string {
@@ -692,148 +249,19 @@ function stringArg(args: ToolArgs, key: string): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function automationsArg(args: ToolArgs): string[] | undefined {
-  const value = args.automations ?? args.automation;
-  const list = Array.isArray(value)
-    ? value
-    : typeof value === "string"
-      ? value.split(",")
-      : [];
-  const automations = list
-    .map((entry) => typeof entry === "string" ? entry.trim() : "")
-    .filter(Boolean);
-  return automations.length > 0 ? [...new Set(automations)] : undefined;
-}
-
-function automationsForEvent(
-  event: AutomationEvent,
-  env: Record<string, string | undefined>,
-): string[] {
-  return [
-    ...(event.automations ?? []),
-    ...commaList(env.PATCH_AUTOMATIONS),
-  ].filter((value, index, values) => value && values.indexOf(value) === index);
-}
-
-function commaList(value: string | undefined): string[] {
-  return value
-    ? value.split(",").map((entry) => entry.trim()).filter(Boolean)
-    : [];
-}
-
-function numberArg(args: ToolArgs, key: string, fallback: number): number {
-  const value = args[key];
-  if (value === undefined) {
-    return fallback;
-  }
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
-}
-
 function booleanArg(args: ToolArgs, key: string): boolean {
   const value = args[key];
   return value === true || value === "true" || value === "1" || value === "yes";
 }
 
-function dispatchStatusArg(args: ToolArgs): "dispatched" | "failed" | "skipped" | undefined {
-  const value = stringArg(args, "status");
-  if (!value) return undefined;
-  if (value === "dispatched" || value === "failed" || value === "skipped") return value;
-  throw new Error("status must be dispatched, failed, or skipped");
-}
-
-function patchAttemptStatusArg(args: ToolArgs): PatchAttemptRecord["status"] | undefined {
-  const value = stringArg(args, "status");
-  if (!value) return undefined;
-  if (
-    value === "started" ||
-    value === "completed" ||
-    value === "changed" ||
-    value === "needs_intervention" ||
-    value === "blocked" ||
-    value === "failed" ||
-    value === "skipped"
-  ) return value;
-  throw new Error("status is not a valid patch attempt status");
-}
-
-function patchWorkKindArg(args: ToolArgs): PatchWorkKind | undefined {
-  const value = stringArg(args, "kind");
-  if (!value) return undefined;
-  if (value === "feature" || value === "maintenance" || value === "release") return value;
-  throw new Error("kind must be feature, maintenance, or release");
-}
-
-function patchWorkStatusArg(args: ToolArgs): PatchWorkStatus | undefined {
-  const value = stringArg(args, "status");
-  if (!value) return undefined;
-  if (
-    value === "planned" ||
-    value === "active" ||
-    value === "captured" ||
-    value === "changed" ||
-    value === "completed" ||
-    value === "needs_intervention" ||
-    value === "blocked" ||
-    value === "failed" ||
-    value === "skipped" ||
-    value === "review" ||
-    value === "shipped" ||
-    value === "closed"
-  ) return value;
-  throw new Error("status is not a valid patch work status");
-}
-
-function terminalPatchWorkStatus(status: PatchWorkStatus): boolean {
-  return status === "completed" ||
-    status === "failed" ||
-    status === "skipped" ||
-    status === "shipped" ||
-    status === "closed";
-}
-
-function slugValue(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._/-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replaceAll("/", "-") || "work";
-}
-
-function uniqueCandidateRefs(refs: CandidateRefRecord[]): CandidateRefRecord[] {
-  const seen = new Set<string>();
-  const result: CandidateRefRecord[] = [];
-  for (const ref of refs) {
-    const key = `${ref.kind}:${ref.repo ?? ""}:${ref.remote ?? ""}:${ref.ref}:${ref.sha ?? ""}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(ref);
-  }
-  return result;
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
-}
-
 function truthy(value: unknown): boolean {
-  return value === true || value === "true" || value === "1" || value === "yes";
+  return value === true || value === "true" || value === "1" || value === "yes" || value === "on";
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-}
-
-function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const item of items) {
-    const value = key(item);
-    counts[value] = (counts[value] ?? 0) + 1;
-  }
-  return counts;
 }
 
 type JsonRpcMessage = {

@@ -1,7 +1,7 @@
 {
   "name": "patch-moi",
   "version": "0.1.0",
-  "description": "Git-first patch-work control plane for patch stacks on top of upstream projects.",
+  "description": "Git-first patch-stack porcelain for forks on top of upstream projects.",
   "author": {
     "name": "Peezy",
     "email": "support@peezy.tech",
@@ -14,15 +14,14 @@
     "git",
     "feature-development",
     "patch-stack",
-    "turn-automation",
     "mcp"
   ],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "patch.moi",
-    "shortDescription": "Develop, maintain, and inspect Git patch stacks with safe local tooling.",
-    "longDescription": "patch.moi helps operators track feature work, inspect upstream remotes, inspect local patch branches, read DATA_DIR state, and dry-run named workspace automation before patch work begins. Local mode is read-mostly by default, with fetch and mutation tools gated by explicit policy.",
+    "shortDescription": "Develop, maintain, and inspect Git patch stacks with local tooling.",
+    "longDescription": "patch.moi helps operators inspect upstream remotes, inspect local patch branches, capture feature branches into patch branches, rebuild maintained branches, and pick up runner-produced candidate refs from Git. Runner execution, retry/replay, remote control, and thread transplant stay in codex-flows or the forge.",
     "developerName": "Peezy",
     "category": "Coding",
     "capabilities": [
@@ -36,8 +35,8 @@
     "defaultPrompt": [
       "Start feature patch work.",
       "Inspect this fork's patch.moi readiness.",
-      "Dry-run the latest upstream release automation.",
-      "Triage a failed patch.moi patch attempt."
+      "List runner candidate refs.",
+      "Capture this branch as a patch branch."
     ],
     "brandColor": "#2563EB"
   }

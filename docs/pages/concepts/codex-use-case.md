@@ -5,37 +5,20 @@ description: How patch.moi applies to Codex fork maintenance.
 
 # Codex Use Case
 
-patch.moi watches OpenAI Codex branch and release feeds. Branch activity emits
-deterministic `upstream.branch_update` events for main-branch maintenance.
-Release activity emits deterministic `upstream.release` events for release-cycle
-maintenance.
+For Codex fork maintenance, patch.moi is the local Git tool used after another
+system has decided work is needed.
 
-The concrete local model is the neighboring `../codex` checkout:
+codex-flows or the forge can watch upstream releases, dispatch runners, preserve
+threads, and publish artifacts. patch.moi then helps inspect and update the
+fork:
 
-- `origin` points at `https://github.com/peezy-tech/codex`.
-- `main` is the rebuildable maintained fork output.
-- `upstream` mirrors `upstream/main`.
-- ordered `patch/*` branches hold the logical patch commits.
-- `rust-v0.130.0` is a downstream tag on the legacy maintained branch head.
-- the current patch inventory contains Code Mode exec/replay work and Peezy npm
-  release changes.
+- confirm the fork/upstream remote shape
+- inspect ordered `patch/*` branches
+- rebuild the maintained `main` branch
+- list and fast-forward runner candidate refs
+- capture new local feature work into the patch stack
 
-That checkout has the canonical `upstream` remote, so maintenance can fetch
-OpenAI Codex main and release tags before rebuilding the fork output branch.
+Internal Codex use, public npm release, and runner repair can share Git
+candidate refs, but their execution state stays outside patch.moi.
 
-The Codex maintenance flow rebuilds the Peezy Codex fork from a canonical
-upstream base plus ordered patch branches. That is a patch application workspace
-job, not a public release by itself.
-
-Internal Codex use can track a fast-moving branch for local work. Public npm
-release can follow upstream release tags and trusted publishing. Those channels
-should share candidate Git refs when appropriate, but one should not block the
-other by default.
-
-In service mode, the same Codex maintenance work can run through a forge runner:
-patch.moi creates or updates the remote maintenance branch, triggers the runner,
-and records the resulting branch, artifact, check, or PR.
-
-See [Codex fork model](codex-fork-model) for the exact repo-derived model and
-[Workspaces and channels](workspaces-and-channels) for why maintenance,
-internal use, and public release stay separate.
+See [Codex fork model](codex-fork-model) and [Flow boundary](flow-boundary).

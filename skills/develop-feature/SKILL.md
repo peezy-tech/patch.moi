@@ -1,6 +1,6 @@
 ---
 name: "patch-moi:develop-feature"
-description: "Develop feature work with patch.moi by starting a patch-work record, committing on a feature branch, capturing it into patch/*, and rebuilding the maintained branch."
+description: "Develop feature work with patch.moi by creating or selecting a local feature branch, capturing it into patch/*, and rebuilding the maintained branch."
 ---
 
 # Develop Feature
@@ -12,12 +12,12 @@ patch stack.
 
 1. Inspect the repo with `mcp__patch-moi__git_discover` and `patch_doctor`.
 2. Start feature work with `work_start_feature`, including a title, base ref,
-   work branch, and intended `patch/*` branch.
+   work branch, and intended `patch/*` branch. Treat the result as an
+   ephemeral Git descriptor, not a durable patch.moi record.
 3. Make and test the feature commits on the work branch.
-4. Capture the feature branch with `patch_capture` and pass the `workId` so the
-   capture attempt is linked to the patch work record.
+4. Capture the feature branch with `patch_capture`.
 5. Rebuild the maintained branch with `patch_rebuild` after the capture.
-6. Show the work with `work_show` and inspect linked attempts before proposing
+6. Inspect `patch_list`, Git status, and the rebuilt branch before proposing
    push, review, or release steps.
 
 Mutation tools fail closed unless the matching safety policy or env gate is

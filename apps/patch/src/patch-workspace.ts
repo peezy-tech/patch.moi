@@ -49,6 +49,22 @@ export type PatchWorkBranchResult = {
   sha: string;
 };
 
+export type PatchCandidateSummary = {
+  ref: string;
+  sha: string;
+  subject: string;
+  remote?: string;
+};
+
+export type PatchPullResult = {
+  repo: string;
+  remote: string;
+  branch: string;
+  beforeSha?: string;
+  afterSha: string;
+  status: "changed" | "up_to_date";
+};
+
 export async function inspectPatchWorkspace(repoPath: string, options: {
   mainBranch?: string;
   upstreamBranch?: string;
@@ -220,6 +236,71 @@ export async function createPatchWorkBranch(repoPath: string, options: {
   };
 }
 
+export async function resolvePatchRef(repoPath: string, ref: string): Promise<string> {
+  return await resolveCommit(repoPath, ref);
+}
+
+export async function listPatchCandidates(repoPath: string, options: {
+  remote?: string;
+  pattern?: string;
+} = {}): Promise<{ repo: string; remote?: string; pattern: string; candidates: PatchCandidateSummary[] }> {
+  const pattern = normalizeCandidatePattern(options.pattern);
+  const refs = options.remote
+    ? [`refs/remotes/${options.remote}/${pattern}`]
+    : [`refs/heads/${pattern}`, `refs/remotes/*/${pattern}`];
+  const candidates = uniqueCandidates(
+    (await Promise.all(refs.map((refPattern) => listCandidateRefPattern(repoPath, refPattern, options.remote))))
+      .flat(),
+  );
+  return {
+    repo: repoPath,
+    ...(options.remote ? { remote: options.remote } : {}),
+    pattern,
+    candidates,
+  };
+}
+
+export async function pullPatchCandidate(repoPath: string, options: {
+  remote: string;
+  branch: string;
+  ffOnly?: boolean;
+}): Promise<PatchPullResult> {
+  await requireClean(repoPath);
+  const branch = normalizeBranchName(options.branch, options.remote);
+  const remoteRef = `refs/remotes/${options.remote}/${branch}`;
+  await git(repoPath, ["fetch", options.remote, `refs/heads/${branch}:${remoteRef}`]);
+  const remoteSha = await resolveCommit(repoPath, remoteRef);
+  const localRef = `refs/heads/${branch}`;
+  const beforeSha = await resolveCommit(repoPath, localRef).catch(() => undefined);
+  if (beforeSha) {
+    const ancestor = await git(repoPath, ["merge-base", "--is-ancestor", beforeSha, remoteSha], { allowFailure: true });
+    if (ancestor.code !== 0) {
+      throw new Error(`${branch} cannot fast-forward to ${options.remote}/${branch}`);
+    }
+  }
+
+  const current = await currentBranch(repoPath);
+  if (beforeSha) {
+    if (current === branch) {
+      await git(repoPath, ["merge", "--ff-only", remoteRef]);
+    } else {
+      await git(repoPath, ["branch", "-f", branch, remoteRef]);
+    }
+  } else {
+    await git(repoPath, ["branch", branch, remoteRef]);
+  }
+
+  const afterSha = await resolveCommit(repoPath, localRef);
+  return {
+    repo: repoPath,
+    remote: options.remote,
+    branch,
+    ...(beforeSha ? { beforeSha } : {}),
+    afterSha,
+    status: beforeSha === afterSha ? "up_to_date" : "changed",
+  };
+}
+
 function validatePatchBranch(branch: string, patchPrefix: string): void {
   if (!branch.startsWith(patchPrefix) || branch === patchPrefix) {
     throw new Error(`patch branch names must start with ${patchPrefix}`);
@@ -272,6 +353,75 @@ async function branchExists(repoPath: string, branch: string): Promise<boolean> 
 async function resolveCommit(repoPath: string, ref: string): Promise<string> {
   const result = await git(repoPath, ["rev-parse", "--verify", `${ref}^{commit}`]);
   return result.stdout.trim();
+}
+
+async function listCandidateRefPattern(
+  repoPath: string,
+  refPattern: string,
+  requestedRemote: string | undefined,
+): Promise<PatchCandidateSummary[]> {
+  const result = await git(repoPath, [
+    "for-each-ref",
+    "--format=%(refname:short)%09%(objectname)%09%(contents:subject)",
+    refPattern,
+  ], { allowFailure: true });
+  if (result.code !== 0 || !result.stdout.trim()) {
+    return [];
+  }
+  return result.stdout.trim().split(/\r?\n/).flatMap((line) => {
+    const [shortRef = "", sha = "", subject = ""] = line.split("\t");
+    if (!shortRef || shortRef.endsWith("/HEAD")) {
+      return [];
+    }
+    const remote = requestedRemote ?? remoteFromShortRef(shortRef);
+    const ref = remote ? shortRef.slice(remote.length + 1) : shortRef;
+    return [{
+      ref,
+      sha,
+      subject,
+      ...(remote ? { remote } : {}),
+    }];
+  }).sort((left, right) => `${left.remote ?? ""}/${left.ref}`.localeCompare(`${right.remote ?? ""}/${right.ref}`));
+}
+
+function remoteFromShortRef(shortRef: string): string | undefined {
+  return shortRef.includes("/") && !shortRef.startsWith("patch/") && !shortRef.startsWith("candidate/")
+    ? shortRef.slice(0, shortRef.indexOf("/"))
+    : undefined;
+}
+
+function normalizeCandidatePattern(value: string | undefined): string {
+  const trimmed = value?.trim() || "candidate/*";
+  return trimmed
+    .replace(/^refs\/heads\//, "")
+    .replace(/^refs\/remotes\/\*?\//, "")
+    .replace(/^\/+/, "");
+}
+
+function normalizeBranchName(value: string, remote: string): string {
+  const trimmed = value.trim()
+    .replace(/^refs\/heads\//, "")
+    .replace(new RegExp(`^${escapeRegExp(remote)}/`), "");
+  if (!trimmed || trimmed.startsWith("refs/")) {
+    throw new Error(`invalid branch name: ${value}`);
+  }
+  return trimmed;
+}
+
+function uniqueCandidates(candidates: PatchCandidateSummary[]): PatchCandidateSummary[] {
+  const seen = new Set<string>();
+  const result: PatchCandidateSummary[] = [];
+  for (const candidate of candidates) {
+    const key = `${candidate.remote ?? ""}:${candidate.ref}:${candidate.sha}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(candidate);
+  }
+  return result;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function git(

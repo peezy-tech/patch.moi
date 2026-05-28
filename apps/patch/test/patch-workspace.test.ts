@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
@@ -7,7 +7,7 @@ import { runCli } from "../src/cli";
 const workspaceRoot = join(import.meta.dir, "../../..");
 
 describe("patch workspace CLI", () => {
-  test("captures a feature branch as patch/* and rebuilds main from upstream", async () => {
+  test("captures a feature branch as patch/* and rebuilds main from upstream without state files", async () => {
     const repo = await createPatchRepo();
     const dataDir = join(await mkdtemp(join(tmpdir(), "patch-work-data-")), "data");
 
@@ -45,12 +45,14 @@ describe("patch workspace CLI", () => {
       "--json",
     ]);
     expect(workStart.code).toBe(0);
-    const work = JSON.parse(workStart.stdout).work;
-    expect(work).toMatchObject({
+    expect(JSON.parse(workStart.stdout)).toMatchObject({
       kind: "feature",
-      status: "active",
+      title: "Feature branch promotion",
+      repo,
+      baseRef: "main",
       workBranch: "feature",
       patchBranch: "patch/010-feature",
+      createdBranch: false,
     });
 
     const capture = await invoke([
@@ -65,47 +67,17 @@ describe("patch workspace CLI", () => {
       "main",
       "--message",
       "patch: feature",
-      "--work-id",
-      work.id,
-      "--data-dir",
-      dataDir,
       "--json",
     ]);
     expect(capture.code).toBe(0);
     expect(JSON.parse(capture.stdout)).toMatchObject({
-      result: {
-        status: "changed",
-        patchBranch: "patch/010-feature",
-        from: "feature",
-        base: "main",
-        message: "patch: feature",
-      },
-      work: {
-        id: work.id,
-        status: "captured",
-        patchBranch: "patch/010-feature",
-      },
-      attempt: {
-        workId: work.id,
-        kind: "feature",
-        operation: "capture",
-        status: "changed",
-      },
+      status: "changed",
+      patchBranch: "patch/010-feature",
+      from: "feature",
+      base: "main",
+      message: "patch: feature",
     });
     expect((await git(repo, ["rev-list", "--count", "main..patch/010-feature"])).stdout.trim()).toBe("1");
-
-    const attempts = await invoke([
-      "attempts",
-      "--work-id",
-      work.id,
-      "--data-dir",
-      dataDir,
-      "--json",
-    ]);
-    expect(attempts.code).toBe(0);
-    expect(JSON.parse(attempts.stdout)).toMatchObject({
-      attempts: [{ workId: work.id, operation: "capture" }],
-    });
 
     const list = await invoke([
       "patch",
@@ -157,11 +129,11 @@ describe("patch workspace CLI", () => {
       ready: true,
       patchBranches: [{ name: "patch/010-feature" }],
     });
+    expect(await exists(dataDir)).toBe(false);
   });
 
   test("starts feature patch work and creates the work branch", async () => {
     const repo = await createPatchRepo();
-    const dataDir = join(await mkdtemp(join(tmpdir(), "patch-work-data-")), "data");
 
     const result = await invoke([
       "work",
@@ -176,25 +148,149 @@ describe("patch workspace CLI", () => {
       "--base",
       "main",
       "--create-branch",
-      "--data-dir",
-      dataDir,
       "--json",
     ]);
 
     expect(result.code).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({
-      work: {
-        kind: "feature",
-        status: "active",
-        workBranch: "created-feature",
-      },
-      branchResult: {
-        status: "created",
-        branch: "created-feature",
-        base: "main",
-      },
+      kind: "feature",
+      title: "Created feature branch",
+      workBranch: "created-feature",
+      createdBranch: true,
     });
     expect((await git(repo, ["branch", "--show-current"])).stdout.trim()).toBe("created-feature");
+  });
+
+  test("lists and pulls runner candidate refs through Git only", async () => {
+    const repo = await createPatchRepo();
+    const root = join(repo, "..");
+    const origin = join(root, "origin.git");
+    await git(root, ["init", "--bare", origin]);
+    await git(repo, ["remote", "set-url", "origin", origin]);
+    await git(repo, ["switch", "-c", "candidate/runner"]);
+    await writeFile(join(repo, "candidate.txt"), "runner\n", "utf8");
+    await git(repo, ["add", "candidate.txt"]);
+    await git(repo, ["commit", "-m", "runner candidate"]);
+    const remoteSha = (await git(repo, ["rev-parse", "HEAD"])).stdout.trim();
+    await git(repo, ["push", "origin", "candidate/runner"]);
+    await git(repo, ["switch", "main"]);
+    await git(repo, ["branch", "-D", "candidate/runner"]);
+    await git(repo, ["update-ref", "-d", "refs/remotes/origin/candidate/runner"]);
+
+    const beforeFetch = await invoke([
+      "patch",
+      "candidates",
+      "--repo",
+      repo,
+      "--remote",
+      "origin",
+      "--json",
+    ]);
+    expect(beforeFetch.code).toBe(0);
+    expect(JSON.parse(beforeFetch.stdout)).toMatchObject({ candidates: [] });
+
+    await git(repo, ["fetch", "origin", "candidate/runner:refs/remotes/origin/candidate/runner"]);
+    const afterFetch = await invoke([
+      "patch",
+      "candidates",
+      "--repo",
+      repo,
+      "--remote",
+      "origin",
+      "--json",
+    ]);
+    expect(afterFetch.code).toBe(0);
+    expect(JSON.parse(afterFetch.stdout)).toMatchObject({
+      remote: "origin",
+      candidates: [{ ref: "candidate/runner", remote: "origin", sha: remoteSha, subject: "runner candidate" }],
+    });
+
+    const blocked = await invoke([
+      "patch",
+      "pull",
+      "--repo",
+      repo,
+      "--remote",
+      "origin",
+      "--branch",
+      "candidate/runner",
+      "--json",
+    ]);
+    expect(blocked.code).toBe(2);
+    expect(blocked.stderr).toContain("patch pull is gated");
+
+    const pulled = await invoke([
+      "patch",
+      "pull",
+      "--repo",
+      repo,
+      "--remote",
+      "origin",
+      "--branch",
+      "candidate/runner",
+      "--json",
+    ], { PATCH_MOI_ALLOW_PULL: "1" });
+    expect(pulled.code).toBe(0);
+    expect(JSON.parse(pulled.stdout)).toMatchObject({
+      remote: "origin",
+      branch: "candidate/runner",
+      afterSha: remoteSha,
+      status: "changed",
+    });
+
+    const upToDate = await invoke([
+      "patch",
+      "pull",
+      "--repo",
+      repo,
+      "--remote",
+      "origin",
+      "--branch",
+      "candidate/runner",
+      "--json",
+    ], { PATCH_MOI_ALLOW_PULL: "1" });
+    expect(upToDate.code).toBe(0);
+    expect(JSON.parse(upToDate.stdout)).toMatchObject({
+      branch: "candidate/runner",
+      beforeSha: remoteSha,
+      afterSha: remoteSha,
+      status: "up_to_date",
+    });
+
+    await writeFile(join(repo, "dirty.txt"), "dirty\n", "utf8");
+    const dirty = await invoke([
+      "patch",
+      "pull",
+      "--repo",
+      repo,
+      "--remote",
+      "origin",
+      "--branch",
+      "candidate/runner",
+      "--json",
+    ], { PATCH_MOI_ALLOW_PULL: "1" });
+    expect(dirty.code).toBe(1);
+    expect(dirty.stderr).toContain("working tree has local changes");
+    await rm(join(repo, "dirty.txt"));
+
+    await git(repo, ["switch", "candidate/runner"]);
+    await writeFile(join(repo, "local.txt"), "local\n", "utf8");
+    await git(repo, ["add", "local.txt"]);
+    await git(repo, ["commit", "-m", "local divergence"]);
+    await git(repo, ["switch", "main"]);
+    const nonFastForward = await invoke([
+      "patch",
+      "pull",
+      "--repo",
+      repo,
+      "--remote",
+      "origin",
+      "--branch",
+      "candidate/runner",
+      "--json",
+    ], { PATCH_MOI_ALLOW_PULL: "1" });
+    expect(nonFastForward.code).toBe(1);
+    expect(nonFastForward.stderr).toContain("cannot fast-forward");
   });
 });
 
@@ -224,12 +320,13 @@ async function createPatchRepo(): Promise<string> {
 
 async function invoke(
   args: string[],
+  env: Record<string, string | undefined> = {},
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   let stdout = "";
   let stderr = "";
   const code = await runCli(args, {
     cwd: workspaceRoot,
-    env: {},
+    env,
     stdout: (text) => {
       stdout += text;
     },
@@ -238,6 +335,18 @@ async function invoke(
     },
   });
   return { code, stdout, stderr };
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await readFile(path);
+    return true;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
 }
 
 async function git(cwd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {

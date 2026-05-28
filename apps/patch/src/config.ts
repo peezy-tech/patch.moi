@@ -17,10 +17,9 @@ export type PatchMoiConfig = {
     pruneTags: boolean;
   };
   safety: {
-    allowDispatch: boolean;
-    allowReplay: boolean;
     allowRebuild: boolean;
     allowCapture: boolean;
+    allowPull: boolean;
   };
 };
 
@@ -39,10 +38,9 @@ export const defaultPatchMoiConfig: PatchMoiConfig = {
     pruneTags: false,
   },
   safety: {
-    allowDispatch: false,
-    allowReplay: false,
     allowRebuild: false,
     allowCapture: false,
+    allowPull: false,
   },
 };
 
@@ -94,10 +92,9 @@ export function mergePatchMoiConfig(base: PatchMoiConfig, overrides: unknown): P
       pruneTags: booleanValue(fetch.pruneTags) ?? base.fetch.pruneTags,
     },
     safety: {
-      allowDispatch: booleanValue(safety.allowDispatch) ?? base.safety.allowDispatch,
-      allowReplay: booleanValue(safety.allowReplay) ?? base.safety.allowReplay,
       allowRebuild: booleanValue(safety.allowRebuild) ?? base.safety.allowRebuild,
       allowCapture: booleanValue(safety.allowCapture) ?? base.safety.allowCapture,
+      allowPull: booleanValue(safety.allowPull) ?? base.safety.allowPull,
     },
   };
 }

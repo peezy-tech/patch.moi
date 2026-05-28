@@ -7,58 +7,33 @@ import { runCli } from "../src/cli";
 const workspaceRoot = join(import.meta.dir, "../../..");
 
 describe("patch.moi CLI", () => {
-  test("dry-runs explicit automation targets and blocks accidental local execution", async () => {
-    const blocked = await invoke([
-      "run",
-      "upstream-release",
-      "--repo",
-      "openai/codex",
-      "--tag",
-      "rust-v1.2.3",
-      "--workspace-root",
-      workspaceRoot,
-      "--automation",
-      "peezy-codex-fork",
-    ], { env: {} });
-    expect(blocked.code).toBe(2);
-    expect(blocked.stderr).toContain("requires PATCH_WORKSPACE_BACKEND_URL, PATCH_WORKSPACE_SSH_TARGET, --allow-local, or PATCH_ALLOW_LOCAL_APP_SERVER=1");
-
-    const dryRun = await invoke([
-      "run",
-      "upstream-release",
-      "--repo",
-      "openai/codex",
-      "--tag",
-      "rust-v1.2.3",
-      "--workspace-root",
-      workspaceRoot,
-      "--automation",
-      "peezy-codex-fork",
-      "--dry-run",
-      "--json",
-    ]);
-    expect(dryRun.code).toBe(0);
-    expect(JSON.parse(dryRun.stdout)).toMatchObject({
-      event: {
-        type: "upstream.release",
-        automations: ["peezy-codex-fork"],
-      },
-      automations: ["peezy-codex-fork"],
-    });
+  test("removed state and runner commands fail as unknown commands", async () => {
+    for (const args of [
+      ["status"],
+      ["events"],
+      ["dispatches"],
+      ["attempts"],
+      ["run", "upstream-release", "--repo", "openai/codex", "--tag", "rust-v1.2.3"],
+      ["retry", "event-id"],
+      ["replay", "event-id"],
+      ["sync", "attempt-id"],
+    ]) {
+      const result = await invoke(args);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("unknown command");
+    }
   });
 
-  test("requires upstream release repo and tag explicitly", async () => {
-    const dryRun = await invoke([
-      "run",
-      "upstream-release",
-      "--workspace-root",
-      workspaceRoot,
-      "--dry-run",
-      "--json",
-    ]);
-
-    expect(dryRun.code).toBe(2);
-    expect(dryRun.stderr).toContain("run upstream-release requires --repo");
+  test("removed work record commands fail as unknown work actions", async () => {
+    for (const args of [
+      ["work", "list"],
+      ["work", "show", "patch-work:feature:test"],
+      ["work", "set-status", "patch-work:feature:test", "--status", "completed"],
+    ]) {
+      const result = await invoke(args);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("work requires start feature");
+    }
   });
 
   test("sets up an upstream remote when explicitly applied", async () => {

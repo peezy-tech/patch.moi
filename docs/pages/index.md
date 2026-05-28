@@ -1,151 +1,46 @@
 ---
 title: patch.moi
-description: Git-first patch-work control plane for custom patches on top of upstream open source software.
+description: Git-first patch-stack porcelain for custom forks.
 ---
 
 # patch.moi
 
-patch.moi keeps the operational record for patch-stack product work. It does
-not replace Git, CI, or release tooling. It records feature work, upstream
-movement, downstream release prep, dispatches, attempts, and enough state to
-inspect, retry, replay, and review the result.
+patch.moi is local Git porcelain for patch-stack work on maintained forks.
 
-The patch stack remains ordinary Git:
+It helps you inspect remotes, inspect ordered `patch/*` branches, start or point
+at feature branches, capture feature work into patch branches, rebuild the
+maintained branch, and pick up runner-produced candidate refs from Git.
 
-- upstream movement comes from feeds, remotes, tags, branches, and commits
-- maintained forks live in fork repositories and patch branches
-- patch commits stay in the maintained repository
-- candidate outputs are branches, tags, pull requests, checks, or artifacts
-- internal build and public release channels consume candidate refs separately
+It does not own runner orchestration, retry/replay, run history, remote/mobile
+control, thread transplant, feed cursors, or an HTTP admin service. Those belong
+to codex-flows, the forge, and Git.
+
+## Model
 
 ```mermaid
 flowchart LR
-  Upstream["upstream feed or ref"] --> Patch["patch.moi intake"]
-  Patch --> Event["durable update event"]
-  Event --> Work["patch work"]
-  Work --> Attempt["patch attempt"]
-  Attempt --> Workspace["local workspace or forge runner"]
-  Git["upstream and fork Git refs"] --> Workspace
-  Workspace --> Candidate["candidate ref or artifact"]
-  Candidate --> Internal["internal channel"]
-  Candidate --> Public["public release"]
+  Upstream["Upstream refs and tags"] --> Git["Maintained fork Git repo"]
+  Feature["Local feature branch"] --> Patch["patch/* branch"]
+  Runner["Forge runner or codex-flows"] --> Candidate["candidate/* refs, checks, artifacts, thread metadata"]
+  Patch --> Main["maintained branch"]
+  Candidate --> Git
+  Git --> Inspect["patch.moi inspect, capture, rebuild, pull"]
 ```
 
-## Ownership
-
-patch.moi owns product state around the patch stack:
-
-- feed cursors and normalized update signals
-- deterministic automation events
-- patch work for feature, maintenance, and release lanes
-- workspace dispatch, retry, and replay records
-- patch attempts, candidate refs, outcomes, and intervention state
-- admin inspection APIs for that state
-
-Execution surfaces own the work itself:
-
-- named codex-flows automations match events and run JavaScript modules
-- Codex workspace backends and SSH remote agents provide app-server, delegation,
-  and turn transport
-- local workspaces and forge runners fetch, rebase, verify, and push candidates
-- release channels publish or deploy after review and policy gates
-
-`.codex/workspace.toml` is repo-native operator automation. In this repo it
-exposes the harness fixture through `codex-flows workspace doctor|tick|run`.
-That state lives under `.codex/workspace/<mode>` and does not replace
-patch.moi-owned `DATA_DIR` records.
-
-## Fastest Path
-
-Install and run the checks:
+## Common commands
 
 ```bash
-bun install
-bun run check
+bun run patch.moi -- patch doctor --repo harness/fork
+bun run patch.moi -- work start feature --title "My feature" --repo harness/fork --branch feature/my-feature --base main --create-branch
+bun run patch.moi -- patch capture patch/010-my-feature --repo harness/fork --from feature/my-feature --base main
+bun run patch.moi -- patch rebuild --repo harness/fork --to main
+bun run patch.moi -- patch candidates --repo harness/fork --remote origin
+PATCH_MOI_ALLOW_PULL=1 bun run patch.moi -- patch pull --repo harness/fork --remote origin --branch candidate/upstream-update
 ```
 
-Run the harness directly:
+## Read next
 
-```bash
-bun run harness:automation
-```
-
-Run the same harness through the patch.moi CLI and record `DATA_DIR` state:
-
-```bash
-bun run patch.moi -- run harness --allow-local
-bun run patch.moi -- status
-```
-
-Run the same harness through repo-native workspace autonomy:
-
-```bash
-bun run workspace:doctor
-bun run workspace:run:harness
-```
-
-Run the manual workspace-owned automation smoke task only when a local Codex
-workspace backend is running:
-
-```bash
-CODEX_WORKSPACE_BACKEND_WS_URL=ws://127.0.0.1:3586 \
-bun run workspace:run:harness
-```
-
-Start the Patch service when you want feed intake and admin state:
-
-```bash
-DATA_DIR=./data FEED_SOURCES_PATH=/path/to/workspace/feed-sources.json bun run --filter @peezy.tech/patch dev
-```
-
-## Codex App Plugin
-
-This repo owns the patch.moi Codex plugin source. Codex needs `git` and `bun` on
-the PATH visible to Codex App. The plugin bootstrap runs
-`bun install --frozen-lockfile` in Codex's installed plugin cache the first time
-the MCP server starts.
-
-In Codex App, open Plugins, choose Add marketplace, enter
-`peezy-tech/skills` or `https://github.com/peezy-tech/skills`, then
-install `patch-moi` from the `peezy-tech` marketplace. Start a new thread so the
-plugin skills and MCP server are loaded.
-
-The same install can be done from a Codex CLI that shares the same `CODEX_HOME`:
-
-```bash
-codex plugin marketplace add peezy-tech/skills --ref main
-codex plugin add patch-moi@peezy-tech
-```
-
-For local development against this product checkout, add the checkout root
-instead:
-
-```bash
-codex plugin marketplace add /home/peezy/meta-workspace/patch.moi
-codex plugin add patch-moi@patch-moi
-```
-
-## Read Next
-
-- Feature development: [Develop a feature as patch work](tutorials/develop-feature-patch-work).
-- First harness run: [Run the harness patch-work automation](tutorials/run-harness-patch-work-flow).
-- Feed intake: [Watch an upstream release](tutorials/watch-upstream-release).
-- Operator runbook: [Maintain a fork](guides/maintain-a-fork).
-- CLI operations: [CLI](reference/cli).
-- System model: [Architecture](concepts/architecture).
-- Durable state: [JSONL state](reference/jsonl-state).
-- Retry and replay: [Automation event retry and replay](reference/dispatch-and-replay-automation-events).
-- Codex-specific model: [Codex fork model](concepts/codex-fork-model).
-- Service runner shape: [Forge service mode](concepts/forge-service-mode).
-
-## Repository Layout
-
-- `apps/patch`: Patch service, feed poller, JSONL store, admin API, Discord
-  output, and execution adapter.
-- `automations/patch-moi-harness-*`: source harness automations that mirror the
-  Codex fork release, main-update, and downstream-release surfaces.
-- `.codex/workspace.toml`: optional repo-native harness automation config.
-  Real installed patch-work automations belong in the workspace repo that uses
-  patch.moi, not in this product repo.
-- `harness`: upstream and maintained fork repositories used for rehearsal.
-- `docs`: this Tome documentation site.
+- [Develop feature patch work](tutorials/develop-feature-patch-work)
+- [Maintain a fork](guides/maintain-a-fork)
+- [CLI reference](reference/cli)
+- [Flow boundary](concepts/flow-boundary)
