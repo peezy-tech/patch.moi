@@ -40,14 +40,48 @@ describe("patch.moi Codex plugin package", () => {
   });
 
   test("ships patch-moi prefixed operator skills", async () => {
-    const skills = await Promise.all([
-      readFile(join(repoRoot, "skills/develop-feature/SKILL.md"), "utf8"),
-      readFile(join(repoRoot, "skills/maintain-fork/SKILL.md"), "utf8"),
-      readFile(join(repoRoot, "skills/inspect-upstream-release/SKILL.md"), "utf8"),
-    ]);
+    const skillNames = [
+      "develop-feature",
+      "maintain-fork",
+      "inspect-upstream-release",
+      "install-codex-flows-templates",
+      "maintain-fork-with-codex-flows",
+      "pickup-runner-candidate",
+    ];
+    const skills = await Promise.all(skillNames.map((name) =>
+      readFile(join(repoRoot, "skills", name, "SKILL.md"), "utf8")
+    ));
 
     expect(skills[0]).toContain('name: "patch-moi:develop-feature"');
     expect(skills[1]).toContain('name: "patch-moi:maintain-fork"');
     expect(skills[2]).toContain('name: "patch-moi:inspect-upstream-release"');
+    expect(skills[3]).toContain('name: "patch-moi:install-codex-flows-templates"');
+    expect(skills[4]).toContain('name: "patch-moi:maintain-fork-with-codex-flows"');
+    expect(skills[5]).toContain('name: "patch-moi:pickup-runner-candidate"');
+  });
+
+  test("ships codex-flows automation template pack", async () => {
+    const pack = await readFile(join(repoRoot, "templates/codex-flows/codex-pack.toml"), "utf8");
+    const maintain = JSON.parse(await readFile(
+      join(repoRoot, "templates/codex-flows/automations/patch-moi-maintain-fork/automation.json"),
+      "utf8",
+    ));
+    const feature = JSON.parse(await readFile(
+      join(repoRoot, "templates/codex-flows/automations/patch-moi-feature-candidate/automation.json"),
+      "utf8",
+    ));
+
+    expect(pack).toContain('name = "patch-moi-codex-flows-templates"');
+    expect(pack).toContain('kind = "automation"');
+    expect(maintain).toMatchObject({
+      name: "patch-moi-maintain-fork",
+      script: "exec/start-turn.mts",
+      promptFile: "prompt.md",
+    });
+    expect(feature).toMatchObject({
+      name: "patch-moi-feature-candidate",
+      script: "exec/start-turn.mts",
+      promptFile: "prompt.md",
+    });
   });
 });

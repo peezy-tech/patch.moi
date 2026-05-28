@@ -34,3 +34,5 @@ release, or runner-produced candidate branch.
 Do not require or create a local branch named `upstream`; use the remote-tracking ref.
 Runner orchestration, retry/replay, run history, and Codex thread transplant
 belong to codex-flows or the forge, not patch.moi.
+When upkeep should be automated, install the patch.moi codex-flows templates
+and run them through codex-flows rather than adding patch.moi state.

@@ -1,0 +1,14 @@
+[pack]
+name = "patch-moi-codex-flows-templates"
+version = "0.1.0"
+description = "codex-flows automation templates for Git-first patch.moi work."
+
+[[pack.items]]
+name = "patch-moi-maintain-fork"
+kind = "automation"
+path = "automations/patch-moi-maintain-fork"
+
+[[pack.items]]
+name = "patch-moi-feature-candidate"
+kind = "automation"
+path = "automations/patch-moi-feature-candidate"

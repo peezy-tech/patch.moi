@@ -44,3 +44,10 @@ PATCH_MOI_ALLOW_PULL=1 bun run patch.moi -- patch pull --repo /path/to/fork --re
 
 `patch pull` is fast-forward only and fails on dirty worktrees. Continue or
 transplant the corresponding Codex thread through codex-flows.
+
+## Automate Through codex-flows
+
+If upkeep should run from a codex-flows workspace or forge runner, install the
+patch.moi codex-flows templates and run `patch-moi-maintain-fork`. The template
+starts a Codex turn with patch.moi instructions; codex-flows remains responsible
+for the run id, thread id, retry/replay, and artifacts.
