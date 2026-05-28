@@ -127,6 +127,7 @@ codex plugin add patch-moi@patch-moi
 
 ## Read Next
 
+- Feature development: [Develop a feature as patch work](tutorials/develop-feature-patch-work).
 - First harness run: [Run the harness patch-work automation](tutorials/run-harness-patch-work-flow).
 - Feed intake: [Watch an upstream release](tutorials/watch-upstream-release).
 - Operator runbook: [Maintain a fork](guides/maintain-a-fork).

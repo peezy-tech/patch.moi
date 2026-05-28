@@ -1,7 +1,7 @@
 {
   "name": "patch-moi",
   "version": "0.1.0",
-  "description": "Git-first fork maintenance for patch stacks on top of upstream projects.",
+  "description": "Git-first patch-work control plane for patch stacks on top of upstream projects.",
   "author": {
     "name": "Peezy",
     "email": "support@peezy.tech",
@@ -12,7 +12,7 @@
   "license": "MIT",
   "keywords": [
     "git",
-    "fork-maintenance",
+    "feature-development",
     "patch-stack",
     "turn-automation",
     "mcp"
@@ -21,8 +21,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "patch.moi",
-    "shortDescription": "Maintain Git patch stacks on upstream forks with safe local inspection and dry-runs.",
-    "longDescription": "patch.moi helps operators inspect upstream remotes, local patch branches, DATA_DIR state, and named workspace automation dispatch before maintenance work begins. Local mode is read-mostly by default, with fetch and mutation tools gated by explicit policy.",
+    "shortDescription": "Develop, maintain, and inspect Git patch stacks with safe local tooling.",
+    "longDescription": "patch.moi helps operators track feature work, inspect upstream remotes, inspect local patch branches, read DATA_DIR state, and dry-run named workspace automation before patch work begins. Local mode is read-mostly by default, with fetch and mutation tools gated by explicit policy.",
     "developerName": "Peezy",
     "category": "Coding",
     "capabilities": [
@@ -34,9 +34,10 @@
     "privacyPolicyURL": "https://peezy.tech/privacy",
     "termsOfServiceURL": "https://peezy.tech/terms",
     "defaultPrompt": [
+      "Start feature patch work.",
       "Inspect this fork's patch.moi readiness.",
       "Dry-run the latest upstream release automation.",
-      "Triage a failed patch.moi maintenance attempt."
+      "Triage a failed patch.moi patch attempt."
     ],
     "brandColor": "#2563EB"
   }

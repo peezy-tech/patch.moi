@@ -34,7 +34,7 @@
     "docs:dev": "bun run --filter @peezy.tech/patch-docs dev",
     "harness:automation": "bun run --filter @peezy.tech/patch harness:automation",
     "mcp": "bun run --filter @peezy.tech/patch mcp",
-    "patch.moi": "bun run --filter @peezy.tech/patch patch.moi",
+    "patch.moi": "bun --cwd apps/patch src/cli.ts",
     "start": "bun run --filter @peezy.tech/patch start",
     "test": "bun run --filter @peezy.tech/patch test",
     "workspace:backend:init": "codex-flows workspace backend init local --global --profile patch-moi --workspace-root .",

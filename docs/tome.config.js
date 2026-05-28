@@ -12,6 +12,7 @@ export default {
     {
       group: "Tutorials",
       pages: [
+        "tutorials/develop-feature-patch-work",
         "tutorials/watch-upstream-release",
         "tutorials/run-harness-patch-work-flow",
         "tutorials/dispatch-codex-release-flow",
