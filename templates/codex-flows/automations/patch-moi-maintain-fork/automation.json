@@ -3,9 +3,9 @@
   "description": "Start a codex-flows turn that maintains a patch.moi fork from Git refs.",
   "script": "exec/start-turn.mts",
   "promptFile": "prompt.md",
-  "cwd": "../..",
+  "cwd": "../../..",
   "config": {
-    "repo": ".",
+    "repo": "fork",
     "skills": ["patch-moi:maintain-fork", "patch-moi:inspect-upstream-release"],
     "wait": false
   }

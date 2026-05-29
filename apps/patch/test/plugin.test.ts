@@ -77,11 +77,19 @@ describe("patch.moi Codex plugin package", () => {
       name: "patch-moi-maintain-fork",
       script: "exec/start-turn.mts",
       promptFile: "prompt.md",
+      cwd: "../../..",
+      config: {
+        repo: "fork",
+      },
     });
     expect(feature).toMatchObject({
       name: "patch-moi-feature-candidate",
       script: "exec/start-turn.mts",
       promptFile: "prompt.md",
+      cwd: "../../..",
+      config: {
+        repo: "fork",
+      },
     });
   });
 });
