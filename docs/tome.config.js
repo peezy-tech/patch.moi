@@ -1,7 +1,7 @@
 /** @type {import('@tomehq/core').TomeConfig} */
 export default {
   name: "patch.moi",
-  basePath: "/",
+  basePath: "/docs",
   theme: {
     preset: "editorial",
     mode: "auto",
@@ -44,6 +44,6 @@ export default {
     },
   ],
   topNav: [
-    { label: "patch.moi", href: "https://patch.moi" },
+    { label: "patch.moi", href: "https://patch.moi/" },
   ],
 };

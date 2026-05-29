@@ -12,7 +12,8 @@
     "packages": [
       "apps/*",
       "packages/*",
-      "docs"
+      "docs",
+      "site"
     ],
     "catalog": {
       "@tomehq/cli": "^0.8.1",
@@ -25,14 +26,16 @@
     }
   },
   "scripts": {
-    "build": "bun run --filter @peezy.tech/patch build && bun run --filter @peezy.tech/patch-docs build",
+    "build": "bun run --filter @peezy.tech/patch build && bun run pages:build",
     "check": "bun run check:types && bun run test",
     "check:types": "bun run --workspaces check:types",
     "docs:build": "bun run --filter @peezy.tech/patch-docs build",
     "docs:deploy": "bun run --filter @peezy.tech/patch-docs deploy",
     "docs:dev": "bun run --filter @peezy.tech/patch-docs dev",
     "mcp": "bun run --filter @peezy.tech/patch mcp",
+    "pages:build": "rm -rf dist && bun run site:build && bun run docs:build && touch dist/.nojekyll",
     "patch.moi": "bun --cwd apps/patch src/cli.ts",
+    "site:build": "bun run --filter @peezy.tech/patch-site build",
     "test": "bun run --filter @peezy.tech/patch test"
   }
 }
