@@ -3,7 +3,7 @@
   "description": "Start a codex-flows turn that promotes feature work into a patch.moi patch branch.",
   "script": "exec/start-turn.mts",
   "promptFile": "prompt.md",
-  "cwd": "../../..",
+  "cwd": "@",
   "config": {
     "repo": "fork",
     "skills": ["patch-moi:develop-feature"],

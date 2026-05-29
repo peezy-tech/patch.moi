@@ -77,7 +77,7 @@ describe("patch.moi Codex plugin package", () => {
       name: "patch-moi-maintain-fork",
       script: "exec/start-turn.mts",
       promptFile: "prompt.md",
-      cwd: "../../..",
+      cwd: "@",
       config: {
         repo: "fork",
       },
@@ -86,7 +86,7 @@ describe("patch.moi Codex plugin package", () => {
       name: "patch-moi-feature-candidate",
       script: "exec/start-turn.mts",
       promptFile: "prompt.md",
-      cwd: "../../..",
+      cwd: "@",
       config: {
         repo: "fork",
       },
