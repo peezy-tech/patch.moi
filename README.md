@@ -36,7 +36,7 @@ the first time the MCP server starts.
 For local development against this product checkout:
 
 ```bash
-codex plugin marketplace add /home/peezy/meta-workspace/patch.moi
+codex plugin marketplace add /home/peezy/repos/patch.moi
 codex plugin add patch-moi@patch-moi
 ```
 

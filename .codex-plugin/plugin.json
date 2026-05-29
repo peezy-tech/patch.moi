@@ -1,6 +1,6 @@
 {
   "name": "patch-moi",
-  "version": "0.1.0",
+  "version": "0.1.0+codex.20260529162212",
   "description": "Git-first patch-stack porcelain for forks on top of upstream projects.",
   "author": {
     "name": "Peezy",
