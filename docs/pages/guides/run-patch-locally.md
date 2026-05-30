@@ -37,5 +37,5 @@ bun run patch.moi -- patch candidates --repo harness/fork --remote origin
 PATCH_MOI_ALLOW_PULL=1 bun run patch.moi -- patch pull --repo harness/fork --remote origin --branch candidate/my-run
 ```
 
-Use codex-flows for runner execution and thread transplant. Use the forge for
+Use codex-toys for runner execution and thread transplant. Use the forge for
 checks and artifacts.

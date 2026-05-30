@@ -6,7 +6,7 @@ description: Inspect upstream refs before rebuilding a maintained fork.
 # Inspect upstream movement
 
 patch.moi no longer watches feeds or stores update events. Use the forge or
-codex-flows to decide when upstream moved, then use patch.moi to inspect the Git
+codex-toys to decide when upstream moved, then use patch.moi to inspect the Git
 shape in the maintained fork.
 
 ## 1. Inspect readiness
@@ -30,5 +30,5 @@ bun run --silent patch.moi -- patch list --repo harness/fork --json
 bun run --silent patch.moi -- patch rebuild --repo harness/fork --to main --json
 ```
 
-Runner runs, retry/replay, and Codex thread continuation are codex-flows or
+Runner runs, retry/replay, and Codex thread continuation are codex-toys or
 forge concerns. patch.moi only consumes the Git refs they leave behind.

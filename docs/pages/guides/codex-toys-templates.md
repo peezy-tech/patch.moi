@@ -1,24 +1,24 @@
 ---
-title: codex-flows templates
+title: codex-toys templates
 description: Install patch.moi automation recipes without giving patch.moi runner state.
 ---
 
-# codex-flows templates
+# codex-toys templates
 
-patch.moi ships codex-flows automation templates for teams that want reusable
+patch.moi ships codex-toys automation templates for teams that want reusable
 patch-stack upkeep recipes, while keeping execution state outside patch.moi.
 
-The templates start codex-flows turns with patch.moi prompts. codex-flows and
+The templates start codex-toys turns with patch.moi prompts. codex-toys and
 the forge own the run ids, retry/replay, thread ids, checks, artifacts, and
-remote control. patch.moi remains local Git porcelain inside the turn.
+remote/dashboard surfaces. patch.moi remains local Git porcelain inside the turn.
 
 ## Install
 
 From the target workspace:
 
 ```bash
-codex-flows pack inspect /path/to/patch.moi/templates/codex-flows
-codex-flows pack add /path/to/patch.moi/templates/codex-flows --apply
+codex-toys pack inspect /path/to/patch.moi/templates/codex-toys
+codex-toys pack add /path/to/patch.moi/templates/codex-toys --apply
 ```
 
 The pack installs:
@@ -29,8 +29,8 @@ The pack installs:
 ## Run
 
 ```bash
-codex-flows automation run patch-moi-maintain-fork --event event.json --via workspace
-codex-flows automation run patch-moi-feature-candidate --event event.json --via workspace
+codex-toys automation run patch-moi-maintain-fork --event event.json --via workspace
+codex-toys automation run patch-moi-feature-candidate --event event.json --via workspace
 ```
 
 The event payload may include `repoPath`, `threadId`, `model`, `permissions`,

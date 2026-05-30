@@ -44,8 +44,8 @@ describe("patch.moi Codex plugin package", () => {
       "develop-feature",
       "maintain-fork",
       "inspect-upstream-release",
-      "install-codex-flows-templates",
-      "maintain-fork-with-codex-flows",
+      "install-codex-toys-templates",
+      "maintain-fork-with-codex-toys",
       "pickup-runner-candidate",
     ];
     const skills = await Promise.all(skillNames.map((name) =>
@@ -55,23 +55,23 @@ describe("patch.moi Codex plugin package", () => {
     expect(skills[0]).toContain('name: "patch-moi:develop-feature"');
     expect(skills[1]).toContain('name: "patch-moi:maintain-fork"');
     expect(skills[2]).toContain('name: "patch-moi:inspect-upstream-release"');
-    expect(skills[3]).toContain('name: "patch-moi:install-codex-flows-templates"');
-    expect(skills[4]).toContain('name: "patch-moi:maintain-fork-with-codex-flows"');
+    expect(skills[3]).toContain('name: "patch-moi:install-codex-toys-templates"');
+    expect(skills[4]).toContain('name: "patch-moi:maintain-fork-with-codex-toys"');
     expect(skills[5]).toContain('name: "patch-moi:pickup-runner-candidate"');
   });
 
-  test("ships codex-flows automation template pack", async () => {
-    const pack = await readFile(join(repoRoot, "templates/codex-flows/codex-pack.toml"), "utf8");
+  test("ships codex-toys automation template pack", async () => {
+    const pack = await readFile(join(repoRoot, "templates/codex-toys/codex-pack.toml"), "utf8");
     const maintain = JSON.parse(await readFile(
-      join(repoRoot, "templates/codex-flows/automations/patch-moi-maintain-fork/automation.json"),
+      join(repoRoot, "templates/codex-toys/automations/patch-moi-maintain-fork/automation.json"),
       "utf8",
     ));
     const feature = JSON.parse(await readFile(
-      join(repoRoot, "templates/codex-flows/automations/patch-moi-feature-candidate/automation.json"),
+      join(repoRoot, "templates/codex-toys/automations/patch-moi-feature-candidate/automation.json"),
       "utf8",
     ));
 
-    expect(pack).toContain('name = "patch-moi-codex-flows-templates"');
+    expect(pack).toContain('name = "patch-moi-codex-toys-templates"');
     expect(pack).toContain('kind = "automation"');
     expect(maintain).toMatchObject({
       name: "patch-moi-maintain-fork",

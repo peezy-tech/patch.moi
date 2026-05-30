@@ -11,10 +11,10 @@ It helps you inspect remotes, inspect ordered `patch/*` branches, start or point
 at feature branches, capture feature work into patch branches, rebuild the
 maintained branch, and pick up runner-produced candidate refs from Git.
 
-It ships codex-flows automation templates as reusable recipes, but it does not
-own runner orchestration, retry/replay, run history, remote/mobile control,
+It ships codex-toys automation templates as reusable recipes, but it does not
+own runner orchestration, retry/replay, run history, remote/dashboard surfaces,
 thread transplant, feed cursors, or an HTTP admin service. Those belong to
-codex-flows, the forge, and Git.
+codex-toys, the forge, and Git.
 
 ## Model
 
@@ -22,8 +22,8 @@ codex-flows, the forge, and Git.
 flowchart LR
   Upstream["Upstream refs and tags"] --> Git["Maintained fork Git repo"]
   Feature["Local feature branch"] --> Patch["patch/* branch"]
-  Runner["Forge runner or codex-flows"] --> Candidate["candidate/* refs, checks, artifacts, thread metadata"]
-  Templates["patch.moi codex-flows templates"] --> Runner
+  Runner["Forge runner or codex-toys"] --> Candidate["candidate/* refs, checks, artifacts, thread metadata"]
+  Templates["patch.moi codex-toys templates"] --> Runner
   Patch --> Main["maintained branch"]
   Candidate --> Git
   Git --> Inspect["patch.moi inspect, capture, rebuild, pull"]
@@ -44,6 +44,6 @@ PATCH_MOI_ALLOW_PULL=1 bun run patch.moi -- patch pull --repo harness/fork --rem
 
 - [Develop feature patch work](tutorials/develop-feature-patch-work)
 - [Maintain a fork](guides/maintain-a-fork)
-- [codex-flows templates](guides/codex-flows-templates)
+- [codex-toys templates](guides/codex-toys-templates)
 - [CLI reference](reference/cli)
 - [Flow boundary](concepts/flow-boundary)

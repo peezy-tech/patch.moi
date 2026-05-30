@@ -21,7 +21,7 @@
   "interface": {
     "displayName": "patch.moi",
     "shortDescription": "Develop, maintain, and inspect Git patch stacks with local tooling.",
-    "longDescription": "patch.moi helps operators inspect upstream remotes, inspect local patch branches, capture feature branches into patch branches, rebuild maintained branches, and pick up runner-produced candidate refs from Git. It also ships codex-flows automation templates as recipes. Runner execution, retry/replay, remote control, and thread transplant stay in codex-flows or the forge.",
+    "longDescription": "patch.moi helps operators inspect upstream remotes, inspect local patch branches, capture feature branches into patch branches, rebuild maintained branches, and pick up runner-produced candidate refs from Git. It also ships codex-toys automation templates as recipes. Runner execution, retry/replay, remote/dashboard surfaces, and thread transplant stay in codex-toys or the forge.",
     "developerName": "Peezy",
     "category": "Coding",
     "capabilities": [
@@ -37,7 +37,7 @@
       "Inspect this fork's patch.moi readiness.",
       "List runner candidate refs.",
       "Capture this branch as a patch branch.",
-      "Install patch.moi codex-flows templates."
+      "Install patch.moi codex-toys templates."
     ],
     "brandColor": "#2563EB"
   }

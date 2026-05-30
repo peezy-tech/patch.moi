@@ -1,6 +1,6 @@
 {
   "name": "patch-moi-maintain-fork",
-  "description": "Start a codex-flows turn that maintains a patch.moi fork from Git refs.",
+  "description": "Start a codex-toys turn that maintains a patch.moi fork from Git refs.",
   "script": "exec/start-turn.mts",
   "promptFile": "prompt.md",
   "cwd": "@",

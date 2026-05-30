@@ -33,7 +33,7 @@ export default async function startMaintenanceTurn(context: AutomationContext) {
   if (!context.turn?.start) {
     return {
       status: "blocked",
-      message: "codex-flows turn.start is unavailable; run this automation through codex-flows.",
+      message: "codex-toys turn.start is unavailable; run this automation through codex-toys.",
     };
   }
 
@@ -49,8 +49,8 @@ export default async function startMaintenanceTurn(context: AutomationContext) {
     },
     policy: {
       patchMoiState: "none",
-      executionOwner: "codex-flows",
-      durableTruth: "git/forge/codex-flows",
+      executionOwner: "codex-toys",
+      durableTruth: "git/forge/codex-toys",
     },
   });
   const turn = await context.turn.start({

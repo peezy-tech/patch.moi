@@ -12,10 +12,10 @@ The Bun package in `apps/patch`. It provides:
 - `patch.moi`, the local Git CLI
 - `patch.moi-mcp`, the local MCP server
 - Git discovery, patch capture, patch rebuild, and candidate ref helpers
-- codex-flows automation templates under `templates/codex-flows`
+- codex-toys automation templates under `templates/codex-toys`
 
 It does not provide an HTTP service, feed poller, JSONL store, dispatch adapter,
-or codex-flows runner controller.
+or codex-toys runner controller.
 
 ## `@peezy.tech/patch-docs`
 
@@ -27,7 +27,7 @@ bun run docs:build
 
 ## Runtime Dependencies
 
-patch.moi has no runtime dependency on codex-flows. codex-flows remains the
-place for runner execution, retry/replay, thread transplant, app-server control,
-and workspace automation. The templates are files that codex-flows can install
-and run; they are not a patch.moi service mode.
+patch.moi has no runtime dependency on codex-toys. codex-toys remains the
+place for runner execution, retry/replay, thread transplant, SSH toybox and
+dashboard surfaces, and workspace automation. The templates are files that
+codex-toys can install and run; they are not a patch.moi service mode.

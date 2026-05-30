@@ -8,7 +8,7 @@ description: How patch.moi applies to Codex fork maintenance.
 For Codex fork maintenance, patch.moi is the local Git tool used after another
 system has decided work is needed.
 
-codex-flows or the forge can watch upstream releases, dispatch runners, preserve
+codex-toys or the forge can watch upstream releases, dispatch runners, preserve
 threads, and publish artifacts. patch.moi then helps inspect and update the
 fork:
 

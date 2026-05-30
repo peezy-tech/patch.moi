@@ -21,7 +21,7 @@ export default {
       pages: [
         "guides/run-patch-locally",
         "guides/maintain-a-fork",
-        "guides/codex-flows-templates",
+        "guides/codex-toys-templates",
       ],
     },
     {

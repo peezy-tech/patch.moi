@@ -11,7 +11,7 @@ patch.moi maintenance is Git-first:
 - local product changes live on feature branches
 - durable patch stack entries live on ordered `patch/*` branches
 - runner output arrives as candidate refs, forge checks, artifacts, and
-  codex-flows thread metadata
+  codex-toys thread metadata
 
 ## Inspect
 
@@ -34,7 +34,7 @@ base plus ordered patch branches.
 
 ## Pick Up Runner Work
 
-Runners should publish Git refs plus forge/codex-flows metadata. patch.moi only
+Runners should publish Git refs plus forge/codex-toys metadata. patch.moi only
 pulls the Git ref:
 
 ```bash
@@ -43,11 +43,11 @@ PATCH_MOI_ALLOW_PULL=1 bun run patch.moi -- patch pull --repo /path/to/fork --re
 ```
 
 `patch pull` is fast-forward only and fails on dirty worktrees. Continue or
-transplant the corresponding Codex thread through codex-flows.
+transplant the corresponding Codex thread through codex-toys.
 
-## Automate Through codex-flows
+## Automate Through codex-toys
 
-If upkeep should run from a codex-flows workspace or forge runner, install the
-patch.moi codex-flows templates and run `patch-moi-maintain-fork`. The template
-starts a Codex turn with patch.moi instructions; codex-flows remains responsible
+If upkeep should run from a codex-toys workspace or forge runner, install the
+patch.moi codex-toys templates and run `patch-moi-maintain-fork`. The template
+starts a Codex turn with patch.moi instructions; codex-toys remains responsible
 for the run id, thread id, retry/replay, and artifacts.

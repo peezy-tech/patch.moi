@@ -15,7 +15,7 @@ patch.moi derives state from Git facts:
 - commit ids and subjects
 
 There is no separate patch.moi database. If a runner produced work, the durable
-proof is the Git ref plus forge checks, artifacts, PRs, and codex-flows thread
+proof is the Git ref plus forge checks, artifacts, PRs, and codex-toys thread
 metadata.
 
 ## Processedness
@@ -26,6 +26,6 @@ the outputs:
 - a branch exists at the expected commit
 - a check or workflow run finished for that commit
 - an artifact or PR references that commit
-- a codex-flows thread can be resumed or transplanted
+- a codex-toys thread can be resumed or transplanted
 
 patch.moi only inspects and updates Git refs.

@@ -6,7 +6,7 @@ candidate refs already present in Git.
 
 Do not create patch.moi durable state. Do not call patch.moi service, feed,
 dispatch, retry, replay, or attempt commands. Runner state, thread transplant,
-checks, artifacts, and remote/mobile control belong to codex-flows or the forge.
+checks, artifacts, and remote/dashboard surfaces belong to codex-toys or the forge.
 
 When mutation is explicitly allowed by workspace policy, rebuild the maintained
 branch from upstream plus patch branches. If the runner or forge should receive

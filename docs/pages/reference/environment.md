@@ -16,5 +16,5 @@ description: Environment variables understood by patch.moi.
 | `PATCH_MOI_ALLOW_PULL` | unset | Allows `patch pull` and MCP `patch_pull`. |
 
 There is no `DATA_DIR`, `PATCH_MOI_URL`, feed watcher, admin token, workspace
-backend URL, or local app-server flag in patch.moi. Runner and thread execution
-configuration belongs to codex-flows or the forge.
+backend URL, or local dashboard proxy flag in patch.moi. Runner and thread execution
+configuration belongs to codex-toys or the forge.

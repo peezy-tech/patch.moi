@@ -14,7 +14,7 @@ This is a Bun monorepo:
 
 patch.moi treats Git as the durable source of truth. Upstream and fork remotes,
 remote-tracking refs, patch branches, tags, commits, candidate branches, forge
-checks, forge artifacts, and codex-flows thread metadata describe what happened.
+checks, forge artifacts, and codex-toys thread metadata describe what happened.
 patch.moi does not keep its own durable attempt database, feed cursor, runner
 state, HTTP admin service, retry/replay queue, or remote-control surface.
 
@@ -77,8 +77,8 @@ patch.moi does local Git patch-stack work:
 - rebuild maintained branches from upstream plus patches
 - list and fast-forward runner candidate refs from Git
 
-codex-flows and the forge own runner execution, retry/replay, run history,
-remote/mobile control, thread transplant, checks, and artifacts. A runner may
+codex-toys and the forge own runner execution, retry/replay, run history,
+remote/dashboard surfaces, thread transplant, checks, and artifacts. A runner may
 call patch.moi as a Git tool, but patch.moi is not the runner controller.
 
 ## Development

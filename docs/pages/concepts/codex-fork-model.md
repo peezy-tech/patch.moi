@@ -12,7 +12,7 @@ The neighboring `../codex` checkout is the concrete model for patch.moi:
 - `main` is the maintained output branch
 - `patch/*` branches are the durable patch stack
 - runner output should arrive as candidate refs, checks, artifacts, and
-  codex-flows thread metadata
+  codex-toys thread metadata
 
 patch.moi should not duplicate patch contents or runner history in product
 state. It reads Git and mutates Git.
@@ -31,12 +31,12 @@ bun run patch.moi -- patch rebuild --repo . --to main
 ## Runner Handoff
 
 A runner may rebuild or repair the fork in a disposable checkout. Its durable
-outputs should be remote refs and forge/codex-flows metadata:
+outputs should be remote refs and forge/codex-toys metadata:
 
 ```bash
 bun run patch.moi -- patch candidates --repo ../codex --remote origin
 PATCH_MOI_ALLOW_PULL=1 bun run patch.moi -- patch pull --repo ../codex --remote origin --branch candidate/codex-upstream
 ```
 
-Continue or transplant any Codex thread through codex-flows. patch.moi only
+Continue or transplant any Codex thread through codex-toys. patch.moi only
 handles the Git ref.
