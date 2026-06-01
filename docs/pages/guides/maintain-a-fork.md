@@ -47,7 +47,7 @@ transplant the corresponding Codex thread through codex-toys.
 
 ## Automate Through codex-toys
 
-If upkeep should run from a codex-toys workspace or forge runner, install the
+If upkeep should run from a codex-toys workbench or forge runner, install the
 patch.moi codex-toys templates and run `patch-moi-maintain-fork`. The template
 starts a Codex turn with patch.moi instructions; codex-toys remains responsible
 for the run id, thread id, retry/replay, and artifacts.

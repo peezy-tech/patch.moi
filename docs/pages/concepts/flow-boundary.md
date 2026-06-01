@@ -23,6 +23,6 @@ The handoff between systems is Git. Runners publish branches, checks, artifacts,
 and thread metadata; local operators fetch refs, inspect them with patch.moi,
 and continue threads through codex-toys when needed.
 
-The template handoff is also explicit: patch.moi owns the recipe files under
+The template handoff is also explicit: patch.moi owns the kit files under
 `templates/codex-toys`, while codex-toys owns installing, running, retrying,
 and recording the resulting turns.

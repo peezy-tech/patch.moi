@@ -14,14 +14,14 @@ remote/dashboard surfaces. patch.moi remains local Git porcelain inside the turn
 
 ## Install
 
-From the target workspace:
+From the target workbench:
 
 ```bash
-codex-toys pack inspect /path/to/patch.moi/templates/codex-toys
-codex-toys pack add /path/to/patch.moi/templates/codex-toys --apply
+codex-toys kit inspect /path/to/patch.moi/templates/codex-toys
+codex-toys kit add /path/to/patch.moi/templates/codex-toys --apply
 ```
 
-The pack installs:
+The kit installs:
 
 - `.codex/automations/patch-moi-maintain-fork`
 - `.codex/automations/patch-moi-feature-candidate`
@@ -29,8 +29,8 @@ The pack installs:
 ## Run
 
 ```bash
-codex-toys automation run patch-moi-maintain-fork --event event.json --via workspace
-codex-toys automation run patch-moi-feature-candidate --event event.json --via workspace
+codex-toys automation run patch-moi-maintain-fork --event event.json --via workbench
+codex-toys automation run patch-moi-feature-candidate --event event.json --via workbench
 ```
 
 The event payload may include `repoPath`, `threadId`, `model`, `permissions`,

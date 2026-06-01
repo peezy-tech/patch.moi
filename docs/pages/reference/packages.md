@@ -29,5 +29,5 @@ bun run docs:build
 
 patch.moi has no runtime dependency on codex-toys. codex-toys remains the
 place for runner execution, retry/replay, thread transplant, SSH toybox and
-dashboard surfaces, and workspace automation. The templates are files that
+dashboard surfaces, and workbench automation. The templates are files that
 codex-toys can install and run; they are not a patch.moi service mode.

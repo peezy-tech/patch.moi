@@ -60,8 +60,8 @@ describe("patch.moi Codex plugin package", () => {
     expect(skills[5]).toContain('name: "patch-moi:pickup-runner-candidate"');
   });
 
-  test("ships codex-toys automation template pack", async () => {
-    const pack = await readFile(join(repoRoot, "templates/codex-toys/codex-pack.toml"), "utf8");
+  test("ships codex-toys automation template kit", async () => {
+    const kit = await readFile(join(repoRoot, "templates/codex-toys/codex-kit.toml"), "utf8");
     const maintain = JSON.parse(await readFile(
       join(repoRoot, "templates/codex-toys/automations/patch-moi-maintain-fork/automation.json"),
       "utf8",
@@ -71,8 +71,10 @@ describe("patch.moi Codex plugin package", () => {
       "utf8",
     ));
 
-    expect(pack).toContain('name = "patch-moi-codex-toys-templates"');
-    expect(pack).toContain('kind = "automation"');
+    expect(kit).toContain("[kit]");
+    expect(kit).toContain("[[kit.items]]");
+    expect(kit).toContain('name = "patch-moi-codex-toys-templates"');
+    expect(kit).toContain('kind = "automation"');
     expect(maintain).toMatchObject({
       name: "patch-moi-maintain-fork",
       script: "exec/start-turn.mts",

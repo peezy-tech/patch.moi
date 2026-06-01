@@ -1,14 +1,14 @@
-[pack]
+[kit]
 name = "patch-moi-codex-toys-templates"
 version = "0.1.0"
 description = "codex-toys automation templates for Git-first patch.moi work."
 
-[[pack.items]]
+[[kit.items]]
 name = "patch-moi-maintain-fork"
 kind = "automation"
 path = "automations/patch-moi-maintain-fork"
 
-[[pack.items]]
+[[kit.items]]
 name = "patch-moi-feature-candidate"
 kind = "automation"
 path = "automations/patch-moi-feature-candidate"

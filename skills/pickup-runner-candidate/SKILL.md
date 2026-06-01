@@ -10,7 +10,7 @@ the local operator wants to inspect or fast-forward it.
 
 ## Workflow
 
-1. Fetch the relevant remote through normal Git or workspace policy.
+1. Fetch the relevant remote through normal Git or workbench policy.
 2. List local and remote-tracking candidates with `patch_candidates`.
 3. Inspect the candidate with Git comparison commands and forge checks.
 4. Pull only with explicit policy:

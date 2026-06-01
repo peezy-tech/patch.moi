@@ -10,7 +10,7 @@ the actual patch-stack operations are still patch.moi Git commands.
 
 ## Workflow
 
-1. Confirm the patch.moi codex-toys templates are installed in the workspace.
+1. Confirm the patch.moi codex-toys templates are installed in the workbench.
 2. Run or trigger `patch-moi-maintain-fork` through codex-toys, passing an
    event payload with the repo path, upstream/release details, and optional
    existing `threadId`.

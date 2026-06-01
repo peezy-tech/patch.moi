@@ -29,8 +29,8 @@ export default async function startFeatureTurn(context: AutomationContext) {
     };
   }
 
-  const workspaceRoot = context.cwd ?? process.cwd();
-  const repo = resolveFrom(workspaceRoot, stringValue(payload.repoPath) ?? stringValue(config.repo) ?? ".");
+  const workbenchRoot = context.cwd ?? process.cwd();
+  const repo = resolveFrom(workbenchRoot, stringValue(payload.repoPath) ?? stringValue(config.repo) ?? ".");
   const prompt = renderPrompt(context.prompt, {
     mode: "feature-candidate",
     repo,
