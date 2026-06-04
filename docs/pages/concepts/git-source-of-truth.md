@@ -10,13 +10,25 @@ patch.moi derives state from Git facts:
 - configured upstream and fork remotes
 - `refs/remotes/<upstreamRemote>/<upstreamBranch>`
 - ordered `patch/*` branches
+- remote-tracking patch refs such as `refs/remotes/<remote>/patch/*`
 - feature branches
 - runner candidate branches such as `candidate/*`
-- commit ids and subjects
+- commit ids, subjects, ancestry, merge bases, and stable patch-ids
 
 There is no separate patch.moi database. If a runner produced work, the durable
 proof is the Git ref plus forge checks, artifacts, PRs, and codex-toys thread
 metadata.
+
+## Patch sharing
+
+Reusable patches are `patch/*` refs. A patch's content is the commit range from
+the inferred upstream merge base to that ref tip. A patch is `stacked` when
+another visible `patch/*` ref tip is an ancestor of it; otherwise it is
+`independent`.
+
+Maintained branches are products assembled from patch refs. `patch explain`
+derives the relationship later by comparing commits with stable patch-ids rather
+than reading a manifest or stored composition file.
 
 ## Processedness
 

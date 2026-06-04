@@ -161,6 +161,206 @@ describe("patch workspace CLI", () => {
     expect((await git(repo, ["branch", "--show-current"])).stdout.trim()).toBe("created-feature");
   });
 
+  test("lists, test-applies, applies, and explains independent patch refs without metadata files", async () => {
+    const repo = await createPatchRepo();
+    await createPatchBranch(repo, "patch/010-one", "one.txt", "one\n", "patch: one");
+    await createPatchBranch(repo, "patch/020-two", "two.txt", "two\n", "patch: two");
+
+    const list = await invoke([
+      "patch",
+      "list",
+      "--repo",
+      repo,
+      "--json",
+    ]);
+    expect(list.code).toBe(0);
+    expect(JSON.parse(list.stdout).patchBranches).toMatchObject([
+      { name: "patch/010-one", status: "independent", dependencies: [] },
+      { name: "patch/020-two", status: "independent", dependencies: [] },
+    ]);
+
+    for (const patchRef of ["patch/010-one", "patch/020-two"]) {
+      const testApply = await invoke([
+        "patch",
+        "test-apply",
+        patchRef,
+        "--repo",
+        repo,
+        "--to",
+        "main",
+        "--json",
+      ]);
+      expect(testApply.code).toBe(0);
+      expect(JSON.parse(testApply.stdout)).toMatchObject({
+        patch: { name: patchRef, status: "independent" },
+        target: "main",
+        status: "applies",
+        missingDependencies: [],
+      });
+    }
+
+    const gated = await invoke([
+      "patch",
+      "apply",
+      "patch/010-one",
+      "--repo",
+      repo,
+      "--to",
+      "shared",
+      "--create-branch",
+      "--json",
+    ]);
+    expect(gated.code).toBe(2);
+    expect(gated.stderr).toContain("patch apply is gated");
+
+    const firstApply = await invoke([
+      "patch",
+      "apply",
+      "patch/010-one",
+      "--repo",
+      repo,
+      "--to",
+      "shared",
+      "--create-branch",
+      "--json",
+    ], { PATCH_MOI_ALLOW_APPLY: "1" });
+    expect(firstApply.code).toBe(0);
+    expect(JSON.parse(firstApply.stdout)).toMatchObject({
+      patch: { name: "patch/010-one" },
+      targetBranch: "shared",
+      status: "changed",
+      missingDependencies: [],
+    });
+
+    const secondApply = await invoke([
+      "patch",
+      "apply",
+      "patch/020-two",
+      "--repo",
+      repo,
+      "--to",
+      "shared",
+      "--json",
+    ], { PATCH_MOI_ALLOW_APPLY: "1" });
+    expect(secondApply.code).toBe(0);
+    expect(JSON.parse(secondApply.stdout)).toMatchObject({
+      patch: { name: "patch/020-two" },
+      targetBranch: "shared",
+      status: "changed",
+      missingDependencies: [],
+    });
+    expect(await readFile(join(repo, "one.txt"), "utf8")).toBe("one\n");
+    expect(await readFile(join(repo, "two.txt"), "utf8")).toBe("two\n");
+    expect(await exists(join(repo, ".patchmoi"))).toBe(false);
+
+    const explain = await invoke([
+      "patch",
+      "explain",
+      "--repo",
+      repo,
+      "--branch",
+      "shared",
+      "--upstream",
+      "refs/remotes/upstream/main",
+      "--json",
+    ]);
+    expect(explain.code).toBe(0);
+    const explained = JSON.parse(explain.stdout);
+    expect(explained.matchedPatches.map((patch: { name: string }) => patch.name)).toEqual(["patch/010-one", "patch/020-two"]);
+    expect(explained.unmatchedCommits).toEqual([]);
+  });
+
+  test("detects stacked patch refs and blocks applying them until dependencies are present", async () => {
+    const repo = await createPatchRepo();
+    await createPatchBranch(repo, "patch/010-base", "base-patch.txt", "base patch\n", "patch: base");
+    await createPatchBranch(repo, "patch/020-stacked", "stacked.txt", "stacked\n", "patch: stacked", "patch/010-base");
+
+    const inspect = await invoke([
+      "patch",
+      "inspect",
+      "patch/020-stacked",
+      "--repo",
+      repo,
+      "--json",
+    ]);
+    expect(inspect.code).toBe(0);
+    expect(JSON.parse(inspect.stdout)).toMatchObject({
+      patch: {
+        name: "patch/020-stacked",
+        status: "stacked",
+        dependencies: [{ name: "patch/010-base" }],
+      },
+      warnings: ["patch/020-stacked depends on patch/010-base"],
+    });
+
+    const blockedTest = await invoke([
+      "patch",
+      "test-apply",
+      "patch/020-stacked",
+      "--repo",
+      repo,
+      "--to",
+      "main",
+      "--json",
+    ]);
+    expect(blockedTest.code).toBe(1);
+    expect(JSON.parse(blockedTest.stdout)).toMatchObject({
+      status: "blocked",
+      missingDependencies: [{ name: "patch/010-base" }],
+    });
+
+    const blockedApply = await invoke([
+      "patch",
+      "apply",
+      "patch/020-stacked",
+      "--repo",
+      repo,
+      "--to",
+      "stacked-target",
+      "--create-branch",
+      "--json",
+    ], { PATCH_MOI_ALLOW_APPLY: "1" });
+    expect(blockedApply.code).toBe(1);
+    expect(JSON.parse(blockedApply.stdout)).toMatchObject({
+      status: "blocked",
+      missingDependencies: [{ name: "patch/010-base" }],
+    });
+
+    const dependency = await invoke([
+      "patch",
+      "apply",
+      "patch/010-base",
+      "--repo",
+      repo,
+      "--to",
+      "stacked-target",
+      "--create-branch",
+      "--json",
+    ], { PATCH_MOI_ALLOW_APPLY: "1" });
+    expect(dependency.code).toBe(0);
+
+    const stacked = await invoke([
+      "patch",
+      "apply",
+      "patch/020-stacked",
+      "--repo",
+      repo,
+      "--to",
+      "stacked-target",
+      "--json",
+    ], { PATCH_MOI_ALLOW_APPLY: "1" });
+    expect(stacked.code).toBe(0);
+    expect(JSON.parse(stacked.stdout)).toMatchObject({
+      status: "changed",
+      skipped: [{ subject: "patch: base" }],
+      applied: [{ subject: "patch: stacked" }],
+      missingDependencies: [],
+    });
+    expect(await readFile(join(repo, "base-patch.txt"), "utf8")).toBe("base patch\n");
+    expect(await readFile(join(repo, "stacked.txt"), "utf8")).toBe("stacked\n");
+    expect(await exists(join(repo, ".patchmoi"))).toBe(false);
+  });
+
   test("lists and pulls runner candidate refs through Git only", async () => {
     const repo = await createPatchRepo();
     const root = join(repo, "..");
@@ -316,6 +516,21 @@ async function createPatchRepo(): Promise<string> {
   await git(repo, ["commit", "-m", "feature work"]);
   await git(repo, ["switch", "main"]);
   return repo;
+}
+
+async function createPatchBranch(
+  repo: string,
+  branch: string,
+  fileName: string,
+  content: string,
+  message: string,
+  base = "main",
+): Promise<void> {
+  await git(repo, ["switch", "-c", branch, base]);
+  await writeFile(join(repo, fileName), content, "utf8");
+  await git(repo, ["add", fileName]);
+  await git(repo, ["commit", "-m", message]);
+  await git(repo, ["switch", "main"]);
 }
 
 async function invoke(

@@ -18,6 +18,12 @@ checks, forge artifacts, and codex-toys thread metadata describe what happened.
 patch.moi does not keep its own durable attempt database, feed cursor, runner
 state, HTTP admin service, retry/replay queue, or remote-control surface.
 
+Reusable patch sharing is also Git-native. Published patches are refs under
+`patch/*`, maintained branches are ordered compositions of those refs, and
+release branches or tags are snapshots. By default, reusable patch refs should
+be independently based on upstream so consumers can apply one patch without
+taking the whole fork.
+
 ## Codex Plugin
 
 This repo owns the patch.moi Codex plugin source:
@@ -55,7 +61,11 @@ change.
 ```text
 patch.moi work start feature --title TITLE --repo DIR --branch BRANCH --base REF [--patch-branch patch/NAME] [--create-branch] [--json]
 patch.moi patch doctor [--repo DIR] [--json]
-patch.moi patch list [--repo DIR] [--prefix patch/] [--json]
+patch.moi patch list [--repo DIR] [--prefix patch/] [--base REF] [--json]
+patch.moi patch inspect <patch-ref> [--repo DIR] [--base REF] [--json]
+patch.moi patch test-apply <patch-ref> [--repo DIR] [--base REF] [--to REF] [--json]
+patch.moi patch apply <patch-ref> --to BRANCH [--repo DIR] [--base REF] [--create-branch] [--json]
+patch.moi patch explain --branch REF [--repo DIR] [--upstream REF] [--json]
 patch.moi patch candidates [--repo DIR] [--remote REMOTE] [--pattern candidate/*] [--json]
 patch.moi patch capture patch/NAME --from BRANCH [--base BRANCH] [--repo DIR] [--message MSG] [--force] [--json]
 patch.moi patch rebuild [--base BRANCH] [--to BRANCH] [--repo DIR] [--prefix patch/] [--json]
@@ -66,6 +76,10 @@ patch.moi setup fork --repo DIR --upstream-url URL [--apply] [--json]
 `patch pull` is fast-forward only and gated by `PATCH_MOI_ALLOW_PULL=1` or
 `[safety].allowPull=true`.
 
+`patch apply` replays a `patch/*` ref onto a local branch and is gated by
+`PATCH_MOI_ALLOW_APPLY=1` or `[safety].allowApply=true`. `patch list`,
+`patch inspect`, `patch test-apply`, and `patch explain` are read-only.
+
 ## Boundary
 
 patch.moi does local Git patch-stack work:
@@ -75,6 +89,7 @@ patch.moi does local Git patch-stack work:
 - start/select feature branches
 - capture feature branches into `patch/*`
 - rebuild maintained branches from upstream plus patches
+- inspect, test, apply, and explain reusable `patch/*` refs
 - list and fast-forward runner candidate refs from Git
 
 codex-toys and the forge own runner execution, retry/replay, run history,

@@ -20,6 +20,7 @@ export type PatchMoiConfig = {
     allowRebuild: boolean;
     allowCapture: boolean;
     allowPull: boolean;
+    allowApply: boolean;
   };
 };
 
@@ -41,6 +42,7 @@ export const defaultPatchMoiConfig: PatchMoiConfig = {
     allowRebuild: false,
     allowCapture: false,
     allowPull: false,
+    allowApply: false,
   },
 };
 
@@ -95,6 +97,7 @@ export function mergePatchMoiConfig(base: PatchMoiConfig, overrides: unknown): P
       allowRebuild: booleanValue(safety.allowRebuild) ?? base.safety.allowRebuild,
       allowCapture: booleanValue(safety.allowCapture) ?? base.safety.allowCapture,
       allowPull: booleanValue(safety.allowPull) ?? base.safety.allowPull,
+      allowApply: booleanValue(safety.allowApply) ?? base.safety.allowApply,
     },
   };
 }

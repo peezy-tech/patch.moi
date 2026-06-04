@@ -7,8 +7,8 @@ import {
   capturePatchBranch,
   createPatchWorkBranch,
   inspectPatchWorkspace,
-  listPatchBranches,
   listPatchCandidates,
+  listPatchRefs,
   pullPatchCandidate,
   rebuildPatchMain,
   resolvePatchRef,
@@ -51,8 +51,9 @@ export const patchMoiTools: ToolDefinition[] = [
     forkRemote: { type: "string" },
     prefix: { type: "string" },
   }),
-  tool("patch_list", "List local patch branches ordered by branch name.", {
+  tool("patch_list", "List local and remote-tracking patch refs with Git-derived sharing status.", {
     prefix: { type: "string" },
+    base: { type: "string" },
   }),
   tool("patch_candidates", "List local or remote-tracking runner candidate refs from Git.", {
     remote: { type: "string" },
@@ -111,7 +112,12 @@ export async function callPatchMoiTool(
       return {
         repo: repoPath,
         patchPrefix: stringArg(args, "prefix") ?? config.git.patchPrefix,
-        patchBranches: await listPatchBranches(repoPath, stringArg(args, "prefix") ?? config.git.patchPrefix),
+        base: stringArg(args, "base") ?? canonicalUpstreamRef(config),
+        patchBranches: await listPatchRefs(repoPath, {
+          config,
+          patchPrefix: stringArg(args, "prefix") ?? config.git.patchPrefix,
+          base: stringArg(args, "base") ?? canonicalUpstreamRef(config),
+        }),
       };
     }
     case "patch_candidates":

@@ -33,10 +33,31 @@ JSON output:
 
 ```bash
 patch.moi patch doctor [--repo DIR] [--main BRANCH] [--upstream-remote REMOTE] [--upstream-branch BRANCH] [--fork-remote REMOTE] [--json]
-patch.moi patch list [--repo DIR] [--prefix patch/] [--json]
+patch.moi patch list [--repo DIR] [--prefix patch/] [--base REF] [--json]
+patch.moi patch inspect <patch-ref> [--repo DIR] [--base REF] [--json]
+patch.moi patch test-apply <patch-ref> [--repo DIR] [--base REF] [--to REF] [--json]
+patch.moi patch apply <patch-ref> --to BRANCH [--repo DIR] [--base REF] [--create-branch] [--json]
+patch.moi patch explain --branch REF [--repo DIR] [--upstream REF] [--json]
 patch.moi patch capture patch/NAME --from BRANCH [--base BRANCH] [--repo DIR] [--message MSG] [--force] [--json]
 patch.moi patch rebuild [--base BRANCH] [--to BRANCH] [--repo DIR] [--prefix patch/] [--json]
 ```
+
+`patch list` includes local `refs/heads/patch/*` and visible remote-tracking
+`refs/remotes/<remote>/patch/*` refs. Output includes the tip SHA, inferred base
+SHA, `independent` or `stacked` status, and dependency refs inferred from Git
+ancestry.
+
+`patch inspect` shows the commits and files in the patch range. It warns when
+another patch ref tip is an ancestor.
+
+`patch test-apply` uses a temporary worktree and does not mutate the repo.
+
+`patch apply` requires `--to`. If the target branch does not exist,
+`--create-branch` creates it from the upstream base. The command is gated by
+`PATCH_MOI_ALLOW_APPLY=1` or `[safety].allowApply=true`.
+
+`patch explain` compares a maintained branch to visible `patch/*` refs with
+stable patch-id matching and reports matched patch refs plus unmatched commits.
 
 ## Runner candidate refs
 

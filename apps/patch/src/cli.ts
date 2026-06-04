@@ -2,16 +2,20 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { loadPatchMoiConfig, type PatchMoiConfig } from "./config";
+import { canonicalUpstreamRef, loadPatchMoiConfig, type PatchMoiConfig } from "./config";
 import {
+  applyPatchRef,
   capturePatchBranch,
   createPatchWorkBranch,
+  explainPatchBranch,
+  inspectPatchRef,
   inspectPatchWorkspace,
-  listPatchBranches,
   listPatchCandidates,
+  listPatchRefs,
   pullPatchCandidate,
   rebuildPatchMain,
   resolvePatchRef,
+  testApplyPatchRef,
 } from "./patch-workspace";
 
 type CliOptions = {
@@ -40,7 +44,11 @@ const usage = `patch.moi CLI
 Usage:
   patch.moi work start feature --title TITLE --repo DIR --branch BRANCH --base REF [--patch-branch patch/NAME] [--create-branch] [--json]
   patch.moi patch doctor [--repo DIR] [--main BRANCH] [--upstream-remote REMOTE] [--upstream-branch BRANCH] [--fork-remote REMOTE] [--json]
-  patch.moi patch list [--repo DIR] [--prefix patch/] [--json]
+  patch.moi patch list [--repo DIR] [--prefix patch/] [--base REF] [--json]
+  patch.moi patch inspect <patch-ref> [--repo DIR] [--base REF] [--json]
+  patch.moi patch test-apply <patch-ref> [--repo DIR] [--base REF] [--to REF] [--json]
+  patch.moi patch apply <patch-ref> --to BRANCH [--repo DIR] [--base REF] [--create-branch] [--json]
+  patch.moi patch explain --branch REF [--repo DIR] [--upstream REF] [--json]
   patch.moi patch candidates [--repo DIR] [--remote REMOTE] [--pattern candidate/*] [--json]
   patch.moi patch capture patch/NAME --from BRANCH [--base BRANCH] [--repo DIR] [--message MSG] [--force] [--json]
   patch.moi patch rebuild [--base BRANCH] [--to BRANCH] [--repo DIR] [--prefix patch/] [--json]
@@ -148,7 +156,7 @@ async function handleWork(positionals: string[], context: CliContext): Promise<n
 async function handlePatch(positionals: string[], context: CliContext): Promise<number> {
   const action = positionals[0];
   if (!action) {
-    throw new UsageError("patch requires doctor, list, candidates, capture, rebuild, or pull");
+    throw new UsageError("patch requires doctor, list, inspect, apply, test-apply, explain, candidates, capture, rebuild, or pull");
   }
   const repoPath = patchRepoPath(context);
   const config = await configForRepo(repoPath, context);
@@ -192,11 +200,100 @@ async function handlePatch(positionals: string[], context: CliContext): Promise<
   }
 
   if (action === "list") {
-    const branches = await listPatchBranches(repoPath, patchPrefix);
-    writeOutput(context, { repo: repoPath, patchBranches: branches }, (value) => {
+    const base = flagValue(context.parsed, "base") ?? canonicalUpstreamRef(effectiveConfig);
+    const branches = await listPatchRefs(repoPath, { config: effectiveConfig, patchPrefix, base });
+    writeOutput(context, { repo: repoPath, patchPrefix, base, patchBranches: branches }, (value) => {
       for (const branch of value.patchBranches) {
-        writeLine(context, `${branch.name} ${branch.sha.slice(0, 12)} ${branch.subject}`);
+        const dependencies = branch.dependencies.length ? branch.dependencies.map((dependency) => dependency.name).join(",") : "-";
+        writeLine(context, `${branch.name} ${branch.sha.slice(0, 12)} ${branch.status} base=${branch.inferredBaseSha.slice(0, 12)} deps=${dependencies} ${branch.subject}`);
       }
+    });
+    return 0;
+  }
+
+  if (action === "inspect") {
+    const patchRef = positionals[1];
+    if (!patchRef) throw new UsageError("patch inspect requires <patch-ref>");
+    const result = await inspectPatchRef(repoPath, {
+      patchRef,
+      base: flagValue(context.parsed, "base") ?? canonicalUpstreamRef(effectiveConfig),
+      patchPrefix,
+      config: effectiveConfig,
+    });
+    writeOutput(context, result, (value) => {
+      writeLine(context, `patch: ${value.patch.name} ${value.patch.sha}`);
+      writeLine(context, `status: ${value.patch.status}`);
+      writeLine(context, `upstream-base: ${value.patch.upstreamBase} ${value.patch.upstreamBaseSha}`);
+      writeLine(context, `inferred-base: ${value.patch.inferredBaseSha}`);
+      if (value.patch.dependencies.length) {
+        writeLine(context, `dependencies: ${value.patch.dependencies.map((dependency) => dependency.name).join(", ")}`);
+      }
+      for (const warning of value.warnings) writeLine(context, `warning: ${warning}`);
+      for (const commit of value.commits) writeLine(context, `- ${commit.sha.slice(0, 12)} ${commit.subject}`);
+    });
+    return 0;
+  }
+
+  if (action === "test-apply") {
+    const patchRef = positionals[1];
+    if (!patchRef) throw new UsageError("patch test-apply requires <patch-ref>");
+    const result = await testApplyPatchRef(repoPath, {
+      patchRef,
+      base: flagValue(context.parsed, "base") ?? canonicalUpstreamRef(effectiveConfig),
+      to: flagValue(context.parsed, "to"),
+      patchPrefix,
+      config: effectiveConfig,
+    });
+    writeOutput(context, result, (value) => {
+      writeLine(context, `${value.status}: ${value.patch.name} -> ${value.target}`);
+      for (const dependency of value.missingDependencies) writeLine(context, `missing dependency: ${dependency.name}`);
+      for (const commit of value.applied) writeLine(context, `- ${commit.sha.slice(0, 12)} ${commit.subject}`);
+      if (value.failedCommit) writeLine(context, `failed: ${value.failedCommit.sha.slice(0, 12)} ${value.failedCommit.subject}`);
+      if (value.error) writeLine(context, value.error);
+    });
+    return result.status === "applies" || result.status === "up_to_date" ? 0 : 1;
+  }
+
+  if (action === "apply") {
+    const patchRef = positionals[1];
+    const to = flagValue(context.parsed, "to");
+    if (!patchRef) throw new UsageError("patch apply requires <patch-ref>");
+    if (!to) throw new UsageError("patch apply requires --to");
+    assertApplyAllowed(config, context.env);
+    const result = await applyPatchRef(repoPath, {
+      patchRef,
+      to,
+      base: flagValue(context.parsed, "base") ?? canonicalUpstreamRef(effectiveConfig),
+      createBranch: flagBool(context.parsed, "create-branch"),
+      patchPrefix,
+      config: effectiveConfig,
+    });
+    writeOutput(context, result, (value) => {
+      writeLine(context, `${value.status}: ${value.patch.name} -> ${value.targetBranch}`);
+      for (const dependency of value.missingDependencies) writeLine(context, `missing dependency: ${dependency.name}`);
+      for (const commit of value.applied) writeLine(context, `- ${commit.sha.slice(0, 12)} ${commit.subject}`);
+      if (value.failedCommit) writeLine(context, `failed: ${value.failedCommit.sha.slice(0, 12)} ${value.failedCommit.subject}`);
+      if (value.error) writeLine(context, value.error);
+    });
+    return result.status === "changed" || result.status === "up_to_date" ? 0 : 1;
+  }
+
+  if (action === "explain") {
+    const branch = flagValue(context.parsed, "branch");
+    if (!branch) throw new UsageError("patch explain requires --branch");
+    const result = await explainPatchBranch(repoPath, {
+      branch,
+      upstream: flagValue(context.parsed, "upstream") ?? flagValue(context.parsed, "base") ?? canonicalUpstreamRef(effectiveConfig),
+      patchPrefix,
+      config: effectiveConfig,
+    });
+    writeOutput(context, result, (value) => {
+      writeLine(context, `branch: ${value.branch} ${value.branchSha}`);
+      writeLine(context, `upstream: ${value.upstream} ${value.upstreamSha}`);
+      writeLine(context, `matched patches: ${value.matchedPatches.length}`);
+      for (const patch of value.matchedPatches) writeLine(context, `- ${patch.name} ${patch.sha.slice(0, 12)}`);
+      writeLine(context, `unmatched commits: ${value.unmatchedCommits.length}`);
+      for (const commit of value.unmatchedCommits) writeLine(context, `- ${commit.sha.slice(0, 12)} ${commit.subject}`);
     });
     return 0;
   }
@@ -389,6 +486,13 @@ function assertPullAllowed(config: PatchMoiConfig, env: Record<string, string | 
     return;
   }
   throw new UsageError("patch pull is gated; set [safety].allowPull=true in .patchmoi.toml or PATCH_MOI_ALLOW_PULL=1");
+}
+
+function assertApplyAllowed(config: PatchMoiConfig, env: Record<string, string | undefined>): void {
+  if (config.safety.allowApply || truthy(env.PATCH_MOI_ALLOW_APPLY)) {
+    return;
+  }
+  throw new UsageError("patch apply is gated; set [safety].allowApply=true in .patchmoi.toml or PATCH_MOI_ALLOW_APPLY=1");
 }
 
 async function git(

@@ -16,8 +16,8 @@ patch.moi is intentionally small:
 
 | Layer | Owns |
 | --- | --- |
-| Git | upstream refs, fork refs, patch branches, candidate branches, commits |
-| patch.moi | inspect, capture, rebuild, candidate ref listing, fast-forward pickup, reusable codex-toys workflow templates |
+| Git | upstream refs, fork refs, patch branches, candidate branches, commits, ancestry, stable patch-ids |
+| patch.moi | inspect, capture, rebuild, patch sharing, candidate ref listing, fast-forward pickup, reusable codex-toys workflow templates |
 | codex-toys | runner execution, retry/replay, thread transplant, SSH toybox and dashboard surfaces |
 | forge | workflow runs, checks, artifacts, PRs, review state |
 
