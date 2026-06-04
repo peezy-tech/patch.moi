@@ -35,4 +35,4 @@ Do not require or create a local branch named `upstream`; use the remote-trackin
 Runner orchestration, retry/replay, run history, and Codex thread transplant
 belong to codex-toys or the forge, not patch.moi.
 When upkeep should be automated, install the patch.moi codex-toys templates
-and run them through codex-toys rather than adding patch.moi state.
+and run them through codex-toys workflow rather than adding patch.moi state.

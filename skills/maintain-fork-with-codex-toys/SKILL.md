@@ -1,6 +1,6 @@
 ---
 name: "patch-moi:maintain-fork-with-codex-toys"
-description: "Maintain a patch.moi fork through codex-toys automation templates while patch.moi remains Git-only porcelain."
+description: "Maintain a patch.moi fork through codex-toys workflow templates while patch.moi remains Git-only porcelain."
 ---
 
 # Maintain Fork With codex-toys
@@ -11,10 +11,10 @@ the actual patch-stack operations are still patch.moi Git commands.
 ## Workflow
 
 1. Confirm the patch.moi codex-toys templates are installed in the workbench.
-2. Run or trigger `patch-moi-maintain-fork` through codex-toys, passing an
+2. Run or trigger `patch-moi-maintain-fork` through codex-toys workflow, passing an
    event payload with the repo path, upstream/release details, and optional
    existing `threadId`.
-3. The automation starts a Codex turn with the patch.moi fork-maintenance prompt.
+3. The workflow starts a Codex turn with the patch.moi fork-maintenance prompt.
 4. Inside that turn, inspect Git refs with patch.moi, rebuild only when safety
    gates allow mutation, and publish any candidate refs/checks/artifacts through
    codex-toys or the forge.

@@ -12,7 +12,7 @@ patch.moi is not the runner orchestrator.
 | Local patch branch capture | patch.moi |
 | Maintained branch rebuild | patch.moi |
 | Candidate ref listing and fast-forward pickup | patch.moi |
-| Reusable patch-stack automation templates | patch.moi, installed and run by codex-toys |
+| Reusable patch-stack workflow templates | patch.moi, installed and run by codex-toys |
 | Runner dispatch | codex-toys or forge |
 | Retry/replay | codex-toys or forge |
 | Thread ids and transplant | codex-toys |

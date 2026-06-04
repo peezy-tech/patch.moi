@@ -11,7 +11,7 @@ It helps you inspect remotes, inspect ordered `patch/*` branches, start or point
 at feature branches, capture feature work into patch branches, rebuild the
 maintained branch, and pick up runner-produced candidate refs from Git.
 
-It ships codex-toys automation templates as reusable recipes, but it does not
+It ships codex-toys workflow templates as reusable recipes, but it does not
 own runner orchestration, retry/replay, run history, remote/dashboard surfaces,
 thread transplant, feed cursors, or an HTTP admin service. Those belong to
 codex-toys, the forge, and Git.

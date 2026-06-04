@@ -1,11 +1,11 @@
 ---
 title: codex-toys templates
-description: Install patch.moi automation recipes without giving patch.moi runner state.
+description: Install patch.moi workflow recipes without giving patch.moi runner state.
 ---
 
 # codex-toys templates
 
-patch.moi ships codex-toys automation templates for teams that want reusable
+patch.moi ships codex-toys workflow templates for teams that want reusable
 patch-stack upkeep recipes, while keeping execution state outside patch.moi.
 
 The templates start codex-toys turns with patch.moi prompts. codex-toys and
@@ -23,14 +23,14 @@ codex-toys kit add /path/to/patch.moi/templates/codex-toys --apply
 
 The kit installs:
 
-- `.codex/automations/patch-moi-maintain-fork`
-- `.codex/automations/patch-moi-feature-candidate`
+- `.codex/workflows/patch-moi-maintain-fork`
+- `.codex/workflows/patch-moi-feature-candidate`
 
 ## Run
 
 ```bash
-codex-toys automation run patch-moi-maintain-fork --event event.json --via workbench
-codex-toys automation run patch-moi-feature-candidate --event event.json --via workbench
+codex-toys workflow run patch-moi-maintain-fork --event event.json --via workbench
+codex-toys workflow run patch-moi-feature-candidate --event event.json --via workbench
 ```
 
 The event payload may include `repoPath`, `threadId`, `model`, `permissions`,

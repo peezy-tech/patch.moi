@@ -12,7 +12,7 @@ The Bun package in `apps/patch`. It provides:
 - `patch.moi`, the local Git CLI
 - `patch.moi-mcp`, the local MCP server
 - Git discovery, patch capture, patch rebuild, and candidate ref helpers
-- codex-toys automation templates under `templates/codex-toys`
+- codex-toys workflow templates under `templates/codex-toys`
 
 It does not provide an HTTP service, feed poller, JSONL store, dispatch adapter,
 or codex-toys runner controller.
@@ -29,5 +29,5 @@ bun run docs:build
 
 patch.moi has no runtime dependency on codex-toys. codex-toys remains the
 place for runner execution, retry/replay, thread transplant, SSH toybox and
-dashboard surfaces, and workbench automation. The templates are files that
+dashboard surfaces, and workbench workflow execution. The templates are files that
 codex-toys can install and run; they are not a patch.moi service mode.

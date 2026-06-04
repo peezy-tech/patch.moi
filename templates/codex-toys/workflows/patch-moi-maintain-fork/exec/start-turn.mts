@@ -2,8 +2,8 @@ import path from "node:path";
 
 type JsonRecord = Record<string, unknown>;
 
-type AutomationContext = {
-  automation?: {
+type WorkflowContext = {
+  workflow?: {
     config?: JsonRecord;
   };
   event?: {
@@ -19,28 +19,29 @@ type AutomationContext = {
   };
 };
 
-export default async function startFeatureTurn(context: AutomationContext) {
-  const config = record(context.automation?.config);
+export default async function startMaintenanceTurn(context: WorkflowContext) {
+  const config = record(context.workflow?.config);
   const payload = record(context.event?.payload);
+  const expectedRepo = stringValue(config.expected_repo);
+  const eventRepo = stringValue(payload.repo);
+  if (expectedRepo && eventRepo && expectedRepo !== eventRepo) {
+    return {
+      status: "skipped",
+      message: `patch.moi maintenance template ignores ${eventRepo}.`,
+    };
+  }
   if (!context.turn?.start) {
     return {
       status: "blocked",
-      message: "codex-toys turn.start is unavailable; run this automation through codex-toys.",
+      message: "codex-toys turn.start is unavailable; run this workflow through codex-toys.",
     };
   }
 
   const workbenchRoot = context.cwd ?? process.cwd();
   const repo = resolveFrom(workbenchRoot, stringValue(payload.repoPath) ?? stringValue(config.repo) ?? ".");
   const prompt = renderPrompt(context.prompt, {
-    mode: "feature-candidate",
+    mode: "maintain-fork",
     repo,
-    feature: {
-      title: stringValue(payload.title) ?? stringValue(config.title),
-      workBranch: stringValue(payload.branch) ?? stringValue(payload.workBranch) ?? stringValue(config.branch),
-      baseRef: stringValue(payload.base) ?? stringValue(config.base),
-      patchBranch: stringValue(payload.patchBranch) ?? stringValue(config.patch_branch),
-      candidateBranch: stringValue(payload.candidateBranch) ?? stringValue(config.candidate_branch),
-    },
     event: {
       id: context.event?.id,
       type: context.event?.type,
@@ -59,14 +60,17 @@ export default async function startFeatureTurn(context: AutomationContext) {
     model: stringValue(payload.model) ?? stringValue(config.model),
     serviceTier: stringValue(payload.serviceTier) ?? stringValue(config.service_tier),
     permissions: stringValue(payload.permissions) ?? stringValue(config.permissions),
-    skills: stringArray(payload.skills) ?? stringArray(config.skills) ?? ["patch-moi:develop-feature"],
+    skills: stringArray(payload.skills) ?? stringArray(config.skills) ?? [
+      "patch-moi:maintain-fork",
+      "patch-moi:inspect-upstream-release",
+    ],
   });
 
   if (booleanValue(payload.wait) ?? booleanValue(config.wait) ?? false) {
     if (!context.turn.wait) {
       return {
         status: "started",
-        message: "Started patch.moi feature turn; wait API is unavailable.",
+        message: "Started patch.moi maintenance turn; wait API is unavailable.",
         turn,
         artifacts: artifacts(repo, context, turn),
       };
@@ -77,7 +81,7 @@ export default async function startFeatureTurn(context: AutomationContext) {
     });
     return {
       status: stringValue(result.status) ?? "completed",
-      message: "Completed patch.moi feature turn.",
+      message: "Completed patch.moi maintenance turn.",
       turn,
       result,
       artifacts: artifacts(repo, context, result),
@@ -86,7 +90,7 @@ export default async function startFeatureTurn(context: AutomationContext) {
 
   return {
     status: "started",
-    message: "Started patch.moi feature turn.",
+    message: "Started patch.moi maintenance turn.",
     turn,
     artifacts: artifacts(repo, context, turn),
   };
