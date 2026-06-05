@@ -6,16 +6,16 @@ description: Environment variables understood by patch.moi.
 # Environment
 
 | Variable | Default | Purpose |
-| --- | --- | --- |
+|----------|---------|---------|
 | `PATCH_MOI_PATCH_REPO` | current workspace | Default repo path for CLI and MCP calls. |
 | `PATCH_MOI_WORKSPACE_ROOT` | process cwd | Default workspace root for MCP calls. |
 | `PATCH_MOI_UPSTREAM_URL` | unset | Default upstream URL for `setup fork`. |
-| `PATCH_MOI_ALLOW_FETCH` | unset | Allows `fetch_upstream`. |
+| `PATCH_MOI_ALLOW_FETCH` | unset | Allows MCP `fetch_upstream`. |
 | `PATCH_MOI_ALLOW_CAPTURE` | unset | Allows MCP `patch_capture`. |
-| `PATCH_MOI_ALLOW_REBUILD` | unset | Allows MCP `patch_rebuild`. |
-| `PATCH_MOI_ALLOW_PULL` | unset | Allows `patch pull` and MCP `patch_pull`. |
-| `PATCH_MOI_ALLOW_APPLY` | unset | Allows `patch apply`. |
+| `PATCH_MOI_ALLOW_REBUILD` | unset | Allows MCP `patch_rebuild` and CLI `patch rebuild`. |
+| `PATCH_MOI_ALLOW_PULL` | unset | Allows MCP `patch_pull` and CLI `patch pull`. |
+| `PATCH_MOI_ALLOW_APPLY` | unset | Allows CLI `patch apply`. |
 
 There is no `DATA_DIR`, `PATCH_MOI_URL`, feed watcher, admin token, workspace
-backend URL, or local dashboard proxy flag in patch.moi. Runner and thread execution
-configuration belongs to codex-toys or the forge.
+backend URL, local dashboard proxy flag, or runner state path in patch.moi.
+Runner and thread execution configuration belongs to codex-toys or the forge.

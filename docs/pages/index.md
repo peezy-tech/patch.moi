@@ -1,49 +1,86 @@
 ---
 title: patch.moi
-description: Git-first patch-stack porcelain for custom forks.
+description: Primitive-first documentation for Git-native fork maintenance, reusable patch refs, local commands, MCP tools, and codex-toys workflow recipes.
 ---
 
 # patch.moi
 
-patch.moi is local Git porcelain for patch-stack work on maintained forks.
+`patch.moi` is Git-first porcelain for maintaining forks on top of upstream
+projects. It treats upstream refs, patch refs, maintained branches, candidate
+refs, commits, ancestry, and stable patch-ids as the durable product model.
 
-It helps you inspect remotes, inspect ordered `patch/*` branches, start or point
-at feature branches, capture feature work into patch branches, rebuild the
-maintained branch, and pick up runner-produced candidate refs from Git.
+There is no patch registry, manifest, database, feed cursor, runner history, or
+patch metadata file. Reusable patches are Git refs under `patch/*`. Maintained
+branches are ordered compositions of those refs. Release branches and tags are
+snapshots.
 
-It ships codex-toys workflow templates as reusable recipes, but it does not
-own runner orchestration, retry/replay, run history, remote/dashboard surfaces,
-thread transplant, feed cursors, or an HTTP admin service. Those belong to
-codex-toys, the forge, and Git.
+## Primitive Map
 
-## Model
+| Primitive | Owns | Start here |
+|-----------|------|------------|
+| Upstream | The configured remote-tracking base used for patch ranges and rebuilds. | [Upstream](primitives/upstream) |
+| Patch Refs | Reusable local or remote-tracking `patch/*` refs, inferred base, status, and dependencies. | [Patch refs](primitives/patch-refs) |
+| Maintained Branches | Product branches assembled from upstream plus patch refs. | [Maintained branches](primitives/maintained-branches) |
+| Candidate Refs | Runner-produced branch refs such as `candidate/*`. | [Candidate refs](primitives/candidate-refs) |
+| Safety Gates | Fail-closed policy for writes and network fetches. | [Safety gates](primitives/safety-gates) |
 
-```mermaid
-flowchart LR
-  Upstream["Upstream refs and tags"] --> Git["Maintained fork Git repo"]
-  Feature["Local feature branch"] --> Patch["patch/* branch"]
-  Runner["Forge runner or codex-toys"] --> Candidate["candidate/* refs, checks, artifacts, thread metadata"]
-  Templates["patch.moi codex-toys templates"] --> Runner
-  Patch --> Main["maintained branch"]
-  Candidate --> Git
-  Git --> Inspect["patch.moi inspect, capture, rebuild, pull"]
-```
+## Components
 
-## Common commands
+| Component | Owns | Start here |
+|-----------|------|------------|
+| CLI | Local command porcelain over Git. | [CLI](components/cli) |
+| MCP | Local Codex tool server for Git inspection and gated fork mutations. | [MCP](components/mcp) |
+| Codex Plugin | Codex-facing skills and MCP bootstrap metadata. | [Codex plugin](components/codex-plugin) |
+| Templates | codex-toys workflow recipes shipped as a kit. | [Templates](components/templates) |
+| Config | `.patchmoi.toml` defaults and policy overrides. | [Config](components/config) |
+
+## Guides
+
+| Guide | Use it when |
+|-------|-------------|
+| [Setup fork](guides/setup-fork) | A checkout needs upstream/fork remotes and a known target branch. |
+| [Develop feature patch](guides/develop-feature-patch) | Local feature work should become an independent `patch/*` ref. |
+| [Share patch](guides/share-patch) | A consumer should inspect, test, or apply one reusable patch ref. |
+| [Maintain fork](guides/maintain-fork) | A product branch should be rebuilt from upstream and patch refs. |
+| [Pick up candidate](guides/pick-up-candidate) | Runner output should be fast-forwarded from a Git ref. |
+| [codex-toys workflows](guides/codex-toys-workflows) | A workbench should install patch.moi workflow recipes. |
+
+## Operations
+
+| Operation | Owns | Start here |
+|-----------|------|------------|
+| Git Hygiene | Clean worktrees, remote-tracking refs, and no patch.moi state files. | [Git hygiene](operations/git-hygiene) |
+| Plugins | Codex plugin install and local development surfaces. | [Plugins](operations/plugins) |
+
+## First Commands
 
 ```bash
-bun run patch.moi -- patch doctor --repo harness/fork
-bun run patch.moi -- work start feature --title "My feature" --repo harness/fork --branch feature/my-feature --base main --create-branch
-bun run patch.moi -- patch capture patch/010-my-feature --repo harness/fork --from feature/my-feature --base main
-bun run patch.moi -- patch rebuild --repo harness/fork --to main
-bun run patch.moi -- patch candidates --repo harness/fork --remote origin
-PATCH_MOI_ALLOW_PULL=1 bun run patch.moi -- patch pull --repo harness/fork --remote origin --branch candidate/upstream-update
+bun run patch.moi -- patch doctor --repo <fork> --json
+bun run patch.moi -- patch list --repo <fork> --json
+bun run patch.moi -- patch inspect patch/010-example --repo <fork> --json
+bun run patch.moi -- patch test-apply patch/010-example --repo <fork> --to main --json
+PATCH_MOI_ALLOW_APPLY=1 bun run patch.moi -- patch apply patch/010-example --repo <fork> --to feature/test --create-branch --json
+PATCH_MOI_ALLOW_REBUILD=1 bun run patch.moi -- patch rebuild --repo <fork> --to main --json
+bun run patch.moi -- patch explain --repo <fork> --branch main --upstream refs/remotes/upstream/main --json
 ```
 
-## Read next
+## Runtime Shape
 
-- [Develop feature patch work](tutorials/develop-feature-patch-work)
-- [Maintain a fork](guides/maintain-a-fork)
-- [codex-toys templates](guides/codex-toys-templates)
-- [CLI reference](reference/cli)
-- [Flow boundary](concepts/flow-boundary)
+CLI commands run locally against a Git repository. The MCP server exposes the
+same local model to Codex through stdio. codex-toys templates can start Codex
+turns that call patch.moi, but codex-toys owns workflow execution, thread ids,
+retry and replay, feeds, schedules, remote workbenches, dashboards, and
+artifacts.
+
+## Boundary
+
+patch.moi owns Git-native fork mechanics:
+
+- discovering upstream and fork readiness
+- listing, inspecting, testing, applying, capturing, and rebuilding patch refs
+- explaining maintained branches by stable patch-id
+- listing and fast-forwarding candidate refs
+- shipping Codex plugin guidance and codex-toys workflow recipes
+
+Products own upstream choice, patch naming, release policy, source catalogs,
+review criteria, deployment decisions, and public sharing UX.

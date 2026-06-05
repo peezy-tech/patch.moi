@@ -1,33 +1,38 @@
 ---
 title: Packages
-description: Workspace packages in the patch.moi monorepo.
+description: patch.moi workspace package map.
 ---
 
 # Packages
 
-## `@peezy.tech/patch`
+This repository is a Bun workspace.
 
-The Bun package in `apps/patch`. It provides:
+| Package | Purpose |
+|---------|---------|
+| `@peezy.tech/patch` | CLI and MCP server implementation in `apps/patch`. |
+| `@peezy.tech/patch-docs` | Tome documentation site in `docs`. |
+| `patch-moi` | Root workspace scripts and local development entrypoint. |
 
-- `patch.moi`, the local Git CLI
-- `patch.moi-mcp`, the local MCP server
-- Git discovery, patch capture, patch rebuild, and candidate ref helpers
-- codex-toys workflow templates under `templates/codex-toys`
-
-It does not provide an HTTP service, feed poller, JSONL store, dispatch adapter,
-or codex-toys runner controller.
-
-## `@peezy.tech/patch-docs`
-
-The Tome documentation package in `docs`.
+## Scripts
 
 ```bash
+bun install
+bun run patch.moi -- patch doctor --repo <fork> --json
+bun run mcp
+bun run check
 bun run docs:build
 ```
 
-## Runtime Dependencies
+## Plugin Files
 
-patch.moi has no runtime dependency on codex-toys. codex-toys remains the
-place for runner execution, retry/replay, thread transplant, SSH toybox and
-dashboard surfaces, and workbench workflow execution. The templates are files that
-codex-toys can install and run; they are not a patch.moi service mode.
+```text
+.codex-plugin/plugin.json
+.mcp.json
+skills/
+templates/codex-toys/
+```
+
+## Boundary
+
+The workspace packages are local development surfaces. Public plugin metadata
+and marketplace entries define how Codex installs patch.moi guidance.
