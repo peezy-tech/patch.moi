@@ -1,0 +1,68 @@
+name: Publish npm package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_dir:
+        description: "Workspace package directory to publish."
+        required: true
+        default: "apps/patch"
+      confirm_package:
+        description: "Exact npm package name to publish."
+        required: true
+      dry_run:
+        description: "Run npm publish --dry-run instead of publishing."
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish-${{ github.event.inputs.confirm_package }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate release
+        run: bun run release:check
+
+      - name: Validate npm publish inputs
+        run: node scripts/validate-npm-publish.mjs
+        env:
+          PACKAGE_DIR: ${{ github.event.inputs.package_dir }}
+          CONFIRM_PACKAGE: ${{ github.event.inputs.confirm_package }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+
+      - name: Publish dry run
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        working-directory: ${{ github.event.inputs.package_dir }}
+        run: npm publish --dry-run --access public
+
+      - name: Publish
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        working-directory: ${{ github.event.inputs.package_dir }}
+        run: npm publish --access public

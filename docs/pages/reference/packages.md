@@ -20,6 +20,7 @@ bun install
 bun run patch.moi -- patch doctor --repo <fork> --json
 bun run mcp
 bun run check
+bun run release:check
 bun run docs:build
 ```
 

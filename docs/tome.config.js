@@ -43,6 +43,7 @@ export default {
 		{
 			group: "Operations",
 			pages: [
+				"operations/release",
 				"operations/git-hygiene",
 				"operations/plugins",
 			],

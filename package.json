@@ -35,6 +35,7 @@
     "mcp": "bun run --filter @peezy.tech/patch mcp",
     "pages:build": "rm -rf dist && bun run site:build && bun run docs:build && touch dist/.nojekyll",
     "patch.moi": "bun --cwd apps/patch src/cli.ts",
+    "release:check": "bun run check && bun run docs:build && git diff --check && bun scripts/check-release.ts",
     "site:build": "bun run --filter @peezy.tech/patch-site build",
     "test": "bun run --filter @peezy.tech/patch test"
   }

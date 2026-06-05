@@ -101,8 +101,12 @@ call patch.moi as a Git tool, but patch.moi is not the runner controller.
 ```bash
 bun install
 bun run check
+bun run release:check
 bun run docs:build
 ```
+
+Release procedure lives in `RELEASE.md`. npm publishing, if enabled for a
+package, must use GitHub Actions trusted publishing rather than npm tokens.
 
 The publishable docs site is a Tome project in `docs/`:
 
