@@ -38,10 +38,12 @@ git -C harness/fork fetch jojo
   release tag or main commit for a maintenance run.
 - `harness/fork` `main`: maintained fork rebuilt from `upstream` plus ordered
   `patch/*` branches.
-- `harness/fork` `patch/*`: one logical fork patch per branch tip. The current
-  seeds are `patch/010-maintained-greeting`, `patch/020-shout-mode`, and
-  `patch/030-package-identity`.
-- `harness/fork` `jojo/main`: service-style maintained fork remote.
+- `harness/fork` `patch/*`: ordered proof patch refs used to exercise
+  independent and stacked patch detection. The current seeds are
+  `patch/010-maintained-greeting`, `patch/020-shout-mode`,
+  `patch/030-package-identity`, and `patch/040-salutation-helper`.
+- `harness/fork` `jojo/main`: optional Forgejo mirror of the maintained fork
+  branch.
 
 The upstream npm package is `@peezy.tech/patch-moi-harness`. It publishes from
 GitHub tags named `v*` through the `npm-publish` GitHub environment.
@@ -112,49 +114,27 @@ git push --force-with-lease jojo main
 Expected result: fork `main` is still patched, but its base is the latest
 upstream release or main commit.
 
-The same maintenance path is executable through the patch.moi harness flows:
+The same maintenance path is executable through patch.moi's local Git
+porcelain:
 
 ```bash
-CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run harness:flow
-```
-
-That direct command is local-mode execution. The default upstream release
-fixture fans out to `patch-moi-harness-bindings/generate-bindings` and
-`patch-moi-harness-fork/release-cycle`. The repo-native workspace autonomy
-surface runs the same harness through a manual command task:
-
-```bash
-CODEX_FLOW_FETCH=0 CODEX_FLOW_PUSH=0 bun run workspace:run:harness
-```
-
-The workspace task is unscheduled, so `bun run workspace:tick` should not run
-the harness until a schedule is added. In the service shape, Patch writes the
-upstream update event, creates a maintenance attempt record, and hands the same
-flow event to the configured workspace backend.
-
-The default fixture targets `v0.1.3`, which should verify the current fork
-without changing it and report `candidateRefs` for the maintained fork branch.
-For a new upstream tag, run the same command with an event file whose
-`payload.tag` names that tag. For upstream main movement, use the
-`flows/patch-moi-harness-fork/fixtures/upstream-main-v0.1.3.json` event shape
-with the new main SHA.
-
-## Scenario: Downstream Release Artifact
-
-Use this when a downstream package release should prepare a local fork artifact
-without pushing or publishing:
-
-```bash
-bun run patch.moi -- run event \
-  --file flows/patch-moi-harness-flows-fork/fixtures/downstream-fork-release-v0.1.3-fork.0.json \
-  --allow-local \
+bun run patch.moi -- patch list --repo harness/fork --json
+PATCH_MOI_ALLOW_REBUILD=1 bun run patch.moi -- patch rebuild \
+  --repo harness/fork \
+  --base refs/remotes/upstream/main \
+  --to main \
+  --json
+bun run patch.moi -- patch explain \
+  --repo harness/fork \
+  --branch main \
+  --upstream refs/remotes/upstream/main \
   --json
 ```
 
-Expected result: `patch-moi-harness-flows-fork/release-fork` creates a
-flow-owned worktree under `.codex/flow-artifacts`, runs the fork package tests,
-and writes an npm tarball under
-`.codex/flow-artifacts/patch-moi-harness-flows-fork-release`.
+Expected result: patch.moi reads only Git refs, rebuilds the maintained branch
+when the safety gate is explicit, and reports which patch refs match the rebuilt
+branch. Runner execution, artifacts, retries, and thread state stay outside
+patch.moi.
 
 ## Scenario: Fork Release
 
@@ -177,19 +157,16 @@ Expected result: GitHub Actions in the fork publishes
 `matamune-peezy/patch-moi-harness`, workflow `publish.yml`, environment
 `npm-publish`.
 
-## Scenario: Remote-Only Service
+## Scenario: Remote Refs
 
-Use this when testing patch.moi service behavior without relying on local
-working trees.
+Use this when testing patch.moi against already-fetched remote refs.
 
-```text
-upstream repo: https://github.com/peezy-tech/patch-moi-harness.git
-upstream branch: main
-fork repo: https://github.com/matamune-peezy/patch-moi-harness.git
-fork branch: main
-service mirror: git@jojo.build:peezy-tech/patch-moi-harness.git
-service branch: main
-```
+- upstream repo: `https://github.com/peezy-tech/patch-moi-harness.git`
+- upstream branch: `main`
+- fork repo: `https://github.com/matamune-peezy/patch-moi-harness.git`
+- fork branch: `main`
+- optional Forgejo mirror: `git@jojo.build:peezy-tech/patch-moi-harness.git`
 
-Expected result: patch.moi can reason from remote refs alone, then create a
-workspace only when it needs to apply or validate the patch stack.
+Expected result: patch.moi can inspect remote-tracking refs and candidate refs
+from Git alone. It only mutates Git when the operator enables the relevant
+safety gate.
